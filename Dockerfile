@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir .
 WORKDIR /github/workspace
 
 # Set the entrypoint to your CLI tool
-ENTRYPOINT ["dockai"]
+ENTRYPOINT ["dockai-cli"]

@@ -98,7 +98,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run DockAI
-        uses: itzzjb/dockai@main
+        uses: itzzjb/dockai-cli@main
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           model_analyzer: gpt-4o-mini
@@ -107,7 +107,7 @@ jobs:
       - name: Commit and Push Dockerfile
         run: |
           git config --global user.name "DockAI Bot"
-          git config --global user.email "bot@dockai.com"
+          git config --global user.email "bot@dockai-cli.com"
           git add Dockerfile
           git commit -m "ci: generate optimized Dockerfile via DockAI" || echo "No changes to commit"
           git push
@@ -115,22 +115,22 @@ jobs:
 
 ## 💻 CLI Usage
 
-Once installed, the `dockai` command is available globally in your terminal.
+Once installed, the `dockai-cli` command is available globally in your terminal.
 
 Run the tool by pointing it to the target repository path.
 
 ```bash
-dockai /path/to/target/repo
+dockai-cli /path/to/target/repo
 ```
 
 **Example (Current Directory):**
 ```bash
-dockai .
+dockai-cli .
 ```
 
 **Verbose Mode (for debugging):**
 ```bash
-dockai . --verbose
+dockai-cli . --verbose
 ```
 
 ### What to Expect
@@ -153,7 +153,7 @@ Set environment variables to provide instructions:
 ```bash
 export DOCKAI_ANALYZER_INSTRUCTIONS="Always include package-lock.json if it exists"
 export DOCKAI_GENERATOR_INSTRUCTIONS="Use port 8080 and install ffmpeg"
-dockai .
+dockai-cli .
 ```
 
 Or in your `.env` file:
@@ -163,9 +163,9 @@ DOCKAI_ANALYZER_INSTRUCTIONS="Always include package-lock.json if it exists."
 DOCKAI_GENERATOR_INSTRUCTIONS="Ensure all images are based on Alpine Linux."
 ```
 
-### Method 2: `.dockai` File
+### Method 2: `.dockai-cli` File
 
-Create a `.dockai` file in your project root with section-based instructions:
+Create a `.dockai-cli` file in your project root with section-based instructions:
 
 ```
 # Instructions for the analyzer (file selection stage)

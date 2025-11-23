@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dockai-cli"
-version = "0.1.2"
+version = "0.1.3"
 description = "A Two-Stage LLM Pipeline for generating optimized Dockerfiles"
 readme = "README.md"
 authors = [
@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [project.scripts]
-dockai = "dockai.main:app"
+dockai-cli = "dockai.main:app"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
