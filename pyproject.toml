@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A Two-Stage LLM Pipeline for generating optimized Dockerfiles"
 readme = "README.md"
 authors = [
-  { name = "Januda Bethmin", email = "januda@example.com" },
+  { name = "Januda Bethmin", email = "desilvabethmin@gmail.com" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
