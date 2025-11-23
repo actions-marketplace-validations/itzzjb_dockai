@@ -32,12 +32,10 @@ The system operates in three distinct phases:
 
 2.  **Stage 1: The Brain (`analyzer.py`)**:
     *   **Input**: JSON list of file paths.
-    *   **Model**: GPT-4o-mini (optimized for speed/cost).
     *   **Task**: Identifies the technology stack (e.g., Python/Flask, Node/Express) and pinpoints the *exact* files needed for context (e.g., `package.json`, `requirements.txt`).
 
 3.  **Stage 2: The Architect (`generator.py`)**:
     *   **Input**: Content of the critical files identified in Stage 1.
-    *   **Model**: GPT-4o (optimized for quality).
     *   **Task**: Writes a multi-stage, security-focused Dockerfile with version pinning and cache optimization.
 
 ## 🚀 Getting Started
