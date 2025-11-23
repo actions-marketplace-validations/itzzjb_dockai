@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dockai"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Two-Stage LLM Pipeline for generating optimized Dockerfiles"
 readme = "README.md"
 authors = [
