@@ -51,7 +51,43 @@ The system operates in three distinct phases:
     MODEL_GENERATOR=gpt-4o
     ```
 
-## 💻 Usage
+## 🤖 Usage as GitHub Action
+
+You can use DockAI directly in your GitHub Actions workflow to automatically generate a Dockerfile on every push (or manually).
+
+### Example Workflow
+
+Create a file `.github/workflows/dockai.yml`:
+
+```yaml
+name: Generate Dockerfile
+on:
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to push the generated Dockerfile back
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run DockAI
+        uses: itzzjb/dockai@main
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          
+      - name: Commit and Push Dockerfile
+        run: |
+          git config --global user.name "DockAI Bot"
+          git config --global user.email "bot@dockai.com"
+          git add Dockerfile
+          git commit -m "ci: generate optimized Dockerfile via DockAI" || echo "No changes to commit"
+          git push
+```
+
+## 💻 CLI Usage
 
 Once installed, the `dockai` command is available globally in your terminal.
 

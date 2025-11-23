@@ -1,0 +1,33 @@
+name: 'DockAI - Dockerfile Generator'
+description: 'Automatically generate an optimized, production-ready Dockerfile for your repository using AI.'
+author: 'Januda Bethmin'
+branding:
+  icon: 'box'
+  color: 'blue'
+
+inputs:
+  openai_api_key:
+    description: 'Your OpenAI API Key'
+    required: true
+  path:
+    description: 'Path to the repository to analyze (relative to the root)'
+    required: false
+    default: '.'
+  model_analyzer:
+    description: 'Model to use for Stage 1 (Analysis)'
+    required: false
+    default: 'gpt-4o-mini'
+  model_generator:
+    description: 'Model to use for Stage 2 (Generation)'
+    required: false
+    default: 'gpt-4o'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.path }}
+  env:
+    OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+    MODEL_ANALYZER: ${{ inputs.model_analyzer }}
+    MODEL_GENERATOR: ${{ inputs.model_generator }}
