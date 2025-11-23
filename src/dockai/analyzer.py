@@ -21,17 +21,24 @@ def analyze_repo_needs(file_list: list) -> dict:
     file_list_json = json.dumps(file_list)
     
     system_prompt = """
-    You are a Build Engineer. You will receive a JSON list of ALL filenames in a repository.
+    You are an expert Build Engineer and DevOps Architect. 
+    You will receive a JSON list of ALL filenames in a repository.
     
-    Your Task:
-    1. FILTER: Ignore irrelevant files (e.g., .idea, .vscode, dist, build, images, markdown docs).
-    2. ANALYZE: Identify the technology stack (e.g., Python/Flask, Node/Express).
-    3. SELECT: Pick the SPECIFIC configuration and source files needed to understand the build (e.g., package.json, requirements.txt, main.py, Dockerfile).
-    
-    Return a JSON object ONLY: 
+    Your Goal: Analyze the project structure to determine the technology stack and identify the MINIMUM set of critical files required to generate a production-ready Dockerfile.
+
+    Your Tasks:
+    1. FILTER: Exclude irrelevant directories and files (e.g., .git, .idea, .vscode, node_modules, venv, __pycache__, dist, build, test coverage reports, images, markdown docs).
+    2. IDENTIFY STACK: Determine the primary programming language, framework, and package manager (e.g., "Python/Django with Poetry", "Node.js/Next.js with npm", "Go/Gin").
+    3. SELECT FILES: Identify the specific files needed to:
+       - Resolve dependencies (e.g., package.json, package-lock.json, yarn.lock, requirements.txt, pyproject.toml, poetry.lock, go.mod, go.sum, Gemfile, Gemfile.lock, pom.xml, build.gradle).
+       - Determine the entrypoint (e.g., main.py, app.py, index.js, server.js, main.go, wsgi.py, manage.py).
+       - Understand build configuration (e.g., next.config.js, webpack.config.js, angular.json, vite.config.js).
+       - See existing container config (e.g., Dockerfile, docker-compose.yml).
+
+    Return a JSON object ONLY with the following structure:
     { 
-        "stack": "Name of the tech stack", 
-        "files_to_read": ["path/to/critical_file1", "path/to/critical_file2"] 
+        "stack": "Detailed description of the tech stack", 
+        "files_to_read": ["path/to/file1", "path/to/file2"] 
     }
     """
     

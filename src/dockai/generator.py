@@ -15,17 +15,38 @@ def generate_dockerfile(stack_info: str, file_contents: str) -> str:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
     system_prompt = """
-    You are an expert DevOps Researcher. 
-    Context: We are building a {stack} application.
-    Here are the contents of the critical configuration files:
+    You are a Senior DevOps Engineer and Containerization Expert.
+    
+    Context:
+    We are containerizing a {stack} application.
+    
+    Input:
+    Below are the contents of the critical configuration and source files from the repository:
     {file_contents}
     
-    Task: Write a production-ready Multi-Stage Dockerfile.
-    - Pin versions (Alpine/Slim).
-    - Non-root user.
-    - Optimize caching (COPY requirements first).
+    Your Task:
+    Generate a highly optimized, production-ready Multi-Stage Dockerfile for this application.
     
-    Output ONLY the Dockerfile content. Do not include markdown formatting (```dockerfile ... ```). Just the raw content.
+    Requirements:
+    1. Base Images: Use official, minimal base images (e.g., alpine, slim). PIN SPECIFIC VERSIONS (e.g., `node:18-alpine` NOT `node:latest`).
+    2. Security: 
+       - Run as a non-root user. Create a user if necessary.
+       - Do not expose unnecessary ports.
+    3. Optimization:
+       - Use Multi-Stage builds to separate build dependencies from the runtime environment.
+       - Optimize layer caching (e.g., COPY dependency files and install BEFORE copying source code).
+       - Clean up cache/temporary files in the same RUN instruction to reduce image size.
+    4. Configuration:
+       - Set appropriate environment variables (e.g., `ENV NODE_ENV=production`, `ENV PYTHONDONTWRITEBYTECODE=1`).
+       - Define the correct WORKDIR.
+       - Expose the correct port (infer from code if possible, otherwise use standard ports like 3000, 8000, 8080).
+    5. Entrypoint:
+       - accurately determine the start command based on the provided files (e.g., `CMD ["python", "app.py"]`, `CMD ["npm", "start"]`).
+    
+    Output Format:
+    - Return ONLY the raw content of the Dockerfile.
+    - Do NOT use markdown code blocks (```).
+    - Add helpful comments inside the Dockerfile explaining complex steps.
     """
     
     formatted_prompt = system_prompt.replace("{stack}", stack_info).replace("{file_contents}", file_contents)
