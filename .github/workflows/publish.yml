@@ -29,7 +29,7 @@ jobs:
 
     - name: Run tests
       env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # Needed if tests hit API, though mocks should be used
+        OPENAI_API_KEY: "sk-dummy-key-for-tests" # Needed if tests hit API, though mocks should be used
         MODEL_ANALYZER: gpt-4o-mini
         MODEL_GENERATOR: gpt-4o
       run: |
