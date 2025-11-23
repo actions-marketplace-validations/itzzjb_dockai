@@ -134,6 +134,77 @@ The CLI uses a rich terminal interface to show progress:
 4.  **Generating**: "The Architect" builds the Dockerfile.
 5.  **Result**: A `Dockerfile` is saved to the target directory.
 
+## 🎨 Custom Instructions
+
+DockAI supports custom instructions to tailor the Dockerfile generation to your specific needs. You can provide instructions in **natural language** using two methods:
+
+### Method 1: Environment Variables
+
+Set environment variables to provide instructions:
+
+```bash
+export DOCKAI_ANALYZER_INSTRUCTIONS="Always include package-lock.json if it exists"
+export DOCKAI_GENERATOR_INSTRUCTIONS="Use port 8080 and install ffmpeg"
+dockai .
+```
+
+Or in your `.env` file:
+
+```bash
+DOCKAI_ANALYZER_INSTRUCTIONS="Always include package-lock.json if it exists."
+DOCKAI_GENERATOR_INSTRUCTIONS="Ensure all images are based on Alpine Linux."
+```
+
+### Method 2: `.dockai` File
+
+Create a `.dockai` file in your project root with section-based instructions:
+
+```
+# Instructions for the analyzer (file selection stage)
+[analyzer]
+Always include package-lock.json or yarn.lock if they exist.
+Look for any .env.example files to understand environment variables.
+Include docker-compose.yml if present.
+
+# Instructions for the generator (Dockerfile creation stage)
+[generator]
+Ensure the container runs as a non-root user named 'appuser'.
+Do not expose any ports other than 8080.
+Install 'curl' and 'vim' for debugging purposes.
+Set the timezone to 'UTC'.
+Define an environment variable 'APP_ENV' with value 'production'.
+```
+
+**Note:** If you don't use sections (`[analyzer]` and `[generator]`), the instructions will be applied to both stages.
+
+### Use Cases for Custom Instructions
+
+**Analyzer Instructions:**
+- "Always include lock files (package-lock.json, yarn.lock, poetry.lock)"
+- "Look for configuration files in the config/ directory"
+- "Include any .proto files for gRPC services"
+
+**Generator Instructions:**
+- "Use Alpine-based images only"
+- "Install system dependencies: ffmpeg, imagemagick, ghostscript"
+- "Expose port 3000 instead of the default"
+- "Add health check using curl to /health endpoint"
+- "Set NODE_ENV to production"
+- "Create a non-root user named 'nodeuser'"
+
+### GitHub Action with Custom Instructions
+
+```yaml
+- name: Run DockAI
+  uses: itzzjb/dockai@main
+  with:
+    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+    model_analyzer: gpt-4o-mini
+    model_generator: gpt-4o
+    analyzer_instructions: "Always include yarn.lock if present"
+    generator_instructions: "Use Alpine Linux and install curl"
+```
+
 ## 🛠️ Development
 
 ### Running Tests

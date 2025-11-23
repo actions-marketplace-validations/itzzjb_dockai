@@ -19,6 +19,14 @@ inputs:
   model_generator:
     description: 'Model to use for Stage 2 (Generation)'
     required: true
+  analyzer_instructions:
+    description: 'Optional custom instructions for the analyzer stage'
+    required: false
+    default: ''
+  generator_instructions:
+    description: 'Optional custom instructions for the generator stage'
+    required: false
+    default: ''
 
 runs:
   using: 'docker'
@@ -29,3 +37,5 @@ runs:
     OPENAI_API_KEY: ${{ inputs.openai_api_key }}
     MODEL_ANALYZER: ${{ inputs.model_analyzer }}
     MODEL_GENERATOR: ${{ inputs.model_generator }}
+    DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
+    DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
