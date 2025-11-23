@@ -6,9 +6,9 @@ from rich.status import Status
 from rich.tree import Tree
 from dotenv import load_dotenv
 
-from scanner import get_file_tree
-from analyzer import analyze_repo_needs
-from generator import generate_dockerfile
+from .scanner import get_file_tree
+from .analyzer import analyze_repo_needs
+from .generator import generate_dockerfile
 
 load_dotenv()
 
@@ -50,7 +50,11 @@ def run(path: str = typer.Argument(..., help="Path to the repository to analyze"
         # Send file list to AI to identify stack and critical files.
         # =========================================================================
         status.update("[bold green]Stage 1: Analyzing repository needs (The Brain)...[/bold green]")
-        analysis_result = analyze_repo_needs(file_tree)
+        try:
+            analysis_result = analyze_repo_needs(file_tree)
+        except Exception as e:
+            console.print(f"[bold red]Error during analysis:[/bold red] {e}")
+            raise typer.Exit(code=1)
         
     stack = analysis_result.get("stack", "Unknown")
     files_to_read = analysis_result.get("files_to_read", [])
@@ -78,7 +82,11 @@ def run(path: str = typer.Argument(..., help="Path to the repository to analyze"
     # Synthesize the Dockerfile using the gathered context.
     # =========================================================================
     with console.status("[bold magenta]Stage 3: Generating Dockerfile (The Architect)...[/bold magenta]", spinner="earth"):
-        dockerfile_content = generate_dockerfile(stack, file_contents_str)
+        try:
+            dockerfile_content = generate_dockerfile(stack, file_contents_str)
+        except Exception as e:
+            console.print(f"[bold red]Error during generation:[/bold red] {e}")
+            raise typer.Exit(code=1)
 
     # Save the result
     output_path = os.path.join(path, "Dockerfile")

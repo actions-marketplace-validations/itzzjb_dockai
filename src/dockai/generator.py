@@ -27,20 +27,15 @@ def generate_dockerfile(stack_info: str, file_contents: str) -> str:
     
     formatted_prompt = system_prompt.replace("{stack}", stack_info).replace("{file_contents}", file_contents)
     
-    try:
-        response = client.chat.completions.create(
-            model=os.getenv("MODEL_GENERATOR"),
-            messages=[
-                {"role": "system", "content": formatted_prompt},
-                {"role": "user", "content": "Generate the Dockerfile now."}
-            ]
-        )
-        
-        content = response.choices[0].message.content
-        # Robust cleanup: Remove any markdown formatting the model might have added
-        content = content.replace("```dockerfile", "").replace("```", "").strip()
-        return content
-        
-    except Exception as e:
-        print(f"Error in generation stage: {e}")
-        return "# Error generating Dockerfile"
+    response = client.chat.completions.create(
+        model=os.getenv("MODEL_GENERATOR"),
+        messages=[
+            {"role": "system", "content": formatted_prompt},
+            {"role": "user", "content": "Generate the Dockerfile now."}
+        ]
+    )
+    
+    content = response.choices[0].message.content
+    # Robust cleanup: Remove any markdown formatting the model might have added
+    content = content.replace("```dockerfile", "").replace("```", "").strip()
+    return content

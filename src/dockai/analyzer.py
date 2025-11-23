@@ -32,19 +32,14 @@ def analyze_repo_needs(file_list: list) -> dict:
     }
     """
     
-    try:
-        response = client.chat.completions.create(
-            model=os.getenv("MODEL_ANALYZER"),
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Here is the file list: {file_list_json}"}
-            ],
-            response_format={"type": "json_object"}
-        )
-        
-        content = response.choices[0].message.content
-        return json.loads(content)
-        
-    except Exception as e:
-        print(f"Error in analysis stage: {e}")
-        return {"stack": "unknown", "files_to_read": []}
+    response = client.chat.completions.create(
+        model=os.getenv("MODEL_ANALYZER"),
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Here is the file list: {file_list_json}"}
+        ],
+        response_format={"type": "json_object"}
+    )
+    
+    content = response.choices[0].message.content
+    return json.loads(content)
