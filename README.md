@@ -61,7 +61,8 @@ export MODEL_ANALYZER=gpt-4o-mini
 export MODEL_GENERATOR=gpt-4o
 ```
 
-> **Note:** The PyPI package is named `dockai-cli`, but the command you run is simply `dockai` (without the `-cli` suffix). This is the same for both installation methods.
+> [!NOTE]  
+> The PyPI package is named `dockai-cli`, but the command you run is simply `dockai` (without the `-cli` suffix). This is the same for both installation methods.
 
 **From Source (Development):**
 
@@ -193,7 +194,8 @@ Set the timezone to 'UTC'.
 Define an environment variable 'APP_ENV' with value 'production'.
 ```
 
-**Note:** If you don't use sections (`[analyzer]` and `[generator]`), the instructions will be applied to both stages.
+> [!NOTE]  
+> If you don't use sections (`[analyzer]` and `[generator]`), the instructions will be applied to both stages.
 
 ### Use Cases for Custom Instructions
 
