@@ -1,6 +1,9 @@
 import os
 from openai import OpenAI
 
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def generate_dockerfile(stack_info: str, file_contents: str) -> str:
     """
     Stage 2: The Architect (Generation).

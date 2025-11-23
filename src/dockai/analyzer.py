@@ -2,6 +2,9 @@ import json
 import os
 from openai import OpenAI
 
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def analyze_repo_needs(file_list: list) -> dict:
     """
     Stage 1: The Brain (Analysis).

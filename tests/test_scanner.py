@@ -33,3 +33,25 @@ def test_get_file_tree_respects_gitignore():
         files = get_file_tree(tmpdirname)
         assert "app.py" in files
         assert "secret.txt" not in files
+
+def test_get_file_tree_respects_wildcards():
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        # Create .gitignore with wildcard
+        with open(os.path.join(tmpdirname, ".gitignore"), "w") as f:
+            f.write("*.log\n")
+            f.write("temp_*\n")
+            
+        # Create ignored files
+        with open(os.path.join(tmpdirname, "error.log"), "w") as f:
+            f.write("error")
+        with open(os.path.join(tmpdirname, "temp_data.txt"), "w") as f:
+            f.write("data")
+            
+        # Create normal file
+        with open(os.path.join(tmpdirname, "main.py"), "w") as f:
+            f.write("print('main')")
+            
+        files = get_file_tree(tmpdirname)
+        assert "main.py" in files
+        assert "error.log" not in files
+        assert "temp_data.txt" not in files
