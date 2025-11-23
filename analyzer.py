@@ -13,10 +13,18 @@ def analyze_repo_needs(file_list: list) -> dict:
     file_list_json = json.dumps(file_list)
     
     system_prompt = """
-    You are a Build Engineer. You will receive a JSON list of filenames from a repository.
-    1. Identify the technology stack (e.g., Python/Flask, Node/Express, Java/Spring).
-    2. Identify the SPECIFIC files you need to read to understand dependencies and entry points (e.g., package.json, requirements.txt, main.py, pom.xml).
-    3. Return a JSON object ONLY: { "stack": "...", "files_to_read": ["path/to/file1", "path/to/file2"] }
+    You are a Build Engineer. You will receive a JSON list of ALL filenames in a repository.
+    
+    Your Task:
+    1. FILTER: Ignore irrelevant files (e.g., .idea, .vscode, dist, build, images, markdown docs).
+    2. ANALYZE: Identify the technology stack (e.g., Python/Flask, Node/Express).
+    3. SELECT: Pick the SPECIFIC configuration and source files needed to understand the build (e.g., package.json, requirements.txt, main.py, Dockerfile).
+    
+    Return a JSON object ONLY: 
+    { 
+        "stack": "Name of the tech stack", 
+        "files_to_read": ["path/to/critical_file1", "path/to/critical_file2"] 
+    }
     """
     
     try:

@@ -2,6 +2,9 @@ import os
 from typing import List, Set
 
 # Default directories to ignore to reduce noise
+# Default directories to ignore to prevent context explosion
+# We only ignore the massive/system folders that would crash the LLM context window.
+# Everything else (dist, build, .idea, etc.) is passed to the AI to decide.
 DEFAULT_IGNORE_DIRS = {
     ".git",
     "node_modules",
