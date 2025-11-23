@@ -56,7 +56,7 @@ The system operates in three distinct phases:
 2.  **Install the package**:
     You can install the tool locally using pip. We recommend installing in "editable" mode (`-e`) if you plan to modify the code.
     ```bash
-    pip install -e .
+    pip install dockai-cli
     ```
 
 3.  **Configure Environment**:

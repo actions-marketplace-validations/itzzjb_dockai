@@ -3,8 +3,8 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dockai"
-version = "0.1.1"
+name = "dockai-cli"
+version = "0.1.2"
 description = "A Two-Stage LLM Pipeline for generating optimized Dockerfiles"
 readme = "README.md"
 authors = [
