@@ -59,6 +59,65 @@ def run(
     logger.info(f"Starting analysis for: {path}")
 
     # =========================================================================
+    # STAGE 0: LOAD CUSTOM INSTRUCTIONS
+    # Read from .dockai file or environment variables (separate for analyzer and generator)
+    # =========================================================================
+    analyzer_instructions = ""
+    generator_instructions = ""
+    
+    # Check environment variables
+    if os.getenv("DOCKAI_ANALYZER_INSTRUCTIONS"):
+        analyzer_instructions += f"\nFrom Environment Variable:\n{os.getenv('DOCKAI_ANALYZER_INSTRUCTIONS')}\n"
+        
+    if os.getenv("DOCKAI_GENERATOR_INSTRUCTIONS"):
+        generator_instructions += f"\nFrom Environment Variable:\n{os.getenv('DOCKAI_GENERATOR_INSTRUCTIONS')}\n"
+        
+    # Check .dockai file in the target directory
+    dockai_file_path = os.path.join(path, ".dockai")
+    if os.path.exists(dockai_file_path):
+        try:
+            with open(dockai_file_path, "r") as f:
+                content = f.read()
+                
+                # Parse sections: [analyzer] and [generator]
+                if "[analyzer]" in content.lower() or "[generator]" in content.lower():
+                    # Split by sections
+                    lines = content.split('\n')
+                    current_section = None
+                    section_content = {"analyzer": [], "generator": []}
+                    
+                    for line in lines:
+                        line_lower = line.strip().lower()
+                        if line_lower == "[analyzer]":
+                            current_section = "analyzer"
+                        elif line_lower == "[generator]":
+                            current_section = "generator"
+                        elif current_section and line.strip() and not line.strip().startswith('#'):
+                            section_content[current_section].append(line)
+                    
+                    if section_content["analyzer"]:
+                        analyzer_instructions += f"\nFrom .dockai file:\n" + "\n".join(section_content["analyzer"]) + "\n"
+                    if section_content["generator"]:
+                        generator_instructions += f"\nFrom .dockai file:\n" + "\n".join(section_content["generator"]) + "\n"
+                else:
+                    # No sections, use for both
+                    shared_instructions = content.strip()
+                    if shared_instructions:
+                        analyzer_instructions += f"\nFrom .dockai file:\n{shared_instructions}\n"
+                        generator_instructions += f"\nFrom .dockai file:\n{shared_instructions}\n"
+                        
+            console.print(f"[green]✓[/green] Loaded custom instructions from {dockai_file_path}")
+            logger.info(f"Loaded custom instructions from {dockai_file_path}")
+        except Exception as e:
+            console.print(f"[yellow]Warning:[/yellow] Could not read .dockai file: {e}")
+            logger.warning(f"Could not read .dockai file: {e}")
+
+    if analyzer_instructions:
+        logger.info(f"Analyzer Instructions: {analyzer_instructions}")
+    if generator_instructions:
+        logger.info(f"Generator Instructions: {generator_instructions}")
+
+    # =========================================================================
     # STAGE 1: SCANNING
     # Map the file structure while ignoring noise (node_modules, etc.)
     # =========================================================================
@@ -73,7 +132,7 @@ def run(
         # =========================================================================
         status.update("[bold green]Stage 1: Analyzing repository needs (The Brain)...[/bold green]")
         try:
-            analysis_result = analyze_repo_needs(file_tree)
+            analysis_result = analyze_repo_needs(file_tree, analyzer_instructions)
             logger.debug(f"Analysis result: {analysis_result}")
         except Exception as e:
             console.print(f"[bold red]Error during analysis:[/bold red] {e}")
@@ -110,7 +169,7 @@ def run(
     # =========================================================================
     with console.status("[bold magenta]Stage 3: Generating Dockerfile (The Architect)...[/bold magenta]", spinner="earth"):
         try:
-            dockerfile_content = generate_dockerfile(stack, file_contents_str)
+            dockerfile_content = generate_dockerfile(stack, file_contents_str, generator_instructions)
             logger.debug("Dockerfile generated successfully")
         except Exception as e:
             console.print(f"[bold red]Error during generation:[/bold red] {e}")

@@ -5,7 +5,7 @@ from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def analyze_repo_needs(file_list: list) -> dict:
+def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> dict:
     """
     Stage 1: The Brain (Analysis).
     
@@ -35,6 +35,9 @@ def analyze_repo_needs(file_list: list) -> dict:
        - Understand build configuration (e.g., next.config.js, webpack.config.js, angular.json, vite.config.js).
        - See existing container config (e.g., Dockerfile, docker-compose.yml).
 
+    User Custom Instructions:
+    {custom_instructions}
+
     Return a JSON object ONLY with the following structure:
     { 
         "stack": "Detailed description of the tech stack", 
@@ -42,10 +45,12 @@ def analyze_repo_needs(file_list: list) -> dict:
     }
     """
     
+    formatted_prompt = system_prompt.replace("{custom_instructions}", custom_instructions)
+
     response = client.chat.completions.create(
         model=os.getenv("MODEL_ANALYZER"),
         messages=[
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": formatted_prompt},
             {"role": "user", "content": f"Here is the file list: {file_list_json}"}
         ],
         response_format={"type": "json_object"}

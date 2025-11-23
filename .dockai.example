@@ -1,0 +1,18 @@
+# Example .dockai file
+# You can use natural language to give specific instructions to the AI.
+# Use [analyzer] and [generator] sections to target specific stages.
+
+[analyzer]
+# Instructions for the analyzer (file selection stage)
+Always include package-lock.json or yarn.lock if they exist.
+Look for any .env.example files to understand environment variables.
+Include docker-compose.yml if present.
+
+[generator]
+# Instructions for the generator (Dockerfile creation stage)
+Ensure the container runs as a non-root user named 'appuser'.
+Do not expose any ports other than 8080.
+Install 'curl' and 'vim' for debugging purposes.
+Ensure 'ffmpeg' is installed if this is a media processing application.
+Set the timezone to 'UTC'.
+Define an environment variable 'APP_ENV' with value 'production'.

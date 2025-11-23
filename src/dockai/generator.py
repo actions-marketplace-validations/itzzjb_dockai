@@ -4,7 +4,7 @@ from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def generate_dockerfile(stack_info: str, file_contents: str) -> str:
+def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions: str = "") -> str:
     """
     Stage 2: The Architect (Generation).
     
@@ -23,6 +23,9 @@ def generate_dockerfile(stack_info: str, file_contents: str) -> str:
     Input:
     Below are the contents of the critical configuration and source files from the repository:
     {file_contents}
+    
+    User Custom Instructions:
+    {custom_instructions}
     
     Your Task:
     Generate a highly optimized, production-ready Multi-Stage Dockerfile for this application.
@@ -49,7 +52,7 @@ def generate_dockerfile(stack_info: str, file_contents: str) -> str:
     - Add helpful comments inside the Dockerfile explaining complex steps.
     """
     
-    formatted_prompt = system_prompt.replace("{stack}", stack_info).replace("{file_contents}", file_contents)
+    formatted_prompt = system_prompt.replace("{stack}", stack_info).replace("{file_contents}", file_contents).replace("{custom_instructions}", custom_instructions)
     
     response = client.chat.completions.create(
         model=os.getenv("MODEL_GENERATOR"),
