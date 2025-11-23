@@ -1,8 +1,8 @@
-# Autodock-Research
+# DockAI
 
 **University Thesis Project: Two-Stage LLM Pipeline for Optimized Dockerfile Generation**
 
-Autodock-Research is a Python CLI tool designed to intelligently analyze a software repository and generate a production-ready, optimized Dockerfile. It uses a novel two-stage LLM pipeline to first understand the project structure ("The Brain") and then architect the build environment ("The Architect").
+DockAI is a Python CLI tool designed to intelligently analyze a software repository and generate a production-ready, optimized Dockerfile. It uses a novel two-stage LLM pipeline to first understand the project structure ("The Brain") and then architect the build environment ("The Architect").
 
 ## 🧠 Architecture
 

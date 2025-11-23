@@ -3,8 +3,11 @@ from openai import OpenAI
 
 def generate_dockerfile(stack_info: str, file_contents: str) -> str:
     """
-    Stage 2: The Architect.
-    Generates a production-ready Dockerfile using the content of critical files.
+    Stage 2: The Architect (Generation).
+    
+    This function uses a high-intelligence LLM (GPT-4o) to synthesize the 
+    gathered context into a production-ready Dockerfile. It applies best 
+    practices like multi-stage builds, version pinning, and user permissions.
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
@@ -26,7 +29,7 @@ def generate_dockerfile(stack_info: str, file_contents: str) -> str:
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",  # Using GPT-4o for quality as requested
+            model="gpt-4o",  # Using the most capable model for complex code generation
             messages=[
                 {"role": "system", "content": formatted_prompt},
                 {"role": "user", "content": "Generate the Dockerfile now."}
@@ -34,7 +37,7 @@ def generate_dockerfile(stack_info: str, file_contents: str) -> str:
         )
         
         content = response.choices[0].message.content
-        # Clean up if the model adds markdown code blocks despite instructions
+        # Robust cleanup: Remove any markdown formatting the model might have added
         content = content.replace("```dockerfile", "").replace("```", "").strip()
         return content
         

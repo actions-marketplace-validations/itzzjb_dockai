@@ -1,10 +1,9 @@
 import os
 from typing import List, Set
 
-# Default directories to ignore to reduce noise
-# Default directories to ignore to prevent context explosion
-# We only ignore the massive/system folders that would crash the LLM context window.
-# Everything else (dist, build, .idea, etc.) is passed to the AI to decide.
+# Core directories to ignore to prevent context explosion.
+# We explicitly ignore these system/heavy folders to ensure the LLM
+# focuses only on source code and configuration files.
 DEFAULT_IGNORE_DIRS = {
     ".git",
     "node_modules",
@@ -23,8 +22,8 @@ DEFAULT_IGNORE_DIRS = {
 
 def load_ignore_file(root_path: str, filename: str) -> Set[str]:
     """
-    Reads a specific ignore file (like .gitignore or .dockerignore) in the root_path 
-    if it exists and returns a set of patterns.
+    Parses a .gitignore or .dockerignore file to extract user-defined ignore patterns.
+    Returns a set of directory names to exclude from the scan.
     """
     file_path = os.path.join(root_path, filename)
     patterns = set()
@@ -34,8 +33,9 @@ def load_ignore_file(root_path: str, filename: str) -> Set[str]:
             with open(file_path, "r") as f:
                 for line in f:
                     line = line.strip()
+                    # Skip comments and empty lines
                     if line and not line.startswith("#"):
-                        # Basic handling: remove trailing slashes for directory matching
+                        # Normalize by removing trailing slashes for directory matching
                         patterns.add(line.rstrip("/"))
         except Exception:
             pass 
@@ -44,27 +44,27 @@ def load_ignore_file(root_path: str, filename: str) -> Set[str]:
 
 def get_file_tree(root_path: str) -> List[str]:
     """
-    Scans the directory tree rooted at root_path and returns a list of relative file paths.
-    Ignores directories specified in DEFAULT_IGNORE_DIRS, .gitignore, and .dockerignore.
+    Traverses the directory tree to build a flat list of relative file paths.
+    
+    This function applies a 'Filter & Select' strategy locally:
+    1. It starts with a hardcoded list of noisy directories (DEFAULT_IGNORE_DIRS).
+    2. It augments this with any .gitignore or .dockerignore patterns found in the root.
+    3. It walks the tree, skipping any ignored directories to save processing time.
     """
-    # Start with defaults
     ignore_dirs = DEFAULT_IGNORE_DIRS.copy()
     
-    # Add patterns from .gitignore and .dockerignore
     ignore_dirs.update(load_ignore_file(root_path, ".gitignore"))
     ignore_dirs.update(load_ignore_file(root_path, ".dockerignore"))
     
     file_list = []
     
     for dirpath, dirnames, filenames in os.walk(root_path):
-        # Modify dirnames in-place to skip ignored directories
-        # We check if the directory name is in our ignore list
+        # In-place modification of dirnames is required to prevent os.walk from
+        # traversing into ignored directories (performance optimization).
         dirnames[:] = [d for d in dirnames if d not in ignore_dirs]
         
         for filename in filenames:
-            # Create absolute path
             abs_path = os.path.join(dirpath, filename)
-            # Convert to relative path from root_path
             rel_path = os.path.relpath(abs_path, root_path)
             file_list.append(rel_path)
             
