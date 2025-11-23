@@ -15,10 +15,10 @@ inputs:
     default: '.'
   model_analyzer:
     description: 'Model to use for Stage 1 (Analysis)'
-    default: 'gpt-4o-mini'
+    required: true
   model_generator:
     description: 'Model to use for Stage 2 (Generation)'
-    default: 'gpt-4o'
+    required: true
 
 runs:
   using: 'docker'
