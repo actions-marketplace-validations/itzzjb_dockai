@@ -29,7 +29,7 @@ def generate_dockerfile(stack_info: str, file_contents: str) -> str:
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",  # Using the most capable model for complex code generation
+            model=os.getenv("MODEL_GENERATOR"),
             messages=[
                 {"role": "system", "content": formatted_prompt},
                 {"role": "user", "content": "Generate the Dockerfile now."}

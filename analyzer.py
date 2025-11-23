@@ -34,7 +34,7 @@ def analyze_repo_needs(file_list: list) -> dict:
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Optimized for high-throughput and low cost
+            model=os.getenv("MODEL_ANALYZER"),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Here is the file list: {file_list_json}"}

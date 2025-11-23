@@ -30,6 +30,11 @@ def run(path: str = typer.Argument(..., help="Path to the repository to analyze"
         console.print("Please create a .env file with your API key.")
         raise typer.Exit(code=1)
 
+    if not os.getenv("MODEL_ANALYZER") or not os.getenv("MODEL_GENERATOR"):
+        console.print("[bold red]Error:[/bold red] Model configuration missing.")
+        console.print("Please set MODEL_ANALYZER and MODEL_GENERATOR in your .env file.")
+        raise typer.Exit(code=1)
+
     console.print(Panel.fit("[bold blue]DockAI[/bold blue]\n[italic]University Thesis - Two-Stage LLM Pipeline[/italic]"))
 
     # =========================================================================
