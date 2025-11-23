@@ -18,7 +18,7 @@ inputs:
     default: 'gpt-4o-mini'
   model_generator:
     description: 'Model to use for Stage 2 (Generation)'
-    default: 'gpt-4o'
+    default: 'gpt-4o-mini'
 
 runs:
   using: 'docker'
