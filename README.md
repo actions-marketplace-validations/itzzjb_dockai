@@ -98,7 +98,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run DockAI
-        uses: itzzjb/dockai@main
+        uses: itzzjb/dockai@v1
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           model_analyzer: gpt-4o-mini
@@ -204,7 +204,7 @@ Define an environment variable 'APP_ENV' with value 'production'.
 
 ```yaml
 - name: Run DockAI
-  uses: itzzjb/dockai@main
+  uses: itzzjb/dockai@v1
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     model_analyzer: gpt-4o-mini
