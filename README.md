@@ -1,8 +1,16 @@
 # DockAI
 
-**University Thesis Project: Two-Stage LLM Pipeline for Optimized Dockerfile Generation**
+**Production-Ready Two-Stage LLM Pipeline for Optimized Dockerfile Generation**
 
-DockAI is a production-ready Python CLI tool designed to intelligently analyze a software repository and generate a production-ready, optimized Dockerfile. It uses a novel two-stage LLM pipeline to first understand the project structure ("The Brain") and then architect the build environment ("The Architect").
+DockAI is a robust, enterprise-grade Python CLI tool designed to intelligently analyze a software repository and generate a production-ready, optimized Dockerfile. It uses a novel two-stage LLM pipeline to first understand the project structure ("The Brain") and then architect the build environment ("The Architect").
+
+## ✨ Key Features
+
+*   **Two-Stage Pipeline**: Separates analysis (cheap/fast) from generation (smart/expensive) for cost-efficiency.
+*   **Intelligent Scanning**: Uses `pathspec` to fully respect `.gitignore` and `.dockerignore` patterns (including wildcards like `*.log` or `secret_*.json`).
+*   **Robust & Reliable**: Built-in automatic retries with exponential backoff for all AI API calls to handle network instability.
+*   **Observability**: Structured logging with a `--verbose` mode for deep debugging and transparency.
+*   **Security First**: Generates non-root, multi-stage builds by default.
 
 ## 🧠 Architecture
 
@@ -10,7 +18,7 @@ The system operates in three distinct phases:
 
 1.  **The Intelligent Scanner (`scanner.py`)**:
     *   Maps the entire repository file tree.
-    *   Intelligently ignores build artifacts (`node_modules`, `venv`, etc.) to reduce noise.
+    *   Automatically filters out files based on `.gitignore` and `.dockerignore` using industry-standard wildcard matching.
 
 2.  **Stage 1: The Brain (`analyzer.py`)**:
     *   **Input**: JSON list of file paths.
@@ -104,16 +112,21 @@ dockai /path/to/target/repo
 dockai .
 ```
 
+**Verbose Mode (for debugging):**
+```bash
+dockai . --verbose
+```
+
 ### What to Expect
 
 The CLI uses a rich terminal interface to show progress:
-1.  **Scanning**: Locates files.
+1.  **Scanning**: Locates files, respecting all ignore patterns.
 2.  **Analyzing**: "The Brain" decides what matters.
 3.  **Reading**: Only reads the content of critical files (privacy/token efficient).
 4.  **Generating**: "The Architect" builds the Dockerfile.
 5.  **Result**: A `Dockerfile` is saved to the target directory.
 
-## �️ Development
+## 🛠️ Development
 
 ### Running Tests
 
@@ -129,8 +142,8 @@ The project follows a modern `src`-layout:
 
 *   `src/dockai/`: Source code package.
     *   `main.py`: The CLI orchestrator using `typer` and `rich`.
-    *   `scanner.py`: Directory traversal logic.
-    *   `analyzer.py`: Interface for the Stage 1 LLM call.
-    *   `generator.py`: Interface for the Stage 2 LLM call.
+    *   `scanner.py`: Directory traversal logic with `pathspec`.
+    *   `analyzer.py`: Interface for the Stage 1 LLM call (with retries).
+    *   `generator.py`: Interface for the Stage 2 LLM call (with retries).
 *   `tests/`: Unit and integration tests.
 *   `pyproject.toml`: Build configuration and dependency management.
