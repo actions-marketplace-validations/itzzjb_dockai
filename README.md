@@ -53,6 +53,14 @@ The system operates in three distinct phases:
 pip install dockai-cli
 ```
 
+**Configure Environment Variables:**
+
+```bash
+export OPENAI_API_KEY=sk-your-api-key-here
+export MODEL_ANALYZER=gpt-4o-mini
+export MODEL_GENERATOR=gpt-4o
+```
+
 > **Note:** The PyPI package is named `dockai-cli`, but the command you run is simply `dockai` (without the `-cli` suffix). This is the same for both installation methods.
 
 **From Source (Development):**
