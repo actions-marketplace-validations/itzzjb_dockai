@@ -47,8 +47,6 @@ The system operates in three distinct phases:
 
 ### Installation
 
-
-
 **From PyPI (Recommended):**
 
 ```bash
