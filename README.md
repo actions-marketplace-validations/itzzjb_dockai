@@ -77,6 +77,8 @@ jobs:
         uses: itzzjb/dockai@main
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          model_analyzer: gpt-4o-mini
+          model_generator: gpt-4o
           
       - name: Commit and Push Dockerfile
         run: |
