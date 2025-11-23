@@ -53,6 +53,8 @@ The system operates in three distinct phases:
 pip install dockai-cli
 ```
 
+> **Note:** The PyPI package is named `dockai-cli`, but the command you run is simply `dockai` (without the `-cli` suffix). This is the same for both installation methods.
+
 **From Source (Development):**
 
 1.  **Clone the repository**:
