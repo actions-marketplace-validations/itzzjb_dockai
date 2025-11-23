@@ -47,6 +47,16 @@ The system operates in three distinct phases:
 
 ### Installation
 
+
+
+**From PyPI (Recommended):**
+
+```bash
+pip install dockai-cli
+```
+
+**From Source (Development):**
+
 1.  **Clone the repository**:
     ```bash
     git clone https://github.com/itzzjb/dockai.git
@@ -56,7 +66,7 @@ The system operates in three distinct phases:
 2.  **Install the package**:
     You can install the tool locally using pip. We recommend installing in "editable" mode (`-e`) if you plan to modify the code.
     ```bash
-    pip install dockai-cli
+    pip install -e .
     ```
 
 3.  **Configure Environment**:
