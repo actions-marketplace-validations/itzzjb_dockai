@@ -57,4 +57,12 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> dict:
     )
     
     content = response.choices[0].message.content
-    return json.loads(content)
+    
+    # Robust cleanup: Remove any markdown formatting
+    content = content.replace("```json", "").replace("```", "").strip()
+    
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        # This will be caught by tenacity and retried
+        raise ValueError(f"Failed to parse JSON response from Analyzer: {e}. Content: {content}")
