@@ -13,8 +13,14 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> dict:
     The goal is to identify the technology stack and filter the list down to 
     only the critical files needed for context (e.g., package.json, requirements.txt).
     
+    Args:
+        file_list (list): A list of all file paths in the repository.
+        custom_instructions (str): Optional custom instructions from the user.
+        
     Returns:
-        dict: containing 'stack' (str) and 'files_to_read' (List[str]).
+        dict: A dictionary containing:
+            - 'stack' (str): Description of the technology stack.
+            - 'files_to_read' (List[str]): List of critical files to read for context.
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     

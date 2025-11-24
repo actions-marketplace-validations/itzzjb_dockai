@@ -7,7 +7,16 @@ from typing import List, Tuple
 logger = logging.getLogger("dockai")
 
 def run_command(command: List[str], cwd: str = ".") -> Tuple[int, str, str]:
-    """Run a shell command and return exit code, stdout, stderr."""
+    """
+    Run a shell command and return exit code, stdout, stderr.
+    
+    Args:
+        command (List[str]): The command to run as a list of strings.
+        cwd (str): The working directory to run the command in.
+        
+    Returns:
+        Tuple[int, str, str]: A tuple containing (exit_code, stdout, stderr).
+    """
     try:
         result = subprocess.run(
             command,
@@ -22,8 +31,19 @@ def run_command(command: List[str], cwd: str = ".") -> Tuple[int, str, str]:
 
 def validate_docker_build_and_run(directory: str) -> Tuple[bool, str]:
     """
-    Builds and runs the Dockerfile in the given directory.
-    Returns (success, message).
+    Builds and runs the Dockerfile in the given directory to verify it works.
+    
+    This function performs the following steps:
+    1. Builds the Docker image with strict memory limits to prevent host exhaustion.
+    2. Runs a container from the image in a sandboxed environment (limited memory, CPU, PIDs).
+    3. Checks if the container starts successfully and stays running.
+    4. Cleans up the container and image.
+    
+    Args:
+        directory (str): The directory containing the Dockerfile.
+        
+    Returns:
+        Tuple[bool, str]: A tuple containing (success, message).
     """
     image_name = f"dockai-test-{uuid.uuid4().hex[:8]}"
     container_name = f"dockai-container-{uuid.uuid4().hex[:8]}"

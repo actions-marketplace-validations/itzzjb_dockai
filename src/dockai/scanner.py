@@ -28,6 +28,13 @@ DEFAULT_IGNORE_DIRS = {
 def load_ignore_spec(root_path: str, filename: str) -> pathspec.PathSpec:
     """
     Parses a .gitignore or .dockerignore file to create a PathSpec object.
+    
+    Args:
+        root_path (str): The root directory of the repository.
+        filename (str): The name of the ignore file (e.g., ".gitignore").
+        
+    Returns:
+        pathspec.PathSpec: A PathSpec object used for matching file paths against the ignore patterns.
     """
     file_path = os.path.join(root_path, filename)
     patterns = []
@@ -49,6 +56,12 @@ def get_file_tree(root_path: str) -> List[str]:
     1. It starts with a hardcoded list of noisy directories (DEFAULT_IGNORE_DIRS).
     2. It augments this with any .gitignore or .dockerignore patterns found in the root.
     3. It walks the tree, skipping any ignored directories to save processing time.
+    
+    Args:
+        root_path (str): The root directory to scan.
+        
+    Returns:
+        List[str]: A list of relative file paths that should be analyzed.
     """
     gitignore_spec = load_ignore_spec(root_path, ".gitignore")
     dockerignore_spec = load_ignore_spec(root_path, ".dockerignore")

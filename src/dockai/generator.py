@@ -11,6 +11,15 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
     This function uses a high-intelligence LLM (GPT-4o) to synthesize the 
     gathered context into a production-ready Dockerfile. It applies best 
     practices like multi-stage builds, version pinning, and user permissions.
+    
+    Args:
+        stack_info (str): Description of the technology stack.
+        file_contents (str): The contents of the critical files.
+        custom_instructions (str): Optional custom instructions from the user.
+        feedback_error (str): Optional error message from a previous validation attempt.
+        
+    Returns:
+        str: The generated Dockerfile content.
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     

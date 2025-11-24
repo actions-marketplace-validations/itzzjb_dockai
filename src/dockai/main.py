@@ -13,12 +13,13 @@ from .analyzer import analyze_repo_needs
 from .generator import generate_dockerfile
 from .validator import validate_docker_build_and_run
 
+# Load environment variables from .env file
 load_dotenv()
 
 app = typer.Typer()
 console = Console()
 
-# Configure logging
+# Configure logging with RichHandler for beautiful output
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
@@ -34,22 +35,31 @@ def run(
 ):
     """
     DockAI: A Three-Stage Agentic Pipeline for generating optimized Dockerfiles.
+    
+    This command orchestrates the entire process:
+    1. Scans the repository structure.
+    2. Analyzes the project to identify the tech stack and critical files.
+    3. Generates a Dockerfile using an LLM.
+    4. Validates the Dockerfile by building and running it in a sandboxed environment.
     """
     if verbose:
         logger.setLevel(logging.DEBUG)
         logger.debug("Verbose mode enabled")
     
+    # Validate input path
     if not os.path.exists(path):
         console.print(f"[bold red]Error:[/bold red] Path '{path}' does not exist.")
         logger.error(f"Path '{path}' does not exist.")
         raise typer.Exit(code=1)
         
+    # Validate API key
     if not os.getenv("OPENAI_API_KEY"):
         console.print("[bold red]Error:[/bold red] OPENAI_API_KEY not found in environment variables.")
         console.print("Please create a .env file with your API key.")
         logger.error("OPENAI_API_KEY missing")
         raise typer.Exit(code=1)
 
+    # Validate model configuration
     if not os.getenv("MODEL_ANALYZER") or not os.getenv("MODEL_GENERATOR"):
         console.print("[bold red]Error:[/bold red] Model configuration missing.")
         console.print("Please set MODEL_ANALYZER and MODEL_GENERATOR in your .env file.")
