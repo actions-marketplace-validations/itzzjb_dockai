@@ -121,6 +121,7 @@ jobs:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           model_analyzer: gpt-4o-mini
           model_generator: gpt-4o
+          max_retries: 3
           
       - name: Commit and Push Dockerfile
         run: |
@@ -158,7 +159,8 @@ The CLI uses a rich terminal interface to show progress:
 2.  **Analyzing**: "The Brain" decides what matters.
 3.  **Reading**: Only reads the content of critical files (privacy/token efficient).
 4.  **Generating**: "The Architect" builds the Dockerfile.
-5.  **Result**: A `Dockerfile` is saved to the target directory.
+5.  **Validating**: Builds and runs the container to ensure it works (auto-corrects if needed).
+6.  **Result**: A `Dockerfile` is saved to the target directory.
 
 ## 🎨 Custom Instructions
 
@@ -251,5 +253,6 @@ The project follows a modern `src`-layout:
     *   `scanner.py`: Directory traversal logic with `pathspec`.
     *   `analyzer.py`: Interface for the Stage 1 LLM call (with retries).
     *   `generator.py`: Interface for the Stage 2 LLM call (with retries).
+    *   `validator.py`: Docker build and run validation logic.
 *   `tests/`: Unit and integration tests.
 *   `pyproject.toml`: Build configuration and dependency management.
