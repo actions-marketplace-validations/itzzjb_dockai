@@ -86,3 +86,30 @@ CMD ["python", "app.py"]
     assert "```" not in result
     assert "FROM python" in result
     assert result.startswith("FROM")
+
+@patch("dockai.generator.OpenAI")
+def test_generate_dockerfile_with_feedback(mock_openai):
+    """Test Dockerfile generation with error feedback"""
+    # Setup mock response
+    mock_client = MagicMock()
+    mock_openai.return_value = mock_client
+    
+    mock_response = MagicMock()
+    mock_response.choices[0].message.content = "FROM python:3.11-slim"
+    mock_client.chat.completions.create.return_value = mock_response
+    
+    # Run function with feedback
+    error_msg = "Error: Cannot find module 'missing.js'"
+    generate_dockerfile(
+        stack_info="Node.js",
+        file_contents="...",
+        feedback_error=error_msg
+    )
+    
+    # Verify the prompt contains the error message
+    call_args = mock_client.chat.completions.create.call_args
+    messages = call_args[1]['messages']
+    system_prompt = messages[0]['content']
+    
+    assert "IMPORTANT: The previous Dockerfile you generated failed" in system_prompt
+    assert error_msg in system_prompt
