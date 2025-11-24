@@ -33,7 +33,7 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> dict:
        - Resolve dependencies (e.g., package.json, package-lock.json, yarn.lock, requirements.txt, pyproject.toml, poetry.lock, go.mod, go.sum, Gemfile, Gemfile.lock, pom.xml, build.gradle).
        - Determine the entrypoint (e.g., main.py, app.py, index.js, server.js, main.go, wsgi.py, manage.py).
        - Understand build configuration (e.g., next.config.js, webpack.config.js, angular.json, vite.config.js).
-       - See existing container config (e.g., Dockerfile, docker-compose.yml).
+       - See existing container config (e.g., Dockerfile, docker-compose.yml). ALWAYS include the existing Dockerfile if present.
 
     User Custom Instructions:
     {custom_instructions}

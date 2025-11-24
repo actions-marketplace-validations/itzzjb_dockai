@@ -29,6 +29,9 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
     
     Your Task:
     Generate a highly optimized, production-ready Multi-Stage Dockerfile for this application.
+
+    IMPORTANT:
+    If an existing Dockerfile is provided in the input files, analyze it carefully. Use it to understand the project's specific build requirements, dependencies, and configurations. However, do not just copy it. Improve upon it by applying the best practices listed below (multi-stage, security, optimization).
     
     Requirements:
     1. Base Images: Use official, minimal base images (e.g., alpine, slim). PIN SPECIFIC VERSIONS (e.g., `node:18-alpine` NOT `node:latest`).
