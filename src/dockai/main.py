@@ -207,10 +207,12 @@ def run(
         
     stack = analysis_result.get("stack", "Unknown")
     files_to_read = analysis_result.get("files_to_read", [])
+    project_type = analysis_result.get("project_type", "service")
     
     console.print(f"[bold cyan]Identified Stack:[/bold cyan] {stack}")
+    console.print(f"[bold cyan]Project Type:[/bold cyan] {project_type}")
     console.print(f"[bold cyan]Critical Files:[/bold cyan] {', '.join(files_to_read)}")
-    logger.info(f"Stack: {stack}, Critical Files: {files_to_read}")
+    logger.info(f"Stack: {stack}, Type: {project_type}, Critical Files: {files_to_read}")
 
     # =========================================================================
     # STAGE 2: CONTEXT GATHERING
@@ -240,7 +242,8 @@ def run(
     while current_try < max_retries:
         with console.status(f"[bold magenta]Stage 3: Generating Dockerfile (Attempt {current_try + 1}/{max_retries})...[/bold magenta]", spinner="earth"):
             try:
-                dockerfile_content, usage = generate_dockerfile(stack, file_contents_str, generator_instructions, feedback_error)
+                # Generator now returns project_type as well
+                dockerfile_content, project_type, usage = generate_dockerfile(stack, file_contents_str, generator_instructions, feedback_error)
                 
                 model = os.getenv("MODEL_GENERATOR")
                 cost = calculate_cost(model, usage.prompt_tokens, usage.completion_tokens)
@@ -248,7 +251,7 @@ def run(
                 total_tokens += usage.total_tokens
                 console.print(f"[dim]Generator Usage (Attempt {current_try + 1}): {usage.total_tokens} tokens (${cost:.4f})[/dim]")
                 
-                logger.debug("Dockerfile generated successfully")
+                logger.debug(f"Dockerfile generated successfully. Type: {project_type}")
             except Exception as e:
                 console.print(f"[bold red]Error during generation:[/bold red] {e}")
                 logger.exception("Error during generation")
@@ -262,8 +265,8 @@ def run(
         console.print(Panel(dockerfile_content, title=f"Generated Dockerfile (Attempt {current_try + 1})", border_style="green"))
         
         # Validate
-        with console.status("[bold blue]Validating Dockerfile (Build & Run)...[/bold blue]", spinner="bouncingBall"):
-            success, message = validate_docker_build_and_run(path)
+        with console.status(f"[bold blue]Validating Dockerfile (Type: {project_type})...[/bold blue]", spinner="bouncingBall"):
+            success, message = validate_docker_build_and_run(path, project_type)
             
         if success:
             console.print(f"[bold green]Success![/bold green] Dockerfile validated successfully.")

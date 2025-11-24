@@ -16,6 +16,8 @@ def test_validate_success(mock_sleep, mock_run_command):
         (0, "Build success", ""), # build
         (0, "container_id", ""),  # run
         (0, "true", ""),          # inspect running
+        (0, "0", ""),             # inspect exit code
+        (0, "logs", ""),          # logs
         (0, "", ""),              # rm
         (0, "", "")               # rmi
     ]
@@ -23,7 +25,7 @@ def test_validate_success(mock_sleep, mock_run_command):
     success, msg = validate_docker_build_and_run(".")
     
     assert success is True
-    assert "Build and Run successful" in msg
+    assert "Service is running successfully" in msg
 
 @patch("dockai.validator.run_command")
 def test_validate_build_failure(mock_run_command):
@@ -84,5 +86,5 @@ def test_validate_run_failure_crash(mock_sleep, mock_run_command):
     success, msg = validate_docker_build_and_run(".")
     
     assert success is False
-    assert "Container stopped unexpectedly" in msg
+    assert "Service stopped unexpectedly" in msg
     assert "Error: crash" in msg

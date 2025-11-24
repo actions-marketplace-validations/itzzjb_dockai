@@ -22,6 +22,7 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
     Returns:
         Tuple: A tuple containing:
             - str: The generated Dockerfile content.
+            - str: The detected project type ('service' or 'script').
             - object: The usage statistics from the API call.
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -63,9 +64,10 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
        - accurately determine the start command based on the provided files (e.g., `CMD ["python", "app.py"]`, `CMD ["npm", "start"]`).
     
     Output Format:
-    - Return ONLY the raw content of the Dockerfile.
-    - Do NOT use markdown code blocks (```).
-    - Add helpful comments inside the Dockerfile explaining complex steps.
+    - Return a JSON object with two keys:
+      1. "dockerfile": The raw content of the Dockerfile (string).
+      2. "project_type": "service" (if it listens on a port/runs indefinitely) or "script" (if it runs once and exits).
+    - Do NOT use markdown code blocks.
     """
     
     formatted_prompt = system_prompt.replace("{stack}", stack_info).replace("{file_contents}", file_contents).replace("{custom_instructions}", custom_instructions)
@@ -78,11 +80,24 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
         messages=[
             {"role": "system", "content": formatted_prompt},
             {"role": "user", "content": "Generate the Dockerfile now."}
-        ]
+        ],
+        response_format={"type": "json_object"}
     )
     
     content = response.choices[0].message.content
     usage = response.usage
-    # Robust cleanup: Remove any markdown formatting the model might have added
-    content = content.replace("```dockerfile", "").replace("```", "").strip()
-    return content, usage
+    
+    import json
+    try:
+        data = json.loads(content)
+        dockerfile_content = data.get("dockerfile", "")
+        project_type = data.get("project_type", "service")
+        
+        # Robust cleanup
+        dockerfile_content = dockerfile_content.replace("```dockerfile", "").replace("```", "").strip()
+        
+        return dockerfile_content, project_type, usage
+    except Exception:
+        # Fallback if JSON parsing fails (unlikely with json_object mode but possible)
+        # Assume content is just the Dockerfile
+        return content.strip(), "service", usage

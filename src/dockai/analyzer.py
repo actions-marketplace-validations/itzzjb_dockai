@@ -38,7 +38,8 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[
     Your Tasks:
     1. FILTER: Exclude irrelevant directories and files (e.g., .git, .idea, .vscode, node_modules, venv, __pycache__, dist, build, test coverage reports, images, markdown docs).
     2. IDENTIFY STACK: Determine the primary programming language, framework, and package manager (e.g., "Python/Django with Poetry", "Node.js/Next.js with npm", "Go/Gin").
-    3. SELECT FILES: Identify the specific files needed to:
+    3. CLASSIFY TYPE: Determine if the project is a "service" (long-running, listens on a port, e.g., web server, API, bot) or a "script" (runs once and exits, e.g., batch job, CLI tool, hello world, simple printer). NOTE: A simple "hello world" or calculation script is a SCRIPT, even if it has a package.json.
+    4. SELECT FILES: Identify the specific files needed to:
        - Resolve dependencies (e.g., package.json, package-lock.json, yarn.lock, requirements.txt, pyproject.toml, poetry.lock, go.mod, go.sum, Gemfile, Gemfile.lock, pom.xml, build.gradle).
        - Determine the entrypoint (e.g., main.py, app.py, index.js, server.js, main.go, wsgi.py, manage.py).
        - Understand build configuration (e.g., next.config.js, webpack.config.js, angular.json, vite.config.js).
@@ -49,7 +50,8 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[
 
     Return a JSON object ONLY with the following structure:
     { 
-        "stack": "Detailed description of the tech stack", 
+        "stack": "Detailed description of the tech stack",
+        "project_type": "service" or "script",
         "files_to_read": ["path/to/file1", "path/to/file2"] 
     }
     """
