@@ -17,6 +17,7 @@ DockAI represents the next evolution in containerization.
 
 *   **Zero-Config Automation**: Developers never need to write a Dockerfile again. The GitHub Action automatically generates a perfect, up-to-date Dockerfile on every commit.
 *   **Three-Stage Pipeline**: Combines analysis (cheap/fast), generation (smart/expensive), and validation (agentic feedback) for maximum reliability.
+*   **Context-Aware Validation**: Intelligently distinguishes between long-running **services** (web servers, APIs) and short-lived **scripts** (CLI tools, batch jobs) to apply the correct validation logic. Services must stay running; scripts must exit successfully with code 0.
 *   **Agentic Self-Correction**: Automatically builds and runs the generated Dockerfile in a **sandboxed environment** to verify it works. If it fails, the agent analyzes the error logs and self-corrects until success.
 *   **Intelligent Scanning**: Uses `pathspec` to fully respect `.gitignore` and `.dockerignore` patterns (including wildcards like `*.log` or `secret_*.json`).
 *   **Robust & Reliable**: Built-in automatic retries with exponential backoff for all AI API calls to handle network instability.
@@ -34,14 +35,18 @@ The system operates in three distinct phases:
 
 2.  **Stage 1: The Brain (`analyzer.py`)**:
     *   **Input**: JSON list of file paths.
-    *   **Task**: Identifies the technology stack (e.g., Python/Flask, Node/Express) and pinpoints the *exact* files needed for context (e.g., `package.json`, `requirements.txt`).
+    *   **Task**: Identifies the technology stack (e.g., Python/Flask, Node/Express, Go/Gin) and pinpoints the *exact* files needed for context (e.g., `package.json`, `requirements.txt`, `go.mod`).
+    *   **Output**: Stack description, critical files list, and initial project type classification.
 
 3.  **Stage 2: The Architect (`generator.py`)**:
     *   **Input**: Content of the critical files identified in Stage 1.
-    *   **Task**: Writes a multi-stage, security-focused Dockerfile with version pinning and cache optimization.
+    *   **Task**: Analyzes the code to determine if the project is a **service** (long-running, listens on a port) or a **script** (runs once and exits).
+    *   **Output**: A multi-stage, security-focused Dockerfile with version pinning and cache optimization, plus the refined project type classification.
 
-4.  **Stage 3: Validation & Feedback Loop (`validator.py`)**:
-    *   **Task**: Builds the generated Dockerfile and runs a container in a **secure, sandboxed environment** to verify it starts successfully without risking the host system.
+4.  **Stage 3: Context-Aware Validation (`validator.py`)**:
+    *   **Task**: Builds the generated Dockerfile and runs a container in a **secure, sandboxed environment** with resource limits (512MB RAM, 1 CPU, 100 PIDs max).
+    *   **Service Validation**: Verifies the container starts and stays running (must be alive after 5 seconds).
+    *   **Script Validation**: Verifies the container runs and exits successfully with code 0.
     *   **Feedback**: If validation fails, the error logs are fed back to "The Architect" to regenerate a fixed Dockerfile. This cycle repeats until success or `MAX_RETRIES` is reached.
 
 ## 🚀 Getting Started
@@ -93,6 +98,107 @@ export MAX_RETRIES=3
     MODEL_GENERATOR=gpt-4o
     MAX_RETRIES=3
     ```
+
+## 📚 Examples
+
+DockAI intelligently handles both **long-running services** and **short-lived scripts** across different programming languages.
+
+### Node.js Examples
+
+**Service (HTTP Server):**
+```javascript
+// index.js
+const http = require('http');
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Hello World');
+});
+server.listen(3000, () => {
+  console.log('Server running at http://localhost:3000/');
+});
+```
+
+```bash
+$ dockai ./my-node-service
+✓ Identified Stack: Node.js with npm
+✓ Project Type: service
+✓ Generated Dockerfile with multi-stage build
+✓ Validation: Service is running successfully
+```
+
+**Script (One-time Execution):**
+```javascript
+// index.js
+console.log("Hello Script World");
+```
+
+```bash
+$ dockai ./my-node-script
+✓ Identified Stack: Node.js with npm
+✓ Project Type: script
+✓ Generated Dockerfile
+✓ Validation: Script finished successfully (Exit Code 0)
+```
+
+### Go Examples
+
+**Service (HTTP Server):**
+```go
+// main.go
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "Hello from Go Service")
+}
+
+func main() {
+    http.HandleFunc("/", handler)
+    fmt.Println("Server starting on port 8080...")
+    http.ListenAndServe(":8080", nil)
+}
+```
+
+```bash
+$ dockai ./my-go-service
+✓ Identified Stack: Go 1.21
+✓ Project Type: service
+✓ Generated optimized multi-stage Dockerfile
+✓ Validation: Service is running successfully
+```
+
+**Script (One-time Execution):**
+```go
+// main.go
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello from Go Script")
+}
+```
+
+```bash
+$ dockai ./my-go-script
+✓ Identified Stack: Go 1.21
+✓ Project Type: script
+✓ Generated Dockerfile
+✓ Validation: Script finished successfully (Exit Code 0)
+```
+
+### Why This Matters
+
+Traditional Dockerfile generators fail with scripts because they expect all containers to stay running. DockAI understands the difference:
+
+- **Services** (web servers, APIs, bots): Must listen on a port and stay alive
+- **Scripts** (CLI tools, batch jobs, data processors): Must run once and exit cleanly
+
+This context-awareness eliminates false validation failures and ensures your Dockerfile works correctly for your specific use case.
 
 ## 🤖 Usage as GitHub Action
 
