@@ -31,8 +31,9 @@ def validate_docker_build_and_run(directory: str) -> Tuple[bool, str]:
     logger.info(f"Validating Dockerfile in {directory}...")
     
     # 1. Build
-    logger.info("Building Docker image...")
-    build_cmd = ["docker", "build", "-t", image_name, "."]
+    logger.info("Building Docker image (with resource limits)...")
+    # Limit build memory to 2GB to prevent host exhaustion during build
+    build_cmd = ["docker", "build", "--memory=2g", "-t", image_name, "."]
     code, stdout, stderr = run_command(build_cmd, cwd=directory)
     
     if code != 0:
@@ -41,9 +42,18 @@ def validate_docker_build_and_run(directory: str) -> Tuple[bool, str]:
         return False, error_msg
     
     # 2. Run
-    logger.info("Running Docker container...")
-    # Run detached
-    run_cmd = ["docker", "run", "-d", "--name", container_name, image_name]
+    logger.info("Running Docker container (sandboxed)...")
+    # Run detached with strict resource limits and security controls
+    run_cmd = [
+        "docker", "run", 
+        "-d", 
+        "--name", container_name,
+        "--memory=512m",                    # Limit RAM to 512MB
+        "--cpus=1.0",                       # Limit to 1 CPU core
+        "--pids-limit=100",                 # Prevent fork bombs
+        "--security-opt=no-new-privileges", # Prevent privilege escalation
+        image_name
+    ]
     code, stdout, stderr = run_command(run_cmd)
     
     if code != 0:
