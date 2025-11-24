@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from .scanner import get_file_tree
 from .analyzer import analyze_repo_needs
 from .generator import generate_dockerfile
+from .validator import validate_docker_build_and_run
 
 load_dotenv()
 
@@ -167,23 +168,47 @@ def run(
     # STAGE 3: GENERATION (THE ARCHITECT)
     # Synthesize the Dockerfile using the gathered context.
     # =========================================================================
-    with console.status("[bold magenta]Stage 3: Generating Dockerfile (The Architect)...[/bold magenta]", spinner="earth"):
-        try:
-            dockerfile_content = generate_dockerfile(stack, file_contents_str, generator_instructions)
-            logger.debug("Dockerfile generated successfully")
-        except Exception as e:
-            console.print(f"[bold red]Error during generation:[/bold red] {e}")
-            logger.exception("Error during generation")
-            raise typer.Exit(code=1)
+    max_retries = int(os.getenv("MAX_RETRIES", "3"))
+    current_try = 0
+    feedback_error = None
 
-    # Save the result
-    output_path = os.path.join(path, "Dockerfile")
-    with open(output_path, "w") as f:
-        f.write(dockerfile_content)
+    while current_try < max_retries:
+        with console.status(f"[bold magenta]Stage 3: Generating Dockerfile (Attempt {current_try + 1}/{max_retries})...[/bold magenta]", spinner="earth"):
+            try:
+                dockerfile_content = generate_dockerfile(stack, file_contents_str, generator_instructions, feedback_error)
+                logger.debug("Dockerfile generated successfully")
+            except Exception as e:
+                console.print(f"[bold red]Error during generation:[/bold red] {e}")
+                logger.exception("Error during generation")
+                raise typer.Exit(code=1)
 
-    console.print(Panel(dockerfile_content, title="Generated Dockerfile", border_style="green"))
-    console.print(f"[bold green]Success![/bold green] Dockerfile saved to {output_path}")
-    logger.info(f"Dockerfile saved to {output_path}")
+        # Save the result
+        output_path = os.path.join(path, "Dockerfile")
+        with open(output_path, "w") as f:
+            f.write(dockerfile_content)
+
+        console.print(Panel(dockerfile_content, title=f"Generated Dockerfile (Attempt {current_try + 1})", border_style="green"))
+        
+        # Validate
+        with console.status("[bold blue]Validating Dockerfile (Build & Run)...[/bold blue]", spinner="bouncingBall"):
+            success, message = validate_docker_build_and_run(path)
+            
+        if success:
+            console.print(f"[bold green]Success![/bold green] Dockerfile validated successfully.")
+            console.print(f"[bold green]Final Dockerfile saved to {output_path}[/bold green]")
+            logger.info(f"Dockerfile validated and saved to {output_path}")
+            break
+        else:
+            console.print(f"[bold red]Validation Failed:[/bold red]\n{message}")
+            logger.warning(f"Validation failed: {message}")
+            feedback_error = message
+            current_try += 1
+            
+            if current_try >= max_retries:
+                console.print(f"[bold red]Failed to generate a valid Dockerfile after {max_retries} attempts.[/bold red]")
+                raise typer.Exit(code=1)
+            else:
+                console.print(f"[yellow]Retrying with error feedback...[/yellow]")
 
 if __name__ == "__main__":
     app()

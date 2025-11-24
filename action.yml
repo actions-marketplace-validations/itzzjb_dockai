@@ -27,6 +27,10 @@ inputs:
     description: 'Optional custom instructions for the generator stage'
     required: false
     default: ''
+  max_retries:
+    description: 'Maximum number of retries for self-correction'
+    required: false
+    default: '3'
 
 runs:
   using: 'docker'
@@ -39,3 +43,4 @@ runs:
     MODEL_GENERATOR: ${{ inputs.model_generator }}
     DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
     DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
+    MAX_RETRIES: ${{ inputs.max_retries }}

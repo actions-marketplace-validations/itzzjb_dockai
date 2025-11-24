@@ -17,6 +17,7 @@ DockAI represents the next evolution in containerization.
 
 *   **Zero-Config Automation**: Developers never need to write a Dockerfile again. The GitHub Action automatically generates a perfect, up-to-date Dockerfile on every commit.
 *   **Two-Stage Pipeline**: Separates analysis (cheap/fast) from generation (smart/expensive) for cost-efficiency.
+*   **Agentic Self-Correction**: Automatically builds and runs the generated Dockerfile to verify it works. If it fails, the agent analyzes the error logs and self-corrects until success.
 *   **Intelligent Scanning**: Uses `pathspec` to fully respect `.gitignore` and `.dockerignore` patterns (including wildcards like `*.log` or `secret_*.json`).
 *   **Robust & Reliable**: Built-in automatic retries with exponential backoff for all AI API calls to handle network instability.
 *   **Observability**: Structured logging with a `--verbose` mode for deep debugging and transparency.
@@ -37,6 +38,10 @@ The system operates in three distinct phases:
 3.  **Stage 2: The Architect (`generator.py`)**:
     *   **Input**: Content of the critical files identified in Stage 1.
     *   **Task**: Writes a multi-stage, security-focused Dockerfile with version pinning and cache optimization.
+
+4.  **Stage 3: Validation & Feedback Loop (`validator.py`)**:
+    *   **Task**: Builds the generated Dockerfile and runs a container to verify it starts successfully.
+    *   **Feedback**: If validation fails, the error logs are fed back to "The Architect" to regenerate a fixed Dockerfile. This cycle repeats until success or `MAX_RETRIES` is reached.
 
 ## 🚀 Getting Started
 
@@ -59,6 +64,7 @@ pip install dockai-cli
 export OPENAI_API_KEY=sk-your-api-key-here
 export MODEL_ANALYZER=gpt-4o-mini
 export MODEL_GENERATOR=gpt-4o
+export MAX_RETRIES=3
 ```
 
 > [!NOTE]  
@@ -84,6 +90,7 @@ export MODEL_GENERATOR=gpt-4o
     OPENAI_API_KEY=sk-your-api-key-here
     MODEL_ANALYZER=gpt-4o-mini
     MODEL_GENERATOR=gpt-4o
+    MAX_RETRIES=3
     ```
 
 ## 🤖 Usage as GitHub Action

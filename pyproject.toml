@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dockai-cli"
-version = "1.0.2"
-description = "A Two-Stage LLM Pipeline for generating optimized Dockerfiles"
+version = "1.0.3"
+description = "A LLM Pipeline for generating optimized Dockerfiles"
 readme = "README.md"
 authors = [
   { name = "Januda Bethmin", email = "desilvabethmin@gmail.com" },
@@ -18,6 +18,7 @@ classifiers = [
 requires-python = ">=3.8"
 dependencies = [
     "openai>=1.0.0",
+    "httpx<0.28.0",
     "typer>=0.9.0",
     "rich>=13.0.0",
     "python-dotenv>=1.0.0",

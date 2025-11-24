@@ -4,7 +4,7 @@ from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions: str = "") -> str:
+def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions: str = "", feedback_error: str = None) -> str:
     """
     Stage 2: The Architect (Generation).
     
@@ -54,6 +54,9 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
     
     formatted_prompt = system_prompt.replace("{stack}", stack_info).replace("{file_contents}", file_contents).replace("{custom_instructions}", custom_instructions)
     
+    if feedback_error:
+        formatted_prompt += f"\n\nIMPORTANT: The previous Dockerfile you generated failed to build or run with the following error:\n{feedback_error}\n\nPlease analyze this error and fix the Dockerfile accordingly."
+
     response = client.chat.completions.create(
         model=os.getenv("MODEL_GENERATOR"),
         messages=[
