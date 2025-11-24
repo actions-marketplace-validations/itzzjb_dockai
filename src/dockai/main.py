@@ -56,7 +56,7 @@ def run(
         logger.error("Model configuration missing")
         raise typer.Exit(code=1)
 
-    console.print(Panel.fit("[bold blue]DockAI[/bold blue]\n[italic]University Thesis - Two-Stage LLM Pipeline[/italic]"))
+    console.print(Panel.fit("[bold blue]DockAI[/bold blue]\n[italic]Three-Stage LLM Pipeline[/italic]"))
     logger.info(f"Starting analysis for: {path}")
 
     # =========================================================================
