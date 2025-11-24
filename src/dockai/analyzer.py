@@ -1,11 +1,12 @@
 import json
 import os
+from typing import Tuple, Dict, List, Any
 from openai import OpenAI
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> tuple[dict, object]:
+def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[dict, object]:
     """
     Stage 1: The Brain (Analysis).
     
@@ -18,8 +19,8 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> tuple[
         custom_instructions (str): Optional custom instructions from the user.
         
     Returns:
-        tuple: A tuple containing:
-            - dict: A dictionary containing:
+        Tuple[Dict, object]: A tuple containing:
+            - Dict: A dictionary containing:
                 - 'stack' (str): Description of the technology stack.
                 - 'files_to_read' (List[str]): List of critical files to read for context.
             - object: The usage statistics from the API call.
@@ -28,7 +29,7 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> tuple[
     
     file_list_json = json.dumps(file_list)
     
-    system_prompt = """
+    system_prompt = r"""
     You are an expert Build Engineer and DevOps Architect. 
     You will receive a JSON list of ALL filenames in a repository.
     

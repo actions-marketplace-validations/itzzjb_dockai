@@ -1,10 +1,11 @@
 import os
+from typing import Tuple
 from openai import OpenAI
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions: str = "", feedback_error: str = None) -> tuple[str, object]:
+def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions: str = "", feedback_error: str = None) -> Tuple[str, object]:
     """
     Stage 2: The Architect (Generation).
     
@@ -19,13 +20,13 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
         feedback_error (str): Optional error message from a previous validation attempt.
         
     Returns:
-        tuple: A tuple containing:
+        Tuple: A tuple containing:
             - str: The generated Dockerfile content.
             - object: The usage statistics from the API call.
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
-    system_prompt = """
+    system_prompt = r"""
     You are a Senior DevOps Engineer and Containerization Expert.
     
     Context:

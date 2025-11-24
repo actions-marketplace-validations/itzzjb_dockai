@@ -17,9 +17,10 @@ DockAI represents the next evolution in containerization.
 
 *   **Zero-Config Automation**: Developers never need to write a Dockerfile again. The GitHub Action automatically generates a perfect, up-to-date Dockerfile on every commit.
 *   **Three-Stage Pipeline**: Combines analysis (cheap/fast), generation (smart/expensive), and validation (agentic feedback) for maximum reliability.
-*   **Agentic Self-Correction**: Automatically builds and runs the generated Dockerfile to verify it works. If it fails, the agent analyzes the error logs and self-corrects until success.
+*   **Agentic Self-Correction**: Automatically builds and runs the generated Dockerfile in a **sandboxed environment** to verify it works. If it fails, the agent analyzes the error logs and self-corrects until success.
 *   **Intelligent Scanning**: Uses `pathspec` to fully respect `.gitignore` and `.dockerignore` patterns (including wildcards like `*.log` or `secret_*.json`).
 *   **Robust & Reliable**: Built-in automatic retries with exponential backoff for all AI API calls to handle network instability.
+*   **Real-time Cost Tracking**: Displays token usage and estimated cost for every run using live pricing data from the community-maintained LiteLLM API.
 *   **Observability**: Structured logging with a `--verbose` mode for deep debugging and transparency.
 *   **Security First**: Generates non-root, multi-stage builds by default.
 
@@ -40,7 +41,7 @@ The system operates in three distinct phases:
     *   **Task**: Writes a multi-stage, security-focused Dockerfile with version pinning and cache optimization.
 
 4.  **Stage 3: Validation & Feedback Loop (`validator.py`)**:
-    *   **Task**: Builds the generated Dockerfile and runs a container to verify it starts successfully.
+    *   **Task**: Builds the generated Dockerfile and runs a container in a **secure, sandboxed environment** to verify it starts successfully without risking the host system.
     *   **Feedback**: If validation fails, the error logs are fed back to "The Architect" to regenerate a fixed Dockerfile. This cycle repeats until success or `MAX_RETRIES` is reached.
 
 ## 🚀 Getting Started
