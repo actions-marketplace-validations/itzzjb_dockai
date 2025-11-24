@@ -2,10 +2,11 @@ import subprocess
 import time
 import uuid
 import logging
+from typing import List, Tuple
 
 logger = logging.getLogger("dockai")
 
-def run_command(command: list[str], cwd: str = ".") -> tuple[int, str, str]:
+def run_command(command: List[str], cwd: str = ".") -> Tuple[int, str, str]:
     """Run a shell command and return exit code, stdout, stderr."""
     try:
         result = subprocess.run(
@@ -19,7 +20,7 @@ def run_command(command: list[str], cwd: str = ".") -> tuple[int, str, str]:
     except Exception as e:
         return -1, "", str(e)
 
-def validate_docker_build_and_run(directory: str) -> tuple[bool, str]:
+def validate_docker_build_and_run(directory: str) -> Tuple[bool, str]:
     """
     Builds and runs the Dockerfile in the given directory.
     Returns (success, message).
