@@ -33,7 +33,7 @@ def run(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose debug logging")
 ):
     """
-    DockAI: A Two-Stage LLM Pipeline for generating optimized Dockerfiles.
+    DockAI: A Three-Stage Agentic Pipeline for generating optimized Dockerfiles.
     """
     if verbose:
         logger.setLevel(logging.DEBUG)

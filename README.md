@@ -2,7 +2,7 @@
 
 **The End of Manual Dockerfiles: Automated, Intelligent, Production-Ready.**
 
-DockAI is a robust, enterprise-grade Python CLI tool designed to intelligently analyze a software repository and generate a production-ready, optimized Dockerfile. It uses a novel two-stage LLM pipeline to first understand the project structure ("The Brain") and then architect the build environment ("The Architect").
+DockAI is a robust, enterprise-grade Python CLI tool designed to intelligently analyze a software repository and generate a production-ready, optimized Dockerfile. It uses a novel three-stage pipeline to understand the project structure ("The Brain"), architect the build environment ("The Architect"), and validate the result ("The Validator").
 
 ## 💡 Why DockAI?
 
@@ -16,7 +16,7 @@ DockAI represents the next evolution in containerization.
 ## ✨ Key Features
 
 *   **Zero-Config Automation**: Developers never need to write a Dockerfile again. The GitHub Action automatically generates a perfect, up-to-date Dockerfile on every commit.
-*   **Two-Stage Pipeline**: Separates analysis (cheap/fast) from generation (smart/expensive) for cost-efficiency.
+*   **Three-Stage Pipeline**: Combines analysis (cheap/fast), generation (smart/expensive), and validation (agentic feedback) for maximum reliability.
 *   **Agentic Self-Correction**: Automatically builds and runs the generated Dockerfile to verify it works. If it fails, the agent analyzes the error logs and self-corrects until success.
 *   **Intelligent Scanning**: Uses `pathspec` to fully respect `.gitignore` and `.dockerignore` patterns (including wildcards like `*.log` or `secret_*.json`).
 *   **Robust & Reliable**: Built-in automatic retries with exponential backoff for all AI API calls to handle network instability.
