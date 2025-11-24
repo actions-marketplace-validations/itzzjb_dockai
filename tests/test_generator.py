@@ -15,10 +15,11 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY . .
 CMD ["python", "app.py"]"""
+    mock_response.usage = MagicMock()
     mock_client.chat.completions.create.return_value = mock_response
     
     # Run function
-    result = generate_dockerfile(
+    result, usage = generate_dockerfile(
         stack_info="Python/Flask",
         file_contents="--- FILE: requirements.txt ---\nflask==2.0.0\n"
     )
@@ -27,6 +28,7 @@ CMD ["python", "app.py"]"""
     assert "FROM python" in result
     assert "WORKDIR" in result
     assert "CMD" in result
+    assert usage is not None
     mock_client.chat.completions.create.assert_called_once()
 
 @patch("dockai.generator.OpenAI")
@@ -46,10 +48,11 @@ RUN npm ci --production
 COPY . .
 EXPOSE 8080
 CMD ["npm", "start"]"""
+    mock_response.usage = MagicMock()
     mock_client.chat.completions.create.return_value = mock_response
     
     # Run function with custom instructions
-    result = generate_dockerfile(
+    result, usage = generate_dockerfile(
         stack_info="Node.js/Express",
         file_contents="--- FILE: package.json ---\n{\"name\": \"app\"}\n",
         custom_instructions="Use port 8080 and create non-root user"
@@ -59,6 +62,7 @@ CMD ["npm", "start"]"""
     assert "FROM node" in result
     assert "USER appuser" in result or "USER" in result
     assert "8080" in result
+    assert usage is not None
     mock_client.chat.completions.create.assert_called_once()
 
 @patch("dockai.generator.OpenAI")
@@ -74,10 +78,11 @@ FROM python:3.11-slim
 WORKDIR /app
 CMD ["python", "app.py"]
 ```"""
+    mock_response.usage = MagicMock()
     mock_client.chat.completions.create.return_value = mock_response
     
     # Run function
-    result = generate_dockerfile(
+    result, usage = generate_dockerfile(
         stack_info="Python",
         file_contents="--- FILE: app.py ---\nprint('hello')\n"
     )
@@ -86,6 +91,7 @@ CMD ["python", "app.py"]
     assert "```" not in result
     assert "FROM python" in result
     assert result.startswith("FROM")
+    assert usage is not None
 
 @patch("dockai.generator.OpenAI")
 def test_generate_dockerfile_with_feedback(mock_openai):
@@ -96,6 +102,7 @@ def test_generate_dockerfile_with_feedback(mock_openai):
     
     mock_response = MagicMock()
     mock_response.choices[0].message.content = "FROM python:3.11-slim"
+    mock_response.usage = MagicMock()
     mock_client.chat.completions.create.return_value = mock_response
     
     # Run function with feedback

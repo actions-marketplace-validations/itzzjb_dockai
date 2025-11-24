@@ -4,7 +4,7 @@ from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions: str = "", feedback_error: str = None) -> str:
+def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions: str = "", feedback_error: str = None) -> tuple[str, object]:
     """
     Stage 2: The Architect (Generation).
     
@@ -19,7 +19,9 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
         feedback_error (str): Optional error message from a previous validation attempt.
         
     Returns:
-        str: The generated Dockerfile content.
+        tuple: A tuple containing:
+            - str: The generated Dockerfile content.
+            - object: The usage statistics from the API call.
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
@@ -53,6 +55,7 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
        - Clean up cache/temporary files in the same RUN instruction to reduce image size.
     4. Configuration:
        - Set appropriate environment variables (e.g., `ENV NODE_ENV=production`, `ENV PYTHONDONTWRITEBYTECODE=1`).
+       - Do NOT use inline comments inside multi-line ENV instructions (e.g., avoid `ENV KEY=VAL \ # comment`).
        - Define the correct WORKDIR.
        - Expose the correct port (infer from code if possible, otherwise use standard ports like 3000, 8000, 8080).
     5. Entrypoint:
@@ -78,6 +81,7 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
     )
     
     content = response.choices[0].message.content
+    usage = response.usage
     # Robust cleanup: Remove any markdown formatting the model might have added
     content = content.replace("```dockerfile", "").replace("```", "").strip()
-    return content
+    return content, usage

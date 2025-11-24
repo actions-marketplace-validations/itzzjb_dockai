@@ -1,6 +1,7 @@
 import os
 import logging
 import typer
+import httpx
 from rich.console import Console
 from rich.panel import Panel
 from rich.status import Status
@@ -15,6 +16,41 @@ from .validator import validate_docker_build_and_run
 
 # Load environment variables from .env file
 load_dotenv()
+
+PRICING_URL = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+
+cached_pricing = None
+
+def get_pricing_data():
+    global cached_pricing
+    if cached_pricing:
+        return cached_pricing
+    
+    try:
+        # Short timeout to not block execution too long
+        response = httpx.get(PRICING_URL, timeout=2.0)
+        response.raise_for_status()
+        cached_pricing = response.json()
+        return cached_pricing
+    except Exception:
+        return None
+
+def calculate_cost(model, prompt_tokens, completion_tokens):
+    pricing_data = get_pricing_data()
+    
+    if pricing_data and model in pricing_data:
+        try:
+            info = pricing_data[model]
+            input_rate = info.get("input_cost_per_token", 0)
+            output_rate = info.get("output_cost_per_token", 0)
+            
+            input_cost = prompt_tokens * input_rate
+            output_cost = completion_tokens * output_rate
+            return input_cost + output_cost
+        except Exception:
+            pass 
+            
+    return 0.0
 
 app = typer.Typer()
 console = Console()
@@ -69,10 +105,22 @@ def run(
     console.print(Panel.fit("[bold blue]DockAI[/bold blue]\n[italic]Three-Stage LLM Pipeline[/italic]"))
     logger.info(f"Starting analysis for: {path}")
 
+    total_cost = 0.0
+    total_tokens = 0
+
     # =========================================================================
     # STAGE 0: LOAD CUSTOM INSTRUCTIONS
     # Read from .dockai file or environment variables (separate for analyzer and generator)
     # =========================================================================
+    
+    # Pre-fetch pricing in background (or just let it happen on first call)
+    # We'll log if we are using live pricing
+    pricing_data = get_pricing_data()
+    if pricing_data:
+        logger.info("Successfully loaded live pricing data")
+    else:
+        logger.warning("Could not load live pricing data. Cost estimates will be unavailable.")
+
     analyzer_instructions = ""
     generator_instructions = ""
     
@@ -143,7 +191,14 @@ def run(
         # =========================================================================
         status.update("[bold green]Stage 1: Analyzing repository needs (The Brain)...[/bold green]")
         try:
-            analysis_result = analyze_repo_needs(file_tree, analyzer_instructions)
+            analysis_result, usage = analyze_repo_needs(file_tree, analyzer_instructions)
+            
+            model = os.getenv("MODEL_ANALYZER")
+            cost = calculate_cost(model, usage.prompt_tokens, usage.completion_tokens)
+            total_cost += cost
+            total_tokens += usage.total_tokens
+            console.print(f"[dim]Analyzer Usage: {usage.total_tokens} tokens (${cost:.4f})[/dim]")
+            
             logger.debug(f"Analysis result: {analysis_result}")
         except Exception as e:
             console.print(f"[bold red]Error during analysis:[/bold red] {e}")
@@ -185,7 +240,14 @@ def run(
     while current_try < max_retries:
         with console.status(f"[bold magenta]Stage 3: Generating Dockerfile (Attempt {current_try + 1}/{max_retries})...[/bold magenta]", spinner="earth"):
             try:
-                dockerfile_content = generate_dockerfile(stack, file_contents_str, generator_instructions, feedback_error)
+                dockerfile_content, usage = generate_dockerfile(stack, file_contents_str, generator_instructions, feedback_error)
+                
+                model = os.getenv("MODEL_GENERATOR")
+                cost = calculate_cost(model, usage.prompt_tokens, usage.completion_tokens)
+                total_cost += cost
+                total_tokens += usage.total_tokens
+                console.print(f"[dim]Generator Usage (Attempt {current_try + 1}): {usage.total_tokens} tokens (${cost:.4f})[/dim]")
+                
                 logger.debug("Dockerfile generated successfully")
             except Exception as e:
                 console.print(f"[bold red]Error during generation:[/bold red] {e}")
@@ -207,6 +269,12 @@ def run(
             console.print(f"[bold green]Success![/bold green] Dockerfile validated successfully.")
             console.print(f"[bold green]Final Dockerfile saved to {output_path}[/bold green]")
             logger.info(f"Dockerfile validated and saved to {output_path}")
+            
+            console.print(Panel(
+                f"Total Tokens: {total_tokens}\nTotal Cost: ${total_cost:.4f}\nModels Used: {os.getenv('MODEL_ANALYZER')}, {os.getenv('MODEL_GENERATOR')}",
+                title="Usage Summary",
+                border_style="blue"
+            ))
             break
         else:
             console.print(f"[bold red]Validation Failed:[/bold red]\n{message}")

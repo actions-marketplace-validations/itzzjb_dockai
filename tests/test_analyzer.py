@@ -13,12 +13,14 @@ def test_analyze_repo_needs(mock_openai):
         "stack": "Python/Flask",
         "files_to_read": ["requirements.txt", "app.py"]
     })
+    mock_response.usage = MagicMock()
     mock_client.chat.completions.create.return_value = mock_response
     
     # Run function
-    result = analyze_repo_needs(["requirements.txt", "app.py", "README.md"])
+    result, usage = analyze_repo_needs(["requirements.txt", "app.py", "README.md"])
     
     # Assertions
     assert result["stack"] == "Python/Flask"
     assert "requirements.txt" in result["files_to_read"]
+    assert usage is not None
     mock_client.chat.completions.create.assert_called_once()

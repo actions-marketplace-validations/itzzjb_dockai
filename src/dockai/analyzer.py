@@ -5,7 +5,7 @@ from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> dict:
+def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> tuple[dict, object]:
     """
     Stage 1: The Brain (Analysis).
     
@@ -18,9 +18,11 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> dict:
         custom_instructions (str): Optional custom instructions from the user.
         
     Returns:
-        dict: A dictionary containing:
-            - 'stack' (str): Description of the technology stack.
-            - 'files_to_read' (List[str]): List of critical files to read for context.
+        tuple: A tuple containing:
+            - dict: A dictionary containing:
+                - 'stack' (str): Description of the technology stack.
+                - 'files_to_read' (List[str]): List of critical files to read for context.
+            - object: The usage statistics from the API call.
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
@@ -63,12 +65,13 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> dict:
     )
     
     content = response.choices[0].message.content
+    usage = response.usage
     
     # Robust cleanup: Remove any markdown formatting
     content = content.replace("```json", "").replace("```", "").strip()
     
     try:
-        return json.loads(content)
+        return json.loads(content), usage
     except json.JSONDecodeError as e:
         # This will be caught by tenacity and retried
         raise ValueError(f"Failed to parse JSON response from Analyzer: {e}. Content: {content}")
