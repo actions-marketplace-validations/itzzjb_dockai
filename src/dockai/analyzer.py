@@ -27,25 +27,26 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[
     structured_llm = llm.with_structured_output(AnalysisResult)
     
     # Define Prompt
-    system_prompt = """You are an expert Build Engineer and DevOps Architect working as an AI agent.
+    system_prompt = """You are an expert Build Engineer and DevOps Architect working as an autonomous AI agent.
 You will receive a list of ALL filenames in a repository.
 
-Your Goal: Analyze the project structure to determine the technology stack, identify critical files, and prepare for Dockerfile generation.
+Your Goal: Autonomously analyze the project structure to determine the technology stack, identify critical files, and prepare for Dockerfile generation. You must work with ANY programming language, framework, or technology.
 
-Your Tasks:
-1. REASON: First, think step-by-step about what the file structure implies.
-2. FILTER: Exclude irrelevant directories and files.
-3. IDENTIFY STACK: Determine the primary programming language, framework, and package manager.
-4. CLASSIFY TYPE: Determine if the project is a "service" (long-running) or a "script" (runs once).
-5. SELECT FILES: Identify specific files needed to understand dependencies, entrypoints, and build config.
-6. EXTRACT COMMANDS: Predict the 'build_command' and 'start_command' based on standard conventions.
-7. IDENTIFY IMAGE: Predict the 'suggested_base_image' (official Docker Hub repo name) for this stack.
+Your Tasks (Apply intelligent reasoning for ANY technology):
+1. REASON: Think step-by-step about what the file structure implies about the technology stack and architecture.
+2. FILTER: Exclude irrelevant directories and files (build artifacts, caches, IDE configs, etc.).
+3. IDENTIFY STACK: Determine the primary technology, frameworks, and build tools by analyzing file patterns, extensions, and project structure.
+4. CLASSIFY TYPE: Determine if the project is a "service" (long-running process like a web server, API, daemon) or a "script" (runs once and exits).
+5. SELECT FILES: Identify critical files needed to understand dependencies, entrypoints, configuration, and build requirements.
+6. EXTRACT COMMANDS: Determine the 'build_command' and 'start_command' by understanding the detected technology's conventions.
+7. IDENTIFY IMAGE: Determine the most appropriate Docker Hub base image for the detected technology stack.
 8. DETECT HEALTH ENDPOINT (OPTIONAL): 
-   - Only set health_endpoint if you find EXPLICIT health check routes in the file list (e.g., health.ts, health.py, routes/health.js)
-   - Common patterns: /health, /api/health, /healthz, /ready, /ping
-   - If NO health endpoint file is clearly present, set health_endpoint to null
-   - Do NOT guess - only provide if you're confident
-9. ESTIMATE WAIT TIME: Estimate initialization time (3-30s).
+   - Only set health_endpoint if you find EXPLICIT health check implementations in the file structure
+   - If NO health endpoint is clearly indicated, set health_endpoint to null
+   - Do NOT guess - only provide if you're confident based on actual file patterns
+9. ESTIMATE WAIT TIME: Estimate container initialization time based on the detected technology (3-60s).
+
+IMPORTANT: Work with ANY technology stack - do not limit yourself to specific languages or frameworks. Use your knowledge to analyze and understand any project structure.
 
 User Custom Instructions:
 {custom_instructions}

@@ -6,18 +6,18 @@ class HealthEndpoint(BaseModel):
     port: int = Field(description="The port the service listens on")
 
 class AnalysisResult(BaseModel):
-    thought_process: str = Field(description="Step-by-step reasoning about the stack and requirements")
-    stack: str = Field(description="Detailed description of the technology stack")
-    project_type: Literal["service", "script"] = Field(description="Type of the project: 'service' (long-running) or 'script' (runs once)")
-    files_to_read: List[str] = Field(description="List of critical files to read for context")
-    build_command: Optional[str] = Field(description="The command to build the application based on the detected stack and build system")
-    start_command: Optional[str] = Field(description="The command to start/run the application based on the detected stack")
-    suggested_base_image: str = Field(description="The official Docker Hub image name appropriate for this stack")
+    thought_process: str = Field(description="Step-by-step reasoning about the technology stack, architecture, and requirements")
+    stack: str = Field(description="Detailed description of the detected technology stack, frameworks, and tools")
+    project_type: Literal["service", "script"] = Field(description="Type of the project: 'service' (long-running process) or 'script' (runs once and exits)")
+    files_to_read: List[str] = Field(description="List of critical files needed to understand dependencies, configuration, entrypoints, and build requirements")
+    build_command: Optional[str] = Field(description="The command to build/compile the application, if applicable. Determined from project analysis.")
+    start_command: Optional[str] = Field(description="The command to start/run the application. Determined from project analysis.")
+    suggested_base_image: str = Field(description="The most appropriate Docker Hub base image for this technology stack")
     health_endpoint: Optional[HealthEndpoint] = Field(
         default=None,
-        description="Health endpoint details if CLEARLY defined in routing files (e.g., /health, /api/health). Set to null if no health endpoint is found - do NOT guess."
+        description="Health endpoint details if explicitly defined in the codebase. Set to null if no health endpoint is detected - do NOT guess."
     )
-    recommended_wait_time: int = Field(description="Estimated initialization time in seconds (3-30)", ge=3, le=60)
+    recommended_wait_time: int = Field(description="Estimated container initialization time in seconds based on the detected stack", ge=3, le=60)
 
 class DockerfileResult(BaseModel):
     thought_process: str = Field(description="Reasoning for the Dockerfile design choices and optimizations")
@@ -34,5 +34,205 @@ class SecurityReviewResult(BaseModel):
     is_secure: bool = Field(description="True if the Dockerfile is secure enough to proceed, False if critical/high issues exist")
     issues: List[SecurityIssue] = Field(description="List of detected security issues")
     thought_process: str = Field(description="Reasoning for the security assessment")
+    # New: Structured fixes for the generator
+    dockerfile_fixes: List[str] = Field(
+        default=[],
+        description="List of specific, actionable fixes to apply to the Dockerfile. Each fix should be a clear instruction."
+    )
+    fixed_dockerfile: Optional[str] = Field(
+        default=None,
+        description="If issues are found, provide a corrected version of the Dockerfile with all security issues fixed"
+    )
+
+
+# ==================== NEW SCHEMAS FOR ADAPTIVE AGENT ====================
+
+class PlanningResult(BaseModel):
+    """AI-generated strategic plan before Dockerfile generation."""
+    thought_process: str = Field(description="Step-by-step reasoning about the approach and strategy")
+    
+    # Strategy selection
+    base_image_strategy: str = Field(
+        description="Detailed strategy for base image selection. Consider build stage needs vs runtime stage needs, binary compatibility requirements, and security."
+    )
+    build_strategy: str = Field(
+        description="How to build the application: single-stage, multi-stage, builder pattern, etc. Based on project analysis."
+    )
+    optimization_priorities: List[str] = Field(
+        description="Ordered list of optimization priorities based on project needs: security, size, build speed, compatibility"
+    )
+    
+    # Anticipated challenges
+    potential_challenges: List[str] = Field(
+        description="Anticipated challenges based on the detected stack and requirements"
+    )
+    mitigation_strategies: List[str] = Field(
+        description="Strategies to mitigate each potential challenge"
+    )
+    
+    # Learning from history (if retrying)
+    lessons_applied: List[str] = Field(
+        default=[],
+        description="Lessons from previous attempts that will be applied in this plan"
+    )
+    
+    # Specific decisions - determined by AI based on project analysis
+    use_multi_stage: bool = Field(description="Whether to use multi-stage build - determined based on project requirements")
+    use_minimal_runtime: bool = Field(description="Whether to use a minimal runtime image - determined based on compatibility analysis")
+    use_static_linking: bool = Field(description="Whether to use static linking - determined based on compilation requirements")
+    estimated_image_size: str = Field(description="Estimated final image size range based on project analysis")
+
+
+class ReflectionResult(BaseModel):
+    """AI reflection on a failed attempt to learn and adapt."""
+    thought_process: str = Field(description="Deep analysis of what went wrong and why")
+    
+    # Error analysis
+    root_cause_analysis: str = Field(
+        description="Detailed root cause analysis of the failure. Go beyond the surface error."
+    )
+    was_error_predictable: bool = Field(
+        description="Could this error have been anticipated from the project analysis?"
+    )
+    
+    # Learning
+    what_was_tried: str = Field(description="Summary of what approach was attempted")
+    why_it_failed: str = Field(description="Why that specific approach failed")
+    lesson_learned: str = Field(description="Key lesson to remember for future attempts")
+    
+    # Adaptation strategy
+    should_change_base_image: bool = Field(description="Should we try a different base image?")
+    suggested_base_image: Optional[str] = Field(
+        default=None, 
+        description="If changing base image, what should it be?"
+    )
+    should_change_build_strategy: bool = Field(description="Should we change the build approach?")
+    new_build_strategy: Optional[str] = Field(
+        default=None,
+        description="If changing strategy, describe the new approach"
+    )
+    
+    # Specific fixes
+    specific_fixes: List[str] = Field(
+        description="List of specific, actionable fixes to apply"
+    )
+    dockerfile_diff: Optional[str] = Field(
+        default=None,
+        description="If possible, provide a diff-like description of changes needed"
+    )
+    
+    # Re-analysis decision
+    needs_reanalysis: bool = Field(
+        description="Should we re-analyze the project? True if the error suggests wrong assumptions about the project"
+    )
+    reanalysis_focus: Optional[str] = Field(
+        default=None,
+        description="If re-analysis needed, what should we focus on?"
+    )
+    
+    # Confidence
+    confidence_in_fix: Literal["high", "medium", "low"] = Field(
+        description="How confident are we that the proposed fixes will work?"
+    )
+    alternative_approaches: List[str] = Field(
+        default=[],
+        description="Alternative approaches to try if the main fix doesn't work"
+    )
+
+
+class HealthEndpointDetectionResult(BaseModel):
+    """AI-detected health endpoints from actual file contents."""
+    thought_process: str = Field(description="Reasoning about health endpoint detection")
+    
+    # Detection results
+    health_endpoints_found: List[HealthEndpoint] = Field(
+        default=[],
+        description="List of detected health endpoints with their paths and ports"
+    )
+    primary_health_endpoint: Optional[HealthEndpoint] = Field(
+        default=None,
+        description="The primary health endpoint to use for validation"
+    )
+    
+    # Confidence and evidence
+    confidence: Literal["high", "medium", "low", "none"] = Field(
+        description="Confidence in the detection"
+    )
+    evidence: List[str] = Field(
+        description="Code snippets or file references that support the detection"
+    )
+    
+    # Fallback
+    suggested_health_path: Optional[str] = Field(
+        default=None,
+        description="If no explicit health endpoint found, suggest a common one for this framework"
+    )
+
+
+class ReadinessPatternResult(BaseModel):
+    """AI-detected patterns to determine container readiness from logs."""
+    thought_process: str = Field(description="Reasoning about readiness pattern detection based on code analysis")
+    
+    # Patterns - AI determines these from code analysis
+    startup_success_patterns: List[str] = Field(
+        description="Regex patterns that indicate successful startup, derived from analyzing the application code"
+    )
+    startup_failure_patterns: List[str] = Field(
+        description="Regex patterns that indicate startup failure, derived from analyzing the application code"
+    )
+    
+    # Timing - AI estimates based on project analysis
+    estimated_startup_time: int = Field(
+        description="Estimated time in seconds for the application to start, based on project analysis",
+        ge=1,
+        le=300
+    )
+    max_wait_time: int = Field(
+        description="Maximum time to wait before considering startup failed, based on project complexity",
+        ge=5,
+        le=600
+    )
+    
+    # Framework/Technology detection
+    technology_detected: Optional[str] = Field(
+        default=None,
+        description="The primary technology/framework detected from the codebase"
+    )
+    technology_specific_patterns: List[str] = Field(
+        default=[],
+        description="Technology-specific patterns derived from the application"
+    )
+
+
+class IterativeDockerfileResult(BaseModel):
+    """Result from iterative Dockerfile improvement."""
+    thought_process: str = Field(description="Reasoning for the changes made")
+    
+    # Analysis of previous attempt
+    previous_issues_addressed: List[str] = Field(
+        description="List of issues from the previous attempt that are now addressed"
+    )
+    
+    # The improved Dockerfile
+    dockerfile: str = Field(description="The improved Dockerfile content")
+    
+    # Changes made
+    changes_summary: List[str] = Field(
+        description="Summary of changes made from the previous version"
+    )
+    
+    # Confidence
+    confidence_in_fix: Literal["high", "medium", "low"] = Field(
+        description="Confidence that this version will work"
+    )
+    
+    # What to try if this fails
+    fallback_strategy: Optional[str] = Field(
+        default=None,
+        description="What to try if this version also fails"
+    )
+    
+    project_type: Literal["service", "script"] = Field(description="Re-confirmed project type")
+
 
 

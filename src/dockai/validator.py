@@ -77,7 +77,8 @@ def validate_docker_build_and_run(
     project_type: str = "service",
     stack: str = "Unknown",
     health_endpoint: Optional[Tuple[str, int]] = None,
-    recommended_wait_time: int = 5
+    recommended_wait_time: int = 5,
+    readiness_patterns: List[str] = None
 ) -> Tuple[bool, str, int, Optional[ClassifiedError]]:
     """
     Builds and runs the Dockerfile in the given directory to verify it works.
@@ -85,7 +86,7 @@ def validate_docker_build_and_run(
     This function performs the following steps:
     1. Builds the Docker image with strict memory limits to prevent host exhaustion.
     2. Runs a container from the image in a sandboxed environment (limited memory, CPU, PIDs).
-    3. Uses AI-recommended wait times based on stack type.
+    3. Uses AI-detected readiness patterns OR recommended wait times.
     4. For services with health endpoints: Performs HTTP health checks.
     5. For services without health endpoints: Checks if it stays running.
     6. For scripts: Checks if it exits with code 0.
@@ -97,6 +98,7 @@ def validate_docker_build_and_run(
         stack (str): The detected technology stack.
         health_endpoint (Optional[Tuple[str, int]]): (endpoint_path, port) for health checks.
         recommended_wait_time (int): AI-recommended wait time in seconds.
+        readiness_patterns (List[str]): AI-detected log patterns for startup detection.
         
     Returns:
         Tuple[bool, str, int, Optional[ClassifiedError]]: A tuple containing 

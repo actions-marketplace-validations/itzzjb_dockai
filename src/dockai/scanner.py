@@ -3,22 +3,55 @@ from typing import List, Set
 import pathspec
 
 # Core directories to ignore to prevent context explosion.
-# We explicitly ignore these system/heavy folders to ensure the LLM
-# focuses only on source code and configuration files.
+# We explicitly ignore these common build/cache/system folders across various
+# technology stacks to ensure the AI focuses only on source code and configuration files.
+# This list is technology-agnostic and covers common patterns.
 DEFAULT_IGNORE_DIRS = {
+    # Version control
     ".git",
+    ".svn",
+    ".hg",
+    # Package manager directories (various ecosystems)
     "node_modules",
+    "vendor",
+    "packages",
+    # Python virtual environments and caches
     "venv",
     ".venv",
     "env",
     "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".tox",
+    "eggs",
+    ".eggs",
+    # Build output directories (various ecosystems)
     "dist",
     "build",
+    "out",
     "target",
+    "bin",
+    "obj",
+    "_build",
+    # IDE and editor directories
     ".idea",
     ".vscode",
+    ".vs",
+    ".eclipse",
+    # OS-specific
     "__MACOSX",
-    "coverage"
+    ".DS_Store",
+    # Test and coverage
+    "coverage",
+    ".coverage",
+    "htmlcov",
+    ".nyc_output",
+    # Misc caches and generated
+    ".cache",
+    ".tmp",
+    "tmp",
+    ".gradle",
+    ".cargo"
 }
 
 def load_ignore_spec(root_path: str, filename: str) -> pathspec.PathSpec:
