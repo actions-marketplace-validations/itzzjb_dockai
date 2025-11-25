@@ -44,36 +44,63 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
     Generate a highly optimized, production-ready Multi-Stage Dockerfile for this application.
 
     IMPORTANT:
-    If an existing Dockerfile is provided in the input files, analyze it carefully. Use it to understand the project's specific build requirements, dependencies, and configurations. However, do not just copy it. Improve upon it by applying the best practices listed below (multi-stage, security, optimization).
+    If an existing Dockerfile is provided in the input files, analyze it carefully. Use it to understand the project's specific build requirements, dependencies, and configurations. However, do not just copy it. Improve upon it by applying the best practices listed below.
     
     Requirements:
-    1. Base Images: Use official, minimal base images (e.g., alpine, slim). PIN SPECIFIC VERSIONS (e.g., `node:18-alpine` NOT `node:latest`).
+    1. Base Images: 
+       - Use official, minimal base images appropriate for the stack
+       - PIN SPECIFIC VERSIONS (never use 'latest' tag)
+       - Choose the smallest viable variant (alpine, slim, distroless when appropriate)
+       
     2. Security: 
-       - Run as a non-root user. Create a user if necessary.
-       - Do not expose unnecessary ports.
+       - Run as a non-root user (create dedicated user if needed)
+       - Minimize exposed ports (only what's necessary)
+       - Follow principle of least privilege
+       
     3. Optimization:
-       - Use Multi-Stage builds to separate build dependencies from the runtime environment.
-       - Optimize layer caching (e.g., COPY dependency files and install BEFORE copying source code).
-       - Clean up cache/temporary files in the same RUN instruction to reduce image size.
+       - Use Multi-Stage builds to separate build and runtime dependencies
+       - Optimize layer caching (install dependencies before copying source code)
+       - Clean up caches and temporary files in the same RUN instruction
+       - Minimize final image size
+       
     4. Configuration:
-       - Set appropriate environment variables (e.g., `ENV NODE_ENV=production`, `ENV PYTHONDONTWRITEBYTECODE=1`).
-       - Do NOT use inline comments inside multi-line ENV instructions (e.g., avoid `ENV KEY=VAL \ # comment`).
-       - Define the correct WORKDIR.
-       - Expose the correct port (infer from code if possible, otherwise use standard ports like 3000, 8000, 8080).
+       - Set appropriate environment variables for production
+       - Avoid inline comments in multi-line instructions
+       - Define proper WORKDIR
+       - Expose correct port(s) based on the application
+       
     5. Entrypoint:
-       - accurately determine the start command based on the provided files (e.g., `CMD ["python", "app.py"]`, `CMD ["npm", "start"]`).
+       - Determine the correct start command from the provided files
+       - Use exec form (JSON array) for CMD/ENTRYPOINT
+       - Ensure the command is appropriate for the project type
     
     Output Format:
     - Return a JSON object with two keys:
-      1. "dockerfile": The raw content of the Dockerfile (string).
-      2. "project_type": "service" (if it listens on a port/runs indefinitely) or "script" (if it runs once and exits).
+      1. "dockerfile": The raw content of the Dockerfile (string)
+      2. "project_type": "service" (if it listens on a port/runs indefinitely) or "script" (if it runs once and exits)
     - Do NOT use markdown code blocks.
     """
     
     formatted_prompt = system_prompt.replace("{stack}", stack_info).replace("{file_contents}", file_contents).replace("{custom_instructions}", custom_instructions)
     
+    
     if feedback_error:
-        formatted_prompt += f"\n\nIMPORTANT: The previous Dockerfile you generated failed to build or run with the following error:\n{feedback_error}\n\nPlease analyze this error and fix the Dockerfile accordingly."
+        formatted_prompt += f"""
+
+CRITICAL - DOCKERFILE VALIDATION FAILED:
+The previous Dockerfile you generated failed validation with the following error:
+
+{feedback_error}
+
+Your Task:
+1. Carefully analyze the error message to identify the root cause
+2. Determine what went wrong (missing dependencies, wrong paths, incorrect commands, permission issues, etc.)
+3. Generate an improved Dockerfile that fixes the specific issue
+4. Ensure you don't introduce new problems while fixing this one
+5. Apply your expertise to understand and resolve the underlying problem
+
+Generate a corrected Dockerfile that addresses the error above.
+"""
 
     response = client.chat.completions.create(
         model=os.getenv("MODEL_GENERATOR"),

@@ -13,8 +13,6 @@ from .scanner import get_file_tree
 from .analyzer import analyze_repo_needs
 from .generator import generate_dockerfile
 from .validator import validate_docker_build_and_run
-from .health_checker import detect_health_endpoint
-from .error_parser import enhance_error_feedback
 
 # Load environment variables from .env file
 load_dotenv()
@@ -207,14 +205,28 @@ def run(
             logger.exception("Error during analysis")
             raise typer.Exit(code=1)
         
+    
     stack = analysis_result.get("stack", "Unknown")
     files_to_read = analysis_result.get("files_to_read", [])
     project_type = analysis_result.get("project_type", "service")
+    health_endpoint_data = analysis_result.get("health_endpoint")
+    recommended_wait_time = analysis_result.get("recommended_wait_time", 5)
+    
+    # Convert health endpoint data to tuple format if present
+    health_endpoint = None
+    if health_endpoint_data and isinstance(health_endpoint_data, dict):
+        health_endpoint = (health_endpoint_data.get("path"), health_endpoint_data.get("port"))
+        console.print(f"[green]✓[/green] AI detected health endpoint: {health_endpoint[0]} on port {health_endpoint[1]}")
+        logger.info(f"Health endpoint detected: {health_endpoint[0]}:{health_endpoint[1]}")
+    else:
+        console.print(f"[yellow]![/yellow] No health endpoint detected by AI, will use basic validation")
+        logger.info("No health endpoint detected")
     
     console.print(f"[bold cyan]Identified Stack:[/bold cyan] {stack}")
     console.print(f"[bold cyan]Project Type:[/bold cyan] {project_type}")
+    console.print(f"[bold cyan]Recommended Wait Time:[/bold cyan] {recommended_wait_time}s")
     console.print(f"[bold cyan]Critical Files:[/bold cyan] {', '.join(files_to_read)}")
-    logger.info(f"Stack: {stack}, Type: {project_type}, Critical Files: {files_to_read}")
+    logger.info(f"Stack: {stack}, Type: {project_type}, Wait Time: {recommended_wait_time}s, Critical Files: {files_to_read}")
 
     # =========================================================================
     # STAGE 2: CONTEXT GATHERING
@@ -233,22 +245,7 @@ def run(
                 console.print(f"[red]Warning:[/red] Could not read {rel_path}: {e}")
                 logger.warning(f"Could not read {rel_path}: {e}")
     
-    # =========================================================================
-    # STAGE 2.5: HEALTH CHECK DETECTION
-    # Detect health check endpoints from the file contents.
-    # =========================================================================
-    health_endpoint = None
-    if project_type == "service":
-        with console.status("[bold yellow]Detecting health check endpoint...[/bold yellow]", spinner="dots"):
-            health_endpoint = detect_health_endpoint(file_contents_str, stack)
-            if health_endpoint:
-                endpoint_path, port = health_endpoint
-                console.print(f"[green]✓[/green] Detected health endpoint: {endpoint_path} on port {port}")
-                logger.info(f"Health endpoint detected: {endpoint_path}:{port}")
-            else:
-                console.print(f"[yellow]![/yellow] No health endpoint detected, will use basic validation")
-                logger.info("No health endpoint detected")
-
+    
     # =========================================================================
     # STAGE 3: GENERATION (THE ARCHITECT)
     # Synthesize the Dockerfile using the gathered context.
@@ -284,7 +281,7 @@ def run(
         
         # Validate
         with console.status(f"[bold blue]Validating Dockerfile (Type: {project_type})...[/bold blue]", spinner="bouncingBall"):
-            success, message = validate_docker_build_and_run(path, project_type, stack, health_endpoint)
+            success, message = validate_docker_build_and_run(path, project_type, stack, health_endpoint, recommended_wait_time)
             
         if success:
             console.print(f"[bold green]Success![/bold green] Dockerfile validated successfully.")
@@ -298,19 +295,18 @@ def run(
             ))
             break
         else:
-            # Enhanced error message with suggestions
-            enhanced_error = enhance_error_feedback(message)
+            # Display raw error - the AI generator will parse and fix it
             console.print(f"[bold red]Validation Failed:[/bold red]")
-            console.print(enhanced_error)
+            console.print(f"[red]{message}[/red]")
             logger.warning(f"Validation failed: {message}")
-            feedback_error = message
+            feedback_error = message  # Raw error sent to AI for intelligent parsing
             current_try += 1
             
             if current_try >= max_retries:
                 console.print(f"[bold red]Failed to generate a valid Dockerfile after {max_retries} attempts.[/bold red]")
                 raise typer.Exit(code=1)
             else:
-                console.print(f"[yellow]Retrying with error feedback...[/yellow]")
+                console.print(f"[yellow]Retrying with AI error analysis...[/yellow]")
 
 if __name__ == "__main__":
     app()

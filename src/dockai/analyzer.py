@@ -33,17 +33,31 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[
     You are an expert Build Engineer and DevOps Architect. 
     You will receive a JSON list of ALL filenames in a repository.
     
-    Your Goal: Analyze the project structure to determine the technology stack and identify the MINIMUM set of critical files required to generate a production-ready Dockerfile.
+    Your Goal: Analyze the project structure to determine the technology stack, identify critical files, detect health endpoints, and estimate appropriate validation wait times.
 
     Your Tasks:
-    1. FILTER: Exclude irrelevant directories and files (e.g., .git, .idea, .vscode, node_modules, venv, __pycache__, dist, build, test coverage reports, images, markdown docs).
-    2. IDENTIFY STACK: Determine the primary programming language, framework, and package manager (e.g., "Python/Django with Poetry", "Node.js/Next.js with npm", "Go/Gin").
-    3. CLASSIFY TYPE: Determine if the project is a "service" (long-running, listens on a port, e.g., web server, API, bot) or a "script" (runs once and exits, e.g., batch job, CLI tool, hello world, simple printer). NOTE: A simple "hello world" or calculation script is a SCRIPT, even if it has a package.json.
-    4. SELECT FILES: Identify the specific files needed to:
-       - Resolve dependencies (e.g., package.json, package-lock.json, yarn.lock, requirements.txt, pyproject.toml, poetry.lock, go.mod, go.sum, Gemfile, Gemfile.lock, pom.xml, build.gradle).
-       - Determine the entrypoint (e.g., main.py, app.py, index.js, server.js, main.go, wsgi.py, manage.py).
-       - Understand build configuration (e.g., next.config.js, webpack.config.js, angular.json, vite.config.js).
-       - See existing container config (e.g., Dockerfile, docker-compose.yml). ALWAYS include the existing Dockerfile if present.
+    1. FILTER: Exclude irrelevant directories and files (IDE configs, dependency caches, build outputs, test coverage, media files, documentation).
+    
+    2. IDENTIFY STACK: Determine the primary programming language, framework, and package manager with specific versions when possible.
+    
+    3. CLASSIFY TYPE: Determine if the project is a "service" (long-running process that listens on a port) or a "script" (runs once and exits). Consider the actual behavior, not just the presence of certain files.
+    
+    4. SELECT FILES: Identify the specific files needed to understand:
+       - Dependencies and their versions (lock files, manifests, module definitions)
+       - Application entrypoint(s) and main source files
+       - Build and bundler configurations
+       - Existing container configurations if present
+       
+    5. DETECT HEALTH ENDPOINT: Analyze the file structure to predict if there's a health check endpoint:
+       - Look for routing files, API handlers, controller definitions
+       - Infer common health check patterns based on the framework
+       - Determine the likely port based on framework conventions or configuration files
+       - Return null if no health endpoint can be inferred
+       
+    6. ESTIMATE WAIT TIME: Based on the stack characteristics, estimate initialization time in seconds:
+       - Consider: compilation needs, JVM/runtime startup, database connections, model loading, framework bootstrapping
+       - Provide a realistic estimate based on the complexity you observe
+       - Range: 3-30 seconds depending on stack complexity
 
     User Custom Instructions:
     {custom_instructions}
@@ -52,7 +66,9 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[
     { 
         "stack": "Detailed description of the tech stack",
         "project_type": "service" or "script",
-        "files_to_read": ["path/to/file1", "path/to/file2"] 
+        "files_to_read": ["path/to/file1", "path/to/file2"],
+        "health_endpoint": {"path": "/health", "port": 8080} or null,
+        "recommended_wait_time": 5
     }
     """
     

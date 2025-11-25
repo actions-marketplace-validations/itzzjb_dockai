@@ -24,6 +24,9 @@ DockAI represents the next evolution in containerization.
 *   **Real-time Cost Tracking**: Displays token usage and estimated cost for every run using live pricing data from the community-maintained LiteLLM API.
 *   **Observability**: Structured logging with a `--verbose` mode for deep debugging and transparency.
 *   **Security First**: Generates non-root, multi-stage builds by default.
+*   **Smart Health Checks**: Automatically detects health endpoints (e.g., `/health`, `/api/health`) and generates appropriate `HEALTHCHECK` instructions in the Dockerfile.
+*   **Adaptive Wait Strategies**: Intelligently estimates service startup times and generates robust wait strategies to ensure services are fully ready before validation proceeds.
+*   **Enhanced Error Handling**: Provides clear, actionable error messages when generation fails or when the AI encounters ambiguous project structures.
 
 ## 🧠 Architecture
 
@@ -45,7 +48,9 @@ The system operates in three distinct phases:
 
 4.  **Stage 3: Context-Aware Validation (`validator.py`)**:
     *   **Task**: Builds the generated Dockerfile and runs a container in a **secure, sandboxed environment** with resource limits (512MB RAM, 1 CPU, 100 PIDs max).
-    *   **Service Validation**: Verifies the container starts and stays running (must be alive after 5 seconds).
+    *   **Smart Health Checks**: Automatically detects and validates health endpoints (e.g., `/health`) to ensure the service is truly ready to accept traffic.
+    *   **Adaptive Wait Times**: Dynamically adjusts wait times based on the service type (e.g., Java apps need more time than Go apps) to prevent false negatives during validation.
+    *   **Service Validation**: Verifies the container starts and stays running.
     *   **Script Validation**: Verifies the container runs and exits successfully with code 0.
     *   **Feedback**: If validation fails, the error logs are fed back to "The Architect" to regenerate a fixed Dockerfile. This cycle repeats until success or `MAX_RETRIES` is reached.
 

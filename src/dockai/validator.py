@@ -29,41 +29,6 @@ def run_command(command: List[str], cwd: str = ".") -> Tuple[int, str, str]:
     except Exception as e:
         return -1, "", str(e)
 
-def get_adaptive_wait_time(stack: str, project_type: str) -> int:
-    """
-    Determine appropriate wait time based on stack and project type.
-    
-    Args:
-        stack (str): The detected technology stack.
-        project_type (str): 'service' or 'script'.
-        
-    Returns:
-        int: Wait time in seconds.
-    """
-    stack_lower = stack.lower()
-    
-    # Scripts typically start faster
-    if project_type == "script":
-        return 3
-    
-    # Database-heavy stacks need more time
-    if any(db in stack_lower for db in ["postgres", "mysql", "mongodb", "redis", "database"]):
-        logger.info("Detected database stack, using 15s wait time")
-        return 15
-    
-    # ML/AI frameworks need more time for model loading
-    if any(ml in stack_lower for ml in ["tensorflow", "pytorch", "ml", "ai", "model"]):
-        logger.info("Detected ML/AI stack, using 30s wait time")
-        return 30
-    
-    # Java/Spring applications are slower to start
-    if any(java in stack_lower for java in ["java", "spring", "kotlin"]):
-        logger.info("Detected Java/Spring stack, using 10s wait time")
-        return 10
-    
-    # Default for most web services
-    return 5
-
 def check_health_endpoint(container_name: str, endpoint: str, port: int, max_attempts: int = 6) -> bool:
     """
     Check if a health endpoint is responding with HTTP 200.
@@ -107,7 +72,8 @@ def validate_docker_build_and_run(
     directory: str, 
     project_type: str = "service",
     stack: str = "Unknown",
-    health_endpoint: Optional[Tuple[str, int]] = None
+    health_endpoint: Optional[Tuple[str, int]] = None,
+    recommended_wait_time: int = 5
 ) -> Tuple[bool, str]:
     """
     Builds and runs the Dockerfile in the given directory to verify it works.
@@ -115,7 +81,7 @@ def validate_docker_build_and_run(
     This function performs the following steps:
     1. Builds the Docker image with strict memory limits to prevent host exhaustion.
     2. Runs a container from the image in a sandboxed environment (limited memory, CPU, PIDs).
-    3. Uses adaptive wait times based on stack type.
+    3. Uses AI-recommended wait times based on stack type.
     4. For services with health endpoints: Performs HTTP health checks.
     5. For services without health endpoints: Checks if it stays running.
     6. For scripts: Checks if it exits with code 0.
@@ -126,6 +92,7 @@ def validate_docker_build_and_run(
         project_type (str): 'service' or 'script'.
         stack (str): The detected technology stack.
         health_endpoint (Optional[Tuple[str, int]]): (endpoint_path, port) for health checks.
+        recommended_wait_time (int): AI-recommended wait time in seconds.
         
     Returns:
         Tuple[bool, str]: A tuple containing (success, message).
@@ -174,10 +141,10 @@ def validate_docker_build_and_run(
         run_command(["docker", "rmi", image_name])
         return False, error_msg
     
-    # 3. Adaptive wait time
-    wait_time = get_adaptive_wait_time(stack, project_type)
-    logger.info(f"Waiting {wait_time}s for container to initialize...")
-    time.sleep(wait_time)
+    
+    # 3. Use AI-recommended wait time
+    logger.info(f"Waiting {recommended_wait_time}s for container to initialize (AI-recommended)...")
+    time.sleep(recommended_wait_time)
     
     # 4. Check status
     inspect_cmd = ["docker", "inspect", "-f", "{{.State.Running}}", container_name]
