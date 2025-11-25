@@ -58,7 +58,7 @@ The system operates in three distinct phases:
 
 ### Prerequisites
 
-*   Python 3.8+
+*   Python 3.10+
 *   An OpenAI API Key
 
 ### Installation
