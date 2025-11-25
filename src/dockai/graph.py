@@ -38,7 +38,7 @@ def analyze_node(state: DockAIState) -> DockAIState:
         "prompt_tokens": usage.get("prompt_tokens", 0),
         "completion_tokens": usage.get("completion_tokens", 0),
         "total_tokens": usage.get("total_tokens", 0),
-        "model": os.getenv("MODEL_ANALYZER")
+        "model": os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     }
     
     current_stats = state.get("usage_stats", [])
@@ -107,15 +107,15 @@ def generate_node(state: DockAIState) -> DockAIState:
     start_cmd = state["analysis_result"].get("start_command", "None detected")
     
     # Dynamic Model Selection
-    # Retry 0: Use cheaper model (Analyzer Model)
-    # Retry > 0: Use stronger model (Generator Model)
+    # First attempt (retry_count=0): Use cheaper model (Analyzer Model)
+    # Subsequent retries (retry_count>0): Use stronger model (Generator Model)
     retry_count = state.get("retry_count", 0)
     if retry_count == 0:
         model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
         logger.info(f"Using Draft Model ({model_name}) for initial generation.")
     else:
         model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
-        logger.info(f"Using Expert Model ({model_name}) for retry {retry_count}.")
+        logger.info(f"Using Expert Model ({model_name}) for retry attempt {retry_count}.")
 
     logger.info("Generating Dockerfile...")
     dockerfile_content, project_type, thought_process, usage = generate_dockerfile(
@@ -136,20 +136,21 @@ def generate_node(state: DockAIState) -> DockAIState:
     analysis_result = state["analysis_result"].copy()
     analysis_result["project_type"] = project_type
     
+    # Record actual model used (not the env var default)
     usage_dict = {
         "stage": "generator",
         "prompt_tokens": usage.get("prompt_tokens", 0),
         "completion_tokens": usage.get("completion_tokens", 0),
         "total_tokens": usage.get("total_tokens", 0),
-        "model": os.getenv("MODEL_GENERATOR")
+        "model": model_name  # Use actual model that was selected
     }
     
     current_stats = state.get("usage_stats", [])
     
+    # Don't increment retry_count here - it will be incremented in conditional edges when actually retrying
     return {
         "dockerfile_content": dockerfile_content,
         "analysis_result": analysis_result,
-        "retry_count": state.get("retry_count", 0) + 1,
         "usage_stats": current_stats + [usage_dict],
         "error": None # Clear error on new generation
     }
@@ -165,7 +166,7 @@ def review_node(state: DockAIState) -> DockAIState:
         "prompt_tokens": usage.get("prompt_tokens", 0),
         "completion_tokens": usage.get("completion_tokens", 0),
         "total_tokens": usage.get("total_tokens", 0),
-        "model": os.getenv("MODEL_ANALYZER")
+        "model": os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     }
     
     current_stats = state.get("usage_stats", [])
@@ -210,18 +211,25 @@ def validate_node(state: DockAIState) -> DockAIState:
         path, project_type, stack, health_endpoint, recommended_wait_time
     )
     
-    # Check for image size optimization
-    # Threshold: 250MB (Aggressive optimization)
-    SIZE_THRESHOLD = 250 * 1024 * 1024
+    # Check for image size optimization (configurable)
+    try:
+        max_size_mb = int(os.getenv("DOCKAI_MAX_IMAGE_SIZE_MB", "500"))
+    except ValueError:
+        logger.warning("Invalid DOCKAI_MAX_IMAGE_SIZE_MB value, using default 500MB")
+        max_size_mb = 500
     
-    if success and image_size > SIZE_THRESHOLD:
-        size_mb = image_size / (1024 * 1024)
-        warning_msg = f"Image size is {size_mb:.2f}MB, which exceeds the 250MB limit. Try to optimize using 'alpine' or 'slim' base images if compatible, or use multi-stage builds."
-        logger.warning(warning_msg)
-        return {
-            "validation_result": {"success": False, "message": warning_msg},
-            "error": warning_msg
-        }
+    if max_size_mb > 0 and success and image_size > 0:
+        SIZE_THRESHOLD = max_size_mb * 1024 * 1024
+        
+        if image_size > SIZE_THRESHOLD:
+            size_mb = image_size / (1024 * 1024)
+            warning_msg = f"Image size is {size_mb:.2f}MB, which exceeds the {max_size_mb}MB limit. Try to optimize using 'alpine' or 'slim' base images if compatible, or use multi-stage builds."
+            logger.warning(warning_msg)
+            return {
+                "validation_result": {"success": False, "message": warning_msg},
+                "error": warning_msg
+            }
+
     
     if success:
         size_mb = image_size / (1024 * 1024)
@@ -234,7 +242,13 @@ def validate_node(state: DockAIState) -> DockAIState:
 
 
 
-def should_retry(state: DockAIState) -> Literal["generate", "end"]:
+def increment_retry(state: DockAIState) -> DockAIState:
+    """Helper node to increment retry count when actually retrying."""
+    current_count = state.get("retry_count", 0)
+    logger.debug(f"Incrementing retry count from {current_count} to {current_count + 1}")
+    return {"retry_count": current_count + 1}
+
+def should_retry(state: DockAIState) -> Literal["increment_retry", "end"]:
     # Check if we have a validation result
     validation_result = state.get("validation_result")
     
@@ -243,8 +257,8 @@ def should_retry(state: DockAIState) -> Literal["generate", "end"]:
         retry_count = state.get("retry_count", 0)
         max_retries = state.get("max_retries", 3)
         if retry_count < max_retries:
-            logger.warning(f"Security check failed. Retrying ({retry_count}/{max_retries})...")
-            return "generate"
+            logger.warning(f"Security check failed. Retrying (attempt {retry_count + 1}/{max_retries})...")
+            return "increment_retry"
         else:
             logger.error("Max retries reached. Security check failed.")
             return "end"
@@ -258,23 +272,25 @@ def should_retry(state: DockAIState) -> Literal["generate", "end"]:
         max_retries = state.get("max_retries", 3)
         
         if retry_count < max_retries:
-            logger.warning(f"Validation failed. Retrying ({retry_count}/{max_retries})...")
-            return "generate"
+            logger.warning(f"Validation failed. Retrying (attempt {retry_count + 1}/{max_retries})...")
+            return "increment_retry"
         
         logger.error("Max retries reached. Validation failed.")
         return "end"
         
     return "end"
 
-def check_security(state: DockAIState) -> Literal["validate", "generate", "end"]:
+def check_security(state: DockAIState) -> Literal["validate", "increment_retry", "end"]:
     # If there is an error from the review node, it means security failed
     if state.get("error"):
         retry_count = state.get("retry_count", 0)
         max_retries = state.get("max_retries", 3)
         if retry_count < max_retries:
-            return "generate"
+            logger.warning(f"Security review failed. Retrying (attempt {retry_count + 1}/{max_retries})...")
+            return "increment_retry"
         return "end"
     return "validate"
+
 
 def create_graph():
     workflow = StateGraph(DockAIState)
@@ -285,6 +301,7 @@ def create_graph():
     workflow.add_node("generate", generate_node)
     workflow.add_node("review", review_node)
     workflow.add_node("validate", validate_node)
+    workflow.add_node("increment_retry", increment_retry)
     
     workflow.set_entry_point("scan")
     
@@ -292,13 +309,14 @@ def create_graph():
     workflow.add_edge("analyze", "read_files")
     workflow.add_edge("read_files", "generate")
     workflow.add_edge("generate", "review")
+    workflow.add_edge("increment_retry", "generate")  # After incrementing, go back to generate
     
     workflow.add_conditional_edges(
         "review",
         check_security,
         {
             "validate": "validate",
-            "generate": "generate",
+            "increment_retry": "increment_retry",
             "end": END
         }
     )
@@ -307,9 +325,10 @@ def create_graph():
         "validate",
         should_retry,
         {
-            "generate": "generate",
+            "increment_retry": "increment_retry",
             "end": END
         }
     )
     
     return workflow.compile()
+

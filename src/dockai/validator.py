@@ -2,6 +2,8 @@ import subprocess
 import time
 import uuid
 import logging
+import os
+import json
 from typing import List, Tuple, Optional
 
 logger = logging.getLogger("dockai")
@@ -115,14 +117,19 @@ def validate_docker_build_and_run(
     # 2. Run
     logger.info("Running Docker container (sandboxed)...")
     
+    # Configurable resource limits (can be adjusted for different stacks)
+    memory_limit = os.getenv("DOCKAI_VALIDATION_MEMORY", "512m")
+    cpu_limit = os.getenv("DOCKAI_VALIDATION_CPUS", "1.0")
+    pids_limit = os.getenv("DOCKAI_VALIDATION_PIDS", "100")
+    
     # Expose port if health endpoint is provided
     run_cmd = [
         "docker", "run", 
         "-d", 
         "--name", container_name,
-        "--memory=512m",
-        "--cpus=1.0",
-        "--pids-limit=100",
+        f"--memory={memory_limit}",
+        f"--cpus={cpu_limit}",
+        f"--pids-limit={pids_limit}",
         "--security-opt=no-new-privileges",
     ]
     
@@ -171,14 +178,17 @@ def validate_docker_build_and_run(
                     success = True
                     message = f"Service is running and health check passed ({endpoint_path})."
                 else:
-                    success = True  # Still consider it success if running, even if health check fails
-                    message = f"Service is running (health check at {endpoint_path} not responding, but container is alive)."
+                    # Health endpoint was detected but not responding - this is a failure
+                    success = False
+                    message = f"Service is running but health check failed at {endpoint_path}:{port}. The endpoint is not responding correctly.\nLogs:\n{logs_out}\n{logs_err}"
             else:
+                # No health endpoint detected - just check if running
                 success = True
-                message = "Service is running successfully."
+                message = "Service is running successfully (no health endpoint detected)."
         else:
             success = False
             message = f"Service stopped unexpectedly. Exit Code: {exit_code}\nLogs:\n{logs_out}\n{logs_err}"
+
             
     elif project_type == "script":
         if is_running:
@@ -205,39 +215,84 @@ def validate_docker_build_and_run(
     else:
         logger.error(message)
 
+    
     # 6. Get Image Size
     size_cmd = ["docker", "inspect", "-f", "{{.Size}}", image_name]
     _, size_out, _ = run_command(size_cmd)
     image_size_bytes = int(size_out.strip()) if size_out.strip().isdigit() else 0
     
-    # 7. Trivy Security Scan
-    logger.info("Running Trivy security scan (CRITICAL/HIGH vulnerabilities)...")
-    trivy_cmd = [
-        "docker", "run", "--rm",
-        "-v", "/var/run/docker.sock:/var/run/docker.sock",
-        "aquasec/trivy", "image",
-        "--severity", "CRITICAL,HIGH",
-        "--exit-code", "1",
-        "--no-progress",
-        "--scanners", "vuln", # Only scan for vulnerabilities for speed
-        image_name
-    ]
+    # 7. Trivy Security Scan (Configurable)
+    skip_security_scan = os.getenv("DOCKAI_SKIP_SECURITY_SCAN", "false").lower() == "true"
+    strict_security = os.getenv("DOCKAI_STRICT_SECURITY", "false").lower() == "true"
     
-    trivy_code, trivy_out, trivy_err = run_command(trivy_cmd)
-    
-    if trivy_code != 0:
-        # Trivy found vulnerabilities or failed to run
-        if "Trivy" in trivy_out or "vulnerabilities" in trivy_out:
-            logger.warning("Trivy found vulnerabilities!")
-            # We don't fail the build yet, but we append it to the message
-            # Ideally, we would fail here if strict security is required.
-            # For now, let's log it clearly.
-            message += "\n\n[SECURITY WARNING] Trivy detected CRITICAL/HIGH vulnerabilities. Check logs."
-            logger.warning(trivy_out)
+    if not skip_security_scan:
+        logger.info("Running Trivy security scan (CRITICAL/HIGH vulnerabilities)...")
+        trivy_cmd = [
+            "docker", "run", "--rm",
+            "-v", "/var/run/docker.sock:/var/run/docker.sock",
+            "aquasec/trivy", "image",
+            "--severity", "CRITICAL,HIGH",
+            "--exit-code", "1",
+            "--no-progress",
+            "--format", "json",  # Get JSON output for better parsing
+            "--scanners", "vuln",
+            image_name
+        ]
+        
+        trivy_code, trivy_out, trivy_err = run_command(trivy_cmd)
+        
+        if trivy_code != 0:
+            # Trivy found vulnerabilities or failed to run
+            if trivy_out and ("vulnerabilities" in trivy_out.lower() or "results" in trivy_out.lower()):
+                logger.warning("Trivy found CRITICAL/HIGH vulnerabilities!")
+                
+                # Try to parse JSON to distinguish base image vs app vulnerabilities
+                try:
+                    trivy_data = json.loads(trivy_out)
+                    base_image_vulns = 0
+                    app_vulns = 0
+                    
+                    for result in trivy_data.get("Results", []):
+                        target = result.get("Target", "").lower()
+                        vulns = result.get("Vulnerabilities", [])
+                        
+                        # Base image vulnerabilities are in OS packages or base layers
+                        if any(x in target for x in ["os-release", "debian", "alpine", "ubuntu", "node:", "python:", "openjdk"]):
+                            base_image_vulns += len(vulns)
+                        else:
+                            app_vulns += len(vulns)
+                    
+                    if base_image_vulns > 0:
+                        # Base image has vulnerabilities - this is a Dockerfile issue
+                        logger.error(f"Found {base_image_vulns} vulnerabilities in base image layers.")
+                        if strict_security or base_image_vulns > 5:
+                            success = False
+                            message = f"Security scan failed: {base_image_vulns} CRITICAL/HIGH vulnerabilities in base image. Try using a different base image tag (alpine, slim, or newer version).\n\nTrivy Output:\n{trivy_out[:500]}"
+                        else:
+                            message += f"\n\n[SECURITY WARNING] {base_image_vulns} vulnerabilities in base image. Consider using a more secure base image."
+                            logger.warning(f"Base image vulnerabilities detected but continuing (strict_security=false)")
+                    
+                    if app_vulns > 0:
+                        # Application dependencies have vulnerabilities - this is code issue, not Dockerfile
+                        logger.warning(f"Found {app_vulns} vulnerabilities in application dependencies (not a Dockerfile issue).")
+                        message += f"\n\n[INFO] {app_vulns} vulnerabilities found in application code/dependencies. Fix these in your application, not the Dockerfile."
+                
+                except (json.JSONDecodeError, Exception) as e:
+                    # Fallback if JSON parsing fails
+                    logger.warning(f"Could not parse Trivy output: {e}")
+                    if strict_security:
+                        success = False
+                        message = f"Security scan found vulnerabilities. Enable verbose mode for details.\n{trivy_out[:500]}"
+                    else:
+                        message += "\n\n[SECURITY WARNING] Trivy detected vulnerabilities. Run with DOCKAI_STRICT_SECURITY=true to fail on vulnerabilities."
+                        logger.warning(trivy_out[:500])
+            else:
+                logger.warning(f"Trivy scan failed to execute: {trivy_err}")
         else:
-             logger.warning(f"Trivy scan failed to execute: {trivy_err}")
+            logger.info("✓ Trivy scan passed (No CRITICAL/HIGH vulnerabilities found).")
     else:
-        logger.info("Trivy scan passed (No CRITICAL/HIGH vulnerabilities found).")
+        logger.info("Security scan skipped (DOCKAI_SKIP_SECURITY_SCAN=true)")
+
 
     # Cleanup
     run_command(["docker", "rm", "-f", container_name])

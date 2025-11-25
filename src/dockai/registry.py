@@ -6,35 +6,43 @@ logger = logging.getLogger("dockai")
 
 def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
     """
-    Fetches valid tags for a given Docker image from Docker Hub, GCR, or Quay.io.
+    Fetches valid tags for a given Docker image from Docker Hub, GCR, Quay.io, or AWS ECR.
     Prioritizes 'alpine' and 'slim' tags for optimization.
     """
     tags = []
     
     try:
-        # 1. GCR (Google Container Registry)
-        if "gcr.io" in image_name:
+        # 1. AWS ECR (Elastic Container Registry)
+        if ".dkr.ecr." in image_name and ".amazonaws.com" in image_name:
+            # Format: <account-id>.dkr.ecr.<region>.amazonaws.com/<repository>
+            # ECR requires AWS CLI or boto3, which we don't want as a hard dependency
+            # For now, we'll skip tag fetching for ECR and let the AI use its knowledge
+            logger.info(f"ECR image detected: {image_name}. Skipping tag verification (requires AWS credentials).")
+            return []  # AI will use suggested_base_image as-is
+
+        # 2. GCR (Google Container Registry)
+        elif "gcr.io" in image_name:
             # Format: gcr.io/project/image
             # API: https://gcr.io/v2/project/image/tags/list
-            repo_path = image_name.split("/", 1)[1]
-            domain = image_name.split("/")[0] # gcr.io, us.gcr.io, etc.
+            repo_path = image_name.split("/", 1)[1] if "/" in image_name else image_name
+            domain = image_name.split("/")[0]  # gcr.io, us.gcr.io, etc.
             url = f"https://{domain}/v2/{repo_path}/tags/list"
             response = httpx.get(url, timeout=5.0)
             if response.status_code == 200:
                 tags = response.json().get("tags", [])
 
-        # 2. Quay.io
+        # 3. Quay.io
         elif "quay.io" in image_name:
             # Format: quay.io/namespace/image
             # API: https://quay.io/api/v1/repository/namespace/image/tag
-            repo_path = image_name.split("/", 1)[1]
+            repo_path = image_name.split("/", 1)[1] if "/" in image_name else image_name
             url = f"https://quay.io/api/v1/repository/{repo_path}/tag"
             response = httpx.get(url, timeout=5.0)
             if response.status_code == 200:
                 data = response.json().get("tags", [])
                 tags = [t["name"] for t in data]
 
-        # 3. Docker Hub (Default)
+        # 4. Docker Hub (Default)
         else:
             # Handle official images (e.g., 'node' -> 'library/node')
             hub_image_name = image_name
@@ -70,6 +78,9 @@ def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
                 if latest_version is None or (current_version.isdigit() and latest_version.isdigit() and int(current_version) > int(latest_version)):
                     latest_version = current_version
         
+        # Determine prefix based on registry type
+        prefix = _get_image_prefix(image_name)
+        
         # If we found a version, filter tags to only include that version
         if latest_version:
             logger.info(f"Detected latest version for {image_name}: {latest_version}")
@@ -83,15 +94,6 @@ def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
                 return 2
                 
             sorted_tags = sorted(version_specific_tags, key=sort_key)
-            # Ensure we keep the registry prefix if it existed
-            prefix = ""
-            if "gcr.io" in image_name or "quay.io" in image_name:
-                prefix = f"{image_name}:"
-            else:
-                # For Docker Hub, we standardized on library/image, but we want to return just image:tag or library/image:tag
-                # Let's return exactly what was passed or the standard form
-                prefix = f"{image_name.replace('library/', '')}:"
-
             return [f"{prefix}{t}" for t in sorted_tags]
         
         # Fallback: If no version detected, use the mix strategy
@@ -106,13 +108,6 @@ def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
         selected_tags.extend(slim_tags[:2])
         selected_tags.extend(standard_tags[:1])
         
-        # Prefix handling for return
-        prefix = ""
-        if "gcr.io" in image_name or "quay.io" in image_name:
-            prefix = f"{image_name}:"
-        else:
-            prefix = f"{image_name.replace('library/', '')}:"
-
         # If we have selected tags, return them
         if len(selected_tags) >= 3:
             # Remove duplicates and format
@@ -125,3 +120,17 @@ def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
     except Exception as e:
         logger.warning(f"Failed to fetch tags for {image_name}: {e}")
         return []
+
+def _get_image_prefix(image_name: str) -> str:
+    """
+    Determine the correct prefix for an image based on its registry.
+    This ensures consistent tag formatting across all registries.
+    """
+    # For registries with explicit domains, keep the full image name
+    if any(registry in image_name for registry in ["gcr.io", "quay.io", ".dkr.ecr.", "azurecr.io"]):
+        return f"{image_name}:"
+    
+    # For Docker Hub, normalize the name
+    # Remove 'library/' prefix for official images to keep it clean
+    clean_name = image_name.replace("docker.io/", "").replace("library/", "")
+    return f"{clean_name}:"

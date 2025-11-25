@@ -1,9 +1,5 @@
 import os
 from typing import List, Set
-
-# Core directories to ignore to prevent context explosion.
-# We explicitly ignore these system/heavy folders to ensure the LLM
-# focuses only on source code and configuration files.
 import pathspec
 
 # Core directories to ignore to prevent context explosion.
