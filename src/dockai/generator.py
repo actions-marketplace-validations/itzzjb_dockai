@@ -36,43 +36,46 @@ Process:
 
 Requirements:
 1. Base Image Strategy (CRITICAL):
-   - BUILD STAGE: Use STANDARD/FULL images (e.g., python:3.11-bookworm, node:20-bookworm, golang:1.21, rust:1.70)
-     - These have compilers, build tools, and system packages needed for building
+   - BUILD STAGE: Use STANDARD/FULL images with compilers, build tools, and system packages needed for building
      - NEVER use slim/alpine for build stage unless you are 100% certain no compilation is needed
-   - RUNTIME STAGE: Use SLIM/ALPINE images (e.g., python:3.11-slim, node:20-alpine, alpine:3.18)
-     - These are minimal for security and smaller size
-   - Use VERIFIED TAGS from the provided list - prefer specific version tags (e.g., node:20.10.0-bookworm not node:latest)
+   - RUNTIME STAGE: Use SLIM/ALPINE/DISTROLESS images for security and smaller size
+   - Use VERIFIED TAGS from the provided list - prefer specific version tags over 'latest'
 
 2. Architecture: MANDATORY: Use Multi-Stage builds. Stage 1: Build/Compile with full image. Stage 2: Runtime with slim/alpine (copy only artifacts).
 
 3. Security: Run as non-root user. Use proper user/group creation syntax for the distro (adduser/addgroup differ between Debian and Alpine).
 
-4. Optimization: Combine RUN commands. Clean package caches (apt-get clean, npm cache clean).
+4. Optimization: Combine RUN commands. Clean package caches after installation.
 
 5. Configuration: Set env vars, WORKDIR, expose correct ports.
 
 6. Commands: Use the provided 'Build Command' and 'Start Command' if they are valid.
 
 7. CRITICAL Binary Compatibility Rules:
-   - GLIBC vs MUSL: Binaries compiled on Debian/Ubuntu (glibc) CANNOT run on Alpine (musl) without static linking
+   - GLIBC vs MUSL: Binaries compiled on glibc-based systems (Debian/Ubuntu) CANNOT run on musl-based systems (Alpine) without static linking
    - This causes "./app: not found" or "No such file or directory" errors even though the file exists
    
-   FOR GO APPLICATIONS (MANDATORY):
-   - OPTION A (PREFERRED): Build static binary with: CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o app
-     Then you can use any Alpine image for runtime
-   - OPTION B: Use same distro family - build on alpine, run on alpine (golang:X-alpine → alpine:X)
-   - NEVER: Build on bookworm/bullseye and run on alpine without CGO_ENABLED=0
+   FOR COMPILED LANGUAGES (Go, Rust, C, C++, etc.):
+   - OPTION A (PREFERRED): Build statically linked binaries so they can run on any Linux distribution
+     - For each language, use the appropriate flags to enable static linking
+   - OPTION B: Use the same distribution family for both build and runtime stages
+     - If you build on a glibc-based image, use a glibc-based runtime (e.g., *-slim variants)
+     - If you build on Alpine, use Alpine for runtime
+   - NEVER: Build on glibc-based images and run on Alpine without static linking
    
-   FOR RUST APPLICATIONS:
-   - OPTION A: Cross-compile for musl: rustup target add x86_64-unknown-linux-musl && cargo build --release --target x86_64-unknown-linux-musl
-   - OPTION B: Use same distro family (rust:X-bookworm → debian:X-slim)
+   FOR INTERPRETED LANGUAGES (Python, Ruby, PHP, etc.):
+   - Native extensions compiled on glibc won't work on musl
+   - Use the same base distribution family for build and runtime
+   - Or ensure all dependencies are pure interpreted code (no native extensions)
    
-   FOR NODE.JS: Build on bookworm → run on bookworm-slim (NOT alpine unless using alpine for build too)
+   FOR RUNTIME ENVIRONMENTS (Node.js, JVM, .NET, etc.):
+   - Match the runtime environment between build and runtime stages
+   - Native addons/extensions follow the same glibc/musl rules
    
-   OTHER PITFALLS:
-   - Don't use setcap on Alpine without installing libcap
-   - Don't use adduser --system on Alpine (use adduser -D instead)
-   - Don't assume curl/wget exist in slim images
+   GENERAL PITFALLS:
+   - Don't use commands that require packages not present in minimal images (e.g., setcap, curl, wget)
+   - User creation syntax differs between distros (Debian: adduser --system, Alpine: adduser -D)
+   - Don't assume common tools exist in slim/alpine images - install them explicitly if needed
 
 {error_context}
 """

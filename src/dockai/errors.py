@@ -56,7 +56,7 @@ class ErrorAnalysisResult(BaseModel):
     )
     image_suggestion: Optional[str] = Field(
         default=None,
-        description="If the error is related to missing dependencies in the image, suggest a better base image (e.g., 'use python:3.11-bookworm instead of python:3.11-slim for build stage to get system packages')"
+        description="If the error is related to missing dependencies in the image, suggest a better base image (e.g., use standard/full variant for build stage instead of slim/alpine to get system packages)"
     )
 
 
@@ -126,7 +126,7 @@ THINK STEP BY STEP like an AI agent:
 ERROR CLASSIFICATION RULES:
 
 1. PROJECT_ERROR (Developer must fix - no retry):
-   - Missing lock files for ANY package manager (npm, yarn, pnpm, pip, poetry, go, cargo, composer, bundler, maven, gradle, etc.)
+   - Missing lock files for the project's package manager (e.g., package-lock.json, yarn.lock, Pipfile.lock, poetry.lock, go.sum, Cargo.lock, composer.lock, Gemfile.lock, pom.xml, build.gradle, etc.)
    - Syntax errors in source code (any language)
    - Import/module/package errors in source code
    - Missing required project configuration files
@@ -164,10 +164,11 @@ ERROR CLASSIFICATION RULES:
    CRITICAL - BINARY NOT FOUND / EXECUTABLE NOT FOUND ERRORS:
    - If error says "./app: not found" or "exec ./app: not found" or "No such file or directory" for a binary that EXISTS:
      This is ALWAYS a glibc vs musl binary compatibility issue!
-     - The binary was built on Debian/Ubuntu (glibc) but running on Alpine (musl)
-     - dockerfile_fix MUST be: "For Go: add CGO_ENABLED=0 GOOS=linux to build command, or use alpine for both stages. For Rust: add --target x86_64-unknown-linux-musl, or use same distro for both stages"
-     - image_suggestion: "Use golang:X-alpine for build AND alpine:X for runtime, OR keep debian and use debian-slim for runtime"
-   - For Go specifically: dockerfile_fix = "Change build command to: CGO_ENABLED=0 GOOS=linux go build -ldflags='-s -w' -o app"
+     - The binary was built on a glibc-based system (Debian/Ubuntu) but running on musl-based system (Alpine)
+     - dockerfile_fix MUST explain: Use static linking flags appropriate for the detected language, OR use the same distribution family for both build and runtime stages
+     - image_suggestion: Suggest using the same base distribution for both stages (either both glibc-based or both musl-based)
+   - For compiled languages: Detect the language and suggest the appropriate static linking flags or same-distro approach
+   - For interpreted languages with native extensions: Suggest using the same base distribution family
 
 3. ENVIRONMENT_ERROR (Local system issue - no retry):
    - Docker daemon not running
@@ -181,11 +182,14 @@ ERROR CLASSIFICATION RULES:
    - Use this only if the error is truly ambiguous
 
 IMAGE SELECTION STRATEGY (for dockerfile_fix and image_suggestion):
-- BUILD STAGE: Use standard/full images (e.g., python:3.11-bookworm, node:20-bookworm, golang:1.21)
-  - These have build tools, compilers, system packages
-- RUNTIME STAGE: Use slim/alpine images (e.g., python:3.11-slim, node:20-alpine, gcr.io/distroless/base)
+- BUILD STAGE: Use standard/full images for the detected language/runtime
+  - These have build tools, compilers, system packages needed for compilation
+  - Choose the appropriate official image with build tools included
+- RUNTIME STAGE: Use slim/alpine/distroless images appropriate for the detected language/runtime
   - These are minimal for security and size
+  - Ensure binary compatibility between build and runtime stages (glibc vs musl)
 - If error mentions missing system tool in slim/alpine, suggest full image for BUILD
+- For compiled languages, prefer static linking to allow maximum flexibility in runtime image choice
 
 IMPORTANT:
 - Be specific about what file or command the user needs to create/run

@@ -10,9 +10,9 @@ class AnalysisResult(BaseModel):
     stack: str = Field(description="Detailed description of the technology stack")
     project_type: Literal["service", "script"] = Field(description="Type of the project: 'service' (long-running) or 'script' (runs once)")
     files_to_read: List[str] = Field(description="List of critical files to read for context")
-    build_command: Optional[str] = Field(description="The command to build the application (e.g., 'npm run build', 'go build')")
-    start_command: Optional[str] = Field(description="The command to start the application (e.g., 'npm start', 'python app.py')")
-    suggested_base_image: str = Field(description="The official Docker Hub image name for this stack (e.g., 'python', 'node', 'golang', 'rust', 'ruby')")
+    build_command: Optional[str] = Field(description="The command to build the application based on the detected stack and build system")
+    start_command: Optional[str] = Field(description="The command to start/run the application based on the detected stack")
+    suggested_base_image: str = Field(description="The official Docker Hub image name appropriate for this stack")
     health_endpoint: Optional[HealthEndpoint] = Field(
         default=None,
         description="Health endpoint details if CLEARLY defined in routing files (e.g., /health, /api/health). Set to null if no health endpoint is found - do NOT guess."
