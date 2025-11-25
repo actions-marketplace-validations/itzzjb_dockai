@@ -13,6 +13,8 @@ from .scanner import get_file_tree
 from .analyzer import analyze_repo_needs
 from .generator import generate_dockerfile
 from .validator import validate_docker_build_and_run
+from .health_checker import detect_health_endpoint
+from .error_parser import enhance_error_feedback
 
 # Load environment variables from .env file
 load_dotenv()
@@ -230,6 +232,22 @@ def run(
             except Exception as e:
                 console.print(f"[red]Warning:[/red] Could not read {rel_path}: {e}")
                 logger.warning(f"Could not read {rel_path}: {e}")
+    
+    # =========================================================================
+    # STAGE 2.5: HEALTH CHECK DETECTION
+    # Detect health check endpoints from the file contents.
+    # =========================================================================
+    health_endpoint = None
+    if project_type == "service":
+        with console.status("[bold yellow]Detecting health check endpoint...[/bold yellow]", spinner="dots"):
+            health_endpoint = detect_health_endpoint(file_contents_str, stack)
+            if health_endpoint:
+                endpoint_path, port = health_endpoint
+                console.print(f"[green]✓[/green] Detected health endpoint: {endpoint_path} on port {port}")
+                logger.info(f"Health endpoint detected: {endpoint_path}:{port}")
+            else:
+                console.print(f"[yellow]![/yellow] No health endpoint detected, will use basic validation")
+                logger.info("No health endpoint detected")
 
     # =========================================================================
     # STAGE 3: GENERATION (THE ARCHITECT)
@@ -266,7 +284,7 @@ def run(
         
         # Validate
         with console.status(f"[bold blue]Validating Dockerfile (Type: {project_type})...[/bold blue]", spinner="bouncingBall"):
-            success, message = validate_docker_build_and_run(path, project_type)
+            success, message = validate_docker_build_and_run(path, project_type, stack, health_endpoint)
             
         if success:
             console.print(f"[bold green]Success![/bold green] Dockerfile validated successfully.")
@@ -280,7 +298,10 @@ def run(
             ))
             break
         else:
-            console.print(f"[bold red]Validation Failed:[/bold red]\n{message}")
+            # Enhanced error message with suggestions
+            enhanced_error = enhance_error_feedback(message)
+            console.print(f"[bold red]Validation Failed:[/bold red]")
+            console.print(enhanced_error)
             logger.warning(f"Validation failed: {message}")
             feedback_error = message
             current_try += 1
