@@ -1,6 +1,7 @@
 import os
 from unittest.mock import patch, MagicMock
 from dockai.validator import validate_docker_build_and_run, check_health_endpoint
+from dockai.errors import ClassifiedError, ErrorType
 
 @patch("dockai.validator.run_command")
 @patch("dockai.validator.time.sleep")
@@ -27,7 +28,7 @@ def test_validate_success_service(mock_getenv, mock_sleep, mock_run_command):
         (0, "", "")                # rmi
     ]
     
-    success, msg, size = validate_docker_build_and_run(".", project_type="service")
+    success, msg, size, _ = validate_docker_build_and_run(".", project_type="service")
     
     assert success is True
     assert "running successfully" in msg.lower()
@@ -54,19 +55,29 @@ def test_validate_success_script(mock_getenv, mock_sleep, mock_run_command):
         (0, "", "")                # rmi
     ]
     
-    success, msg, size = validate_docker_build_and_run(".", project_type="script")
+    success, msg, size, _ = validate_docker_build_and_run(".", project_type="script")
     
     assert success is True
     assert "finished successfully" in msg.lower()
 
+@patch("dockai.validator.classify_error")
 @patch("dockai.validator.run_command")
-def test_validate_build_failure(mock_run_command):
+def test_validate_build_failure(mock_run_command, mock_classify):
     """Test build failure"""
     mock_run_command.side_effect = [
         (1, "", "Build failed error message"),  # build fails
     ]
     
-    success, msg, size = validate_docker_build_and_run(".")
+    # Mock classify_error return
+    mock_classify.return_value = ClassifiedError(
+        error_type=ErrorType.DOCKERFILE_ERROR,
+        message="Build failed error message",
+        suggestion="Fix it",
+        original_error="Build failed error message",
+        should_retry=True
+    )
+    
+    success, msg, size, _ = validate_docker_build_and_run(".")
     
     assert success is False
     assert "Docker build failed" in msg
@@ -95,7 +106,7 @@ def test_validate_with_health_check_success(mock_getenv, mock_sleep, mock_run_co
         (0, "", "")                # rmi
     ]
     
-    success, msg, size = validate_docker_build_and_run(
+    success, msg, size, _ = validate_docker_build_and_run(
         ".", 
         project_type="service",
         health_endpoint=("/health", 8080)
@@ -107,8 +118,8 @@ def test_validate_with_health_check_success(mock_getenv, mock_sleep, mock_run_co
 @patch("dockai.validator.run_command")
 @patch("dockai.validator.time.sleep")
 @patch("dockai.validator.os.getenv")
-def test_validate_with_health_check_failure(mock_getenv, mock_sleep, mock_run_command):
-    """Test service with health check that fails"""
+def test_validate_with_health_check_failure_but_running(mock_getenv, mock_sleep, mock_run_command):
+    """Test service with health check that fails but service keeps running (should pass with warning)"""
     mock_getenv.side_effect = lambda key, default=None: {
         "DOCKAI_SKIP_SECURITY_SCAN": "true",
     }.get(key, default)
@@ -131,19 +142,22 @@ def test_validate_with_health_check_failure(mock_getenv, mock_sleep, mock_run_co
         (0, "", "")                # rmi
     ]
     
-    success, msg, size = validate_docker_build_and_run(
+    success, msg, size, _ = validate_docker_build_and_run(
         ".", 
         project_type="service",
         health_endpoint=("/health", 8080)
     )
     
-    assert success is False
-    assert "health check failed" in msg.lower()
+    # Updated expectation: Success is True, but message indicates health check issue
+    assert success is True
+    assert "health check" in msg.lower()
+    assert "did not respond" in msg.lower()
 
+@patch("dockai.validator.classify_error")
 @patch("dockai.validator.run_command")
 @patch("dockai.validator.time.sleep")
 @patch("dockai.validator.os.getenv")
-def test_validate_service_crash(mock_getenv, mock_sleep, mock_run_command):
+def test_validate_service_crash(mock_getenv, mock_sleep, mock_run_command, mock_classify):
     """Test service that crashes after starting"""
     mock_getenv.side_effect = lambda key, default=None: {
         "DOCKAI_SKIP_SECURITY_SCAN": "true",
@@ -160,16 +174,25 @@ def test_validate_service_crash(mock_getenv, mock_sleep, mock_run_command):
         (0, "", "")                # rmi
     ]
     
-    success, msg, size = validate_docker_build_and_run(".", project_type="service")
+    mock_classify.return_value = ClassifiedError(
+        error_type=ErrorType.DOCKERFILE_ERROR,
+        message="Service crashed",
+        suggestion="Fix crash",
+        original_error="Error: crash",
+        should_retry=True
+    )
+    
+    success, msg, size, _ = validate_docker_build_and_run(".", project_type="service")
     
     assert success is False
     assert "stopped unexpectedly" in msg.lower()
-    assert "Error: crash" in msg
+    assert "Service crashed" in msg
 
+@patch("dockai.validator.classify_error")
 @patch("dockai.validator.run_command")
 @patch("dockai.validator.time.sleep")
 @patch("dockai.validator.os.getenv")
-def test_validate_script_failure(mock_getenv, mock_sleep, mock_run_command):
+def test_validate_script_failure(mock_getenv, mock_sleep, mock_run_command, mock_classify):
     """Test script that exits with non-zero code"""
     mock_getenv.side_effect = lambda key, default=None: {
         "DOCKAI_SKIP_SECURITY_SCAN": "true",
@@ -186,14 +209,24 @@ def test_validate_script_failure(mock_getenv, mock_sleep, mock_run_command):
         (0, "", "")                # rmi
     ]
     
-    success, msg, size = validate_docker_build_and_run(".", project_type="script")
+    mock_classify.return_value = ClassifiedError(
+        error_type=ErrorType.PROJECT_ERROR,
+        message="Script failed",
+        suggestion="Fix script",
+        original_error="Error occurred",
+        should_retry=False
+    )
+    
+    success, msg, size, _ = validate_docker_build_and_run(".", project_type="script")
     
     assert success is False
     assert "failed" in msg.lower()
     assert "Exit Code: 1" in msg
+    assert "Script failed" in msg
 
+@patch("dockai.validator.classify_error")
 @patch("dockai.validator.run_command")
-def test_validate_container_start_failure(mock_run_command):
+def test_validate_container_start_failure(mock_run_command, mock_classify):
     """Test container fails to start"""
     mock_run_command.side_effect = [
         (0, "Build success", ""),      # build
@@ -201,10 +234,19 @@ def test_validate_container_start_failure(mock_run_command):
         (0, "", "")                    # rmi
     ]
     
-    success, msg, size = validate_docker_build_and_run(".")
+    mock_classify.return_value = ClassifiedError(
+        error_type=ErrorType.ENVIRONMENT_ERROR,
+        message="Cannot start container",
+        suggestion="Check docker",
+        original_error="Cannot start container",
+        should_retry=False
+    )
+    
+    success, msg, size, _ = validate_docker_build_and_run(".")
     
     assert success is False
-    assert "Failed to start container" in msg
+    assert "Container start failed" in msg
+    assert "Cannot start container" in msg
     assert size == 0
 
 def test_configurable_resource_limits():

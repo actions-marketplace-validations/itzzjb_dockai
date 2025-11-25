@@ -31,4 +31,5 @@ class DockAIState(TypedDict):
     reflection: Optional[Dict[str, Any]]  # AI reflection on failures
     detected_health_endpoint: Optional[Dict[str, Any]]  # AI-detected from file contents
     readiness_patterns: List[str]  # AI-detected startup log patterns
+    failure_patterns: List[str]  # AI-detected failure log patterns
     needs_reanalysis: bool  # Flag to trigger re-analysis on certain errors

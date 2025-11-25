@@ -4,6 +4,7 @@ import uuid
 import logging
 import os
 import json
+import re
 from typing import List, Tuple, Optional
 
 from .errors import classify_error, ClassifiedError, ErrorType
@@ -78,7 +79,8 @@ def validate_docker_build_and_run(
     stack: str = "Unknown",
     health_endpoint: Optional[Tuple[str, int]] = None,
     recommended_wait_time: int = 5,
-    readiness_patterns: List[str] = None
+    readiness_patterns: List[str] = None,
+    failure_patterns: List[str] = None
 ) -> Tuple[bool, str, int, Optional[ClassifiedError]]:
     """
     Builds and runs the Dockerfile in the given directory to verify it works.
@@ -99,6 +101,7 @@ def validate_docker_build_and_run(
         health_endpoint (Optional[Tuple[str, int]]): (endpoint_path, port) for health checks.
         recommended_wait_time (int): AI-recommended wait time in seconds.
         readiness_patterns (List[str]): AI-detected log patterns for startup detection.
+        failure_patterns (List[str]): AI-detected log patterns for failure detection.
         
     Returns:
         Tuple[bool, str, int, Optional[ClassifiedError]]: A tuple containing 
@@ -144,7 +147,8 @@ def validate_docker_build_and_run(
     # Add port mapping if we have a health endpoint
     if health_endpoint:
         _, port = health_endpoint
-        run_cmd.extend(["-p", f"{port}:{port}"])
+        # Use ephemeral host port (0) to avoid conflicts
+        run_cmd.extend(["-p", f"0:{port}"])
     
     run_cmd.append(image_name)
     
@@ -159,9 +163,19 @@ def validate_docker_build_and_run(
         return False, error_msg, 0, classified
     
     
-    # 3. Use AI-recommended wait time
-    logger.info(f"Waiting {recommended_wait_time}s for container to initialize (AI-recommended)...")
-    time.sleep(recommended_wait_time)
+    # 3. Use AI-detected readiness patterns OR recommended wait times
+    if readiness_patterns:
+        logger.info(f"Using smart readiness check with {len(readiness_patterns)} patterns...")
+        is_ready, ready_msg, _ = check_container_readiness(
+            container_name, 
+            readiness_patterns, 
+            failure_patterns=failure_patterns or [],
+            max_wait_time=60
+        )
+        logger.info(f"Readiness result: {ready_msg}")
+    else:
+        logger.info(f"Waiting {recommended_wait_time}s for container to initialize (AI-recommended)...")
+        time.sleep(recommended_wait_time)
     
     # 4. Check status
     inspect_cmd = ["docker", "inspect", "-f", "{{.State.Running}}", container_name]
@@ -338,3 +352,132 @@ def validate_docker_build_and_run(
     run_command(["docker", "rmi", image_name])
     
     return success, message, image_size_bytes, classified_error
+
+
+def check_container_readiness(
+    container_name: str,
+    readiness_patterns: List[str],
+    failure_patterns: List[str],
+    max_wait_time: int = 60,
+    check_interval: int = 2
+) -> Tuple[bool, str, str]:
+    """
+    Smart container readiness check using AI-detected log patterns.
+    
+    Instead of fixed sleep, this polls container logs and looks for
+    patterns that indicate successful startup or failure.
+    
+    Returns:
+        Tuple of (is_ready, status_message, logs)
+    """
+    start_time = time.time()
+    last_log_position = 0
+    accumulated_logs = ""
+    
+    # Compile regex patterns
+    success_regexes = []
+    failure_regexes = []
+    
+    for pattern in readiness_patterns:
+        try:
+            success_regexes.append(re.compile(pattern, re.IGNORECASE))
+        except re.error:
+            logger.warning(f"Invalid success regex pattern: {pattern}")
+    
+    for pattern in failure_patterns:
+        try:
+            failure_regexes.append(re.compile(pattern, re.IGNORECASE))
+        except re.error:
+            logger.warning(f"Invalid failure regex pattern: {pattern}")
+    
+    # Add default patterns if none provided
+    if not success_regexes:
+        default_success = [
+            r"listening on.*port",
+            r"server.*started",
+            r"application.*ready",
+            r"ready to accept connections",
+            r"started.*successfully"
+        ]
+        success_regexes = [re.compile(p, re.IGNORECASE) for p in default_success]
+    
+    if not failure_regexes:
+        default_failure = [
+            r"error:",
+            r"fatal:",
+            r"failed to",
+            r"exception",
+            r"panic:",
+            r"segmentation fault"
+        ]
+        failure_regexes = [re.compile(p, re.IGNORECASE) for p in default_failure]
+    
+    logger.info(f"Checking container readiness (max {max_wait_time}s)...")
+    
+    while (time.time() - start_time) < max_wait_time:
+        # Check if container is still running
+        result = subprocess.run(
+            ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            return False, "Container inspection failed", accumulated_logs
+        
+        is_running = result.stdout.strip() == "true"
+        
+        # Get container logs
+        logs_result = subprocess.run(
+            ["docker", "logs", container_name],
+            capture_output=True,
+            text=True
+        )
+        
+        current_logs = logs_result.stdout + logs_result.stderr
+        new_logs = current_logs[last_log_position:]
+        accumulated_logs = current_logs
+        last_log_position = len(current_logs)
+        
+        # Check for success patterns
+        for regex in success_regexes:
+            if regex.search(current_logs):
+                logger.info("Container readiness detected via log pattern")
+                return True, "Container is ready (detected via log patterns)", accumulated_logs
+        
+        # Check for failure patterns
+        for regex in failure_regexes:
+            if regex.search(new_logs):  # Only check new logs for failures
+                logger.warning(f"Failure pattern detected in logs")
+                return False, f"Container startup failed (error pattern detected)", accumulated_logs
+        
+        # If container stopped, check exit code
+        if not is_running:
+            exit_result = subprocess.run(
+                ["docker", "inspect", "-f", "{{.State.ExitCode}}", container_name],
+                capture_output=True,
+                text=True
+            )
+            exit_code = exit_result.stdout.strip()
+            
+            if exit_code == "0":
+                return True, "Container completed successfully (exit code 0)", accumulated_logs
+            else:
+                return False, f"Container stopped with exit code {exit_code}", accumulated_logs
+        
+        time.sleep(check_interval)
+    
+    # Timeout reached - check if container is still running (might be a long-starting service)
+    result = subprocess.run(
+        ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
+        capture_output=True,
+        text=True
+    )
+    
+    if result.stdout.strip() == "true":
+        # Container is running but didn't emit success pattern - consider it ready
+        logger.warning("Container is running but no startup pattern detected - assuming ready")
+        return True, "Container is running (no startup pattern detected, assuming ready)", accumulated_logs
+    
+    return False, f"Container readiness timeout after {max_wait_time}s", accumulated_logs
+

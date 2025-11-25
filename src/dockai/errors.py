@@ -58,6 +58,10 @@ class ErrorAnalysisResult(BaseModel):
         default=None,
         description="If the error is related to missing dependencies in the image, suggest a better base image (e.g., use standard/full variant for build stage instead of slim/alpine to get system packages)"
     )
+    readiness_fix: Optional[str] = Field(
+        default=None,
+        description="If the error is a readiness timeout or failure, suggest a better regex pattern to detect successful startup (e.g., 'server started at port' instead of 'listening')"
+    )
 
 
 @dataclass
@@ -70,6 +74,7 @@ class ClassifiedError:
     should_retry: bool
     dockerfile_fix: Optional[str] = None  # Specific fix for Dockerfile issues
     image_suggestion: Optional[str] = None  # Better image to use
+    readiness_fix: Optional[str] = None # Better readiness pattern
     
     def to_dict(self):
         return {
@@ -79,7 +84,8 @@ class ClassifiedError:
             "original_error": self.original_error,
             "should_retry": self.should_retry,
             "dockerfile_fix": self.dockerfile_fix,
-            "image_suggestion": self.image_suggestion
+            "image_suggestion": self.image_suggestion,
+            "readiness_fix": self.readiness_fix
         }
 
 
@@ -177,6 +183,13 @@ ERROR CLASSIFICATION RULES:
      - dockerfile_fix MUST explain: Use static linking OR use compatible build/runtime environments
      - image_suggestion: Suggest using compatible base images for both stages
 
+   CRITICAL - READINESS TIMEOUT / CONTAINER STARTUP ISSUES:
+   - If error is "Container readiness timeout" or "Container is running but no startup pattern detected":
+     This means the application started but the LOG PATTERN was not found.
+     - readiness_fix MUST suggest a better regex pattern based on the logs provided
+     - Look at the "Container/Build Logs" to see what the app ACTUALLY printed when it started
+     - Example: If logs say "Server listening on 8080" but pattern was "started", suggest "listening on"
+
 3. ENVIRONMENT_ERROR (Local system issue - no retry):
    - Docker daemon not running
    - Network connectivity issues (cannot pull images)
@@ -253,7 +266,8 @@ Classify this error and provide guidance.""")
             original_error=error_message[:500],
             should_retry=result.can_retry,
             dockerfile_fix=result.dockerfile_fix,
-            image_suggestion=result.image_suggestion
+            image_suggestion=result.image_suggestion,
+            readiness_fix=result.readiness_fix
         )
         
     except Exception as e:

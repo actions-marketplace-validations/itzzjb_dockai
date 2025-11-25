@@ -46,14 +46,20 @@ def create_plan(
     - Previous retry history (learning from mistakes)
     - Custom user instructions
     
+    Args:
+        analysis_result: Dictionary containing analysis results.
+        file_contents: String containing content of critical files.
+        retry_history: List of previous attempts and failures.
+        custom_instructions: Custom instructions from the user.
+
     Returns:
-        Tuple of (PlanningResult, usage_dict)
+        Tuple of (PlanningResult, usage_dict).
     """
     model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     
     llm = ChatOpenAI(
         model=model_name,
-        temperature=0.1,  # Slight creativity for strategy
+        temperature=0.2,  # Slight creativity for strategy
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
@@ -81,21 +87,21 @@ you must anticipate problems and plan multiple moves ahead.
 You must work with ANY programming language, framework, or technology stack.
 
 PLANNING PRINCIPLES:
-1. ANALYZE the detected stack thoroughly - understand build requirements, runtime needs, and dependencies
-2. ANTICIPATE challenges - what could go wrong? Compatibility issues? Missing packages? Binary incompatibilities?
-3. STRATEGIZE - choose the right approach for this specific project and technology
-4. LEARN - if there are previous failed attempts, understand WHY they failed and AVOID those mistakes
+1.  **ANALYZE** the detected stack thoroughly - understand build requirements, runtime needs, and dependencies.
+2.  **ANTICIPATE** challenges - what could go wrong? Compatibility issues? Missing packages? Binary incompatibilities?
+3.  **STRATEGIZE** - choose the right approach for this specific project and technology.
+4.  **LEARN** - if there are previous failed attempts, understand WHY they failed and AVOID those mistakes.
 
 CRITICAL CONSIDERATIONS (Apply intelligently based on detected technology):
-- Build environment requirements: compilers, development tools, headers
-- Runtime environment requirements: minimal dependencies for security and size
-- Binary/artifact compatibility between build and runtime environments
-- Package manager artifacts and where they are installed
-- Static vs dynamic linking considerations for compiled code
+-   **Build environment requirements**: compilers, development tools, headers.
+-   **Runtime environment requirements**: minimal dependencies for security and size.
+-   **Binary/artifact compatibility** between build and runtime environments.
+-   **Package manager artifacts** and where they are installed.
+-   **Static vs dynamic linking** considerations for compiled code.
 
 MULTI-STAGE BUILD STRATEGY:
-- BUILD stage: Use images with all necessary build tools for the detected technology
-- RUNTIME stage: Use minimal images appropriate for the technology, ensuring compatibility
+-   **BUILD stage**: Use images with all necessary build tools for the detected technology.
+-   **RUNTIME stage**: Use minimal images appropriate for the technology, ensuring compatibility.
 
 {retry_context}
 
@@ -116,7 +122,8 @@ Start Command: {start_command}
 KEY FILE CONTENTS:
 {file_contents}
 
-Generate a comprehensive plan that will guide the Dockerfile generation.""")
+Generate a comprehensive plan that will guide the Dockerfile generation.
+Start by explaining your thought process in detail.""")
     ])
     
     chain = prompt | structured_llm
@@ -153,8 +160,16 @@ def reflect_on_failure(
     This performs deep analysis of WHY something failed and HOW to fix it,
     learning from the failure to make the next attempt smarter.
     
+    Args:
+        dockerfile_content: The content of the failed Dockerfile.
+        error_message: The error message returned.
+        error_details: Detailed error information.
+        analysis_result: Original analysis result.
+        retry_history: History of previous retries.
+        container_logs: Logs from the failed container.
+
     Returns:
-        Tuple of (ReflectionResult, usage_dict)
+        Tuple of (ReflectionResult, usage_dict).
     """
     model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")  # Use stronger model for reflection
     
@@ -183,25 +198,25 @@ Think like a senior engineer debugging a production incident.
 You must work with ANY programming language, framework, or technology stack.
 
 ANALYSIS FRAMEWORK:
-1. IDENTIFY the exact point of failure
-2. UNDERSTAND the root cause (not just symptoms)
-3. DETERMINE if this is fixable by changing the Dockerfile or if it's a project issue
-4. CREATE specific, actionable fixes
-5. ANTICIPATE if this fix might cause other issues
+1.  **IDENTIFY** the exact point of failure.
+2.  **UNDERSTAND** the root cause (not just symptoms).
+3.  **DETERMINE** if this is fixable by changing the Dockerfile or if it's a project issue.
+4.  **CREATE** specific, actionable fixes.
+5.  **ANTICIPATE** if this fix might cause other issues.
 
 COMMON ROOT CAUSES (Apply intelligently based on detected technology):
-- Binary/runtime compatibility issues between build and runtime environments
-- Missing build or runtime dependencies
-- Incorrect commands for the detected technology
-- Permission issues - files created as root, running as non-root
-- Path issues - incorrect WORKDIR or COPY destinations
-- Missing source files or artifacts not properly copied
+-   Binary/runtime compatibility issues between build and runtime environments.
+-   Missing build or runtime dependencies.
+-   Incorrect commands for the detected technology.
+-   Permission issues - files created as root, running as non-root.
+-   Path issues - incorrect WORKDIR or COPY destinations.
+-   Missing source files or artifacts not properly copied.
 
 RE-ANALYSIS TRIGGERS (set needs_reanalysis=true):
-- Wrong technology/framework detected
-- Missing critical configuration files
-- Incorrect entrypoint assumptions
-- Build system misidentified
+-   Wrong technology/framework detected.
+-   Missing critical configuration files.
+-   Incorrect entrypoint assumptions.
+-   Build system misidentified.
 
 {retry_context}
 """
@@ -227,7 +242,8 @@ Project Type: {project_type}
 CONTAINER LOGS:
 {container_logs}
 
-Perform a deep analysis and provide specific fixes.""")
+Perform a deep analysis and provide specific fixes.
+Start by explaining your root cause analysis in the thought process.""")
     ])
     
     chain = prompt | structured_llm
@@ -260,8 +276,12 @@ def detect_health_endpoints(
     Instead of guessing from file names, this reads the actual code
     to find health check routes and their configurations.
     
+    Args:
+        file_contents: Content of files to analyze.
+        analysis_result: Previous analysis result.
+
     Returns:
-        Tuple of (HealthEndpointDetectionResult, usage_dict)
+        Tuple of (HealthEndpointDetectionResult, usage_dict).
     """
     model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     
@@ -279,18 +299,18 @@ Your task is to analyze the provided source code and identify any health check e
 You must work with ANY programming language, framework, or technology stack.
 
 WHAT TO LOOK FOR:
-1. Explicit health routes: Common paths like /health, /healthz, /ready, /ping, /status, /api/health, or technology-specific health endpoints
-2. Technology-specific health patterns: Analyze the code to find route definitions, endpoint handlers, or health check middleware
-3. Port configuration:
-   - Look for PORT environment variable usage
-   - Look for explicit port numbers in server/listen calls
-   - Look for configuration files with port settings
+1.  **Explicit health routes**: Common paths like /health, /healthz, /ready, /ping, /status, /api/health, or technology-specific health endpoints.
+2.  **Technology-specific health patterns**: Analyze the code to find route definitions, endpoint handlers, or health check middleware.
+3.  **Port configuration**:
+    -   Look for PORT environment variable usage.
+    -   Look for explicit port numbers in server/listen calls.
+    -   Look for configuration files with port settings.
 
 CONFIDENCE LEVELS:
-- high: Found explicit health endpoint with clear path and port
-- medium: Found health-like endpoint but port unclear
-- low: Found patterns that MIGHT be health endpoints
-- none: No health endpoints detected
+-   **high**: Found explicit health endpoint with clear path and port.
+-   **medium**: Found health-like endpoint but port unclear.
+-   **low**: Found patterns that MIGHT be health endpoints.
+-   **none**: No health endpoints detected.
 
 DO NOT GUESS. Only report what you find in the code. Analyze the actual code patterns for the detected technology.
 """
@@ -304,7 +324,8 @@ STACK: {stack}
 FILE CONTENTS:
 {file_contents}
 
-Find any health check endpoints and their port configurations.""")
+Find any health check endpoints and their port configurations.
+Explain your reasoning in the thought process.""")
     ])
     
     chain = prompt | structured_llm
@@ -331,8 +352,12 @@ def detect_readiness_patterns(
     Instead of fixed sleep times, this detects patterns in logs
     that indicate the application has started successfully.
     
+    Args:
+        file_contents: Content of files to analyze.
+        analysis_result: Previous analysis result.
+
     Returns:
-        Tuple of (ReadinessPatternResult, usage_dict)
+        Tuple of (ReadinessPatternResult, usage_dict).
     """
     model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     
@@ -347,22 +372,22 @@ def detect_readiness_patterns(
     system_prompt = """You are an expert at understanding application startup patterns, working as an autonomous AI agent.
 
 Your task is to analyze source code and determine:
-1. What log messages indicate successful startup
-2. What log messages indicate failure
-3. How long the application typically takes to start
+1.  What log messages indicate successful startup.
+2.  What log messages indicate failure.
+3.  How long the application typically takes to start.
 
 You must work with ANY programming language, framework, or technology stack.
 
 APPROACH:
-- Analyze the detected technology and understand its common startup patterns
-- Look for logging statements, print statements, or output patterns in the code
-- Identify success indicators (server started, listening, ready, initialized)
-- Identify failure indicators (error, fatal, failed, exception, panic)
+-   Analyze the detected technology and understand its common startup patterns.
+-   Look for logging statements, print statements, or output patterns in the code.
+-   Identify success indicators (server started, listening, ready, initialized).
+-   Identify failure indicators (error, fatal, failed, exception, panic).
 
 FAILURE PATTERNS (Common across technologies):
-- Error messages, exception traces, panic/crash indicators
-- Connection failures, module not found errors
-- Any indication of startup failure
+-   Error messages, exception traces, panic/crash indicators.
+-   Connection failures, module not found errors.
+-   Any indication of startup failure.
 
 Generate REGEX patterns that can be used to detect these in container logs.
 Use Python-compatible regex syntax.
@@ -379,7 +404,8 @@ PROJECT TYPE: {project_type}
 FILE CONTENTS:
 {file_contents}
 
-Identify log patterns that indicate successful startup or failure.""")
+Identify log patterns that indicate successful startup or failure.
+Explain your reasoning in the thought process.""")
     ])
     
     chain = prompt | structured_llm
@@ -412,8 +438,17 @@ def generate_iterative_dockerfile(
     Unlike fresh generation, this specifically targets the issues identified
     in the reflection, making minimal changes to fix the problems.
     
+    Args:
+        previous_dockerfile: The previous, failed Dockerfile.
+        reflection: The reflection result containing analysis of failure.
+        analysis_result: Original analysis result.
+        file_contents: Content of critical files.
+        current_plan: The current generation plan.
+        verified_tags: List of verified Docker tags.
+        custom_instructions: Custom instructions.
+
     Returns:
-        Tuple of (IterativeDockerfileResult, usage_dict)
+        Tuple of (IterativeDockerfileResult, usage_dict).
     """
     model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
     
@@ -433,25 +468,25 @@ based on specific feedback about what went wrong.
 You must work with ANY programming language, framework, or technology stack.
 
 APPROACH:
-1. UNDERSTAND what was wrong with the previous Dockerfile
-2. APPLY the specific fixes from the reflection
-3. PRESERVE what was working correctly
-4. MAKE MINIMAL CHANGES - don't rewrite everything, fix what's broken
+1.  **UNDERSTAND** what was wrong with the previous Dockerfile.
+2.  **APPLY** the specific fixes from the reflection.
+3.  **PRESERVE** what was working correctly.
+4.  **MAKE MINIMAL CHANGES** - don't rewrite everything, fix what's broken.
 
 REFLECTION GUIDANCE:
-- Root cause: {root_cause}
-- Specific fixes to apply: {specific_fixes}
-- Should change base image: {should_change_base_image}
-- Suggested base image: {suggested_base_image}
-- Should change build strategy: {should_change_build_strategy}
-- New strategy: {new_build_strategy}
+-   Root cause: {root_cause}
+-   Specific fixes to apply: {specific_fixes}
+-   Should change base image: {should_change_base_image}
+-   Suggested base image: {suggested_base_image}
+-   Should change build strategy: {should_change_build_strategy}
+-   New strategy: {new_build_strategy}
 
 PLAN GUIDANCE:
-- Base image strategy: {base_image_strategy}
-- Build strategy: {build_strategy}
-- Use multi-stage: {use_multi_stage}
-- Use minimal runtime: {use_minimal_runtime}
-- Use static linking: {use_static_linking}
+-   Base image strategy: {base_image_strategy}
+-   Build strategy: {build_strategy}
+-   Use multi-stage: {use_multi_stage}
+-   Use minimal runtime: {use_minimal_runtime}
+-   Use static linking: {use_static_linking}
 
 VERIFIED BASE IMAGES: {verified_tags}
 
@@ -473,7 +508,8 @@ Start Command: {start_command}
 KEY FILES:
 {file_contents}
 
-Apply the fixes and return an improved Dockerfile.""")
+Apply the fixes and return an improved Dockerfile.
+Explain your changes in the thought process.""")
     ])
     
     chain = prompt | structured_llm
@@ -506,132 +542,4 @@ Apply the fixes and return an improved Dockerfile.""")
     return result, callback.get_usage()
 
 
-def check_container_readiness(
-    container_name: str,
-    readiness_patterns: List[str],
-    failure_patterns: List[str],
-    max_wait_time: int = 60,
-    check_interval: int = 2
-) -> Tuple[bool, str, str]:
-    """
-    Smart container readiness check using AI-detected log patterns.
-    
-    Instead of fixed sleep, this polls container logs and looks for
-    patterns that indicate successful startup or failure.
-    
-    Returns:
-        Tuple of (is_ready, status_message, logs)
-    """
-    import subprocess
-    import time
-    
-    start_time = time.time()
-    last_log_position = 0
-    accumulated_logs = ""
-    
-    # Compile regex patterns
-    success_regexes = []
-    failure_regexes = []
-    
-    for pattern in readiness_patterns:
-        try:
-            success_regexes.append(re.compile(pattern, re.IGNORECASE))
-        except re.error:
-            logger.warning(f"Invalid success regex pattern: {pattern}")
-    
-    for pattern in failure_patterns:
-        try:
-            failure_regexes.append(re.compile(pattern, re.IGNORECASE))
-        except re.error:
-            logger.warning(f"Invalid failure regex pattern: {pattern}")
-    
-    # Add default patterns if none provided
-    if not success_regexes:
-        default_success = [
-            r"listening on.*port",
-            r"server.*started",
-            r"application.*ready",
-            r"ready to accept connections",
-            r"started.*successfully"
-        ]
-        success_regexes = [re.compile(p, re.IGNORECASE) for p in default_success]
-    
-    if not failure_regexes:
-        default_failure = [
-            r"error:",
-            r"fatal:",
-            r"failed to",
-            r"exception",
-            r"panic:",
-            r"segmentation fault"
-        ]
-        failure_regexes = [re.compile(p, re.IGNORECASE) for p in default_failure]
-    
-    logger.info(f"Checking container readiness (max {max_wait_time}s)...")
-    
-    while (time.time() - start_time) < max_wait_time:
-        # Check if container is still running
-        result = subprocess.run(
-            ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
-            capture_output=True,
-            text=True
-        )
-        
-        if result.returncode != 0:
-            return False, "Container inspection failed", accumulated_logs
-        
-        is_running = result.stdout.strip() == "true"
-        
-        # Get container logs
-        logs_result = subprocess.run(
-            ["docker", "logs", container_name],
-            capture_output=True,
-            text=True
-        )
-        
-        current_logs = logs_result.stdout + logs_result.stderr
-        new_logs = current_logs[last_log_position:]
-        accumulated_logs = current_logs
-        last_log_position = len(current_logs)
-        
-        # Check for success patterns
-        for regex in success_regexes:
-            if regex.search(current_logs):
-                logger.info("Container readiness detected via log pattern")
-                return True, "Container is ready (detected via log patterns)", accumulated_logs
-        
-        # Check for failure patterns
-        for regex in failure_regexes:
-            if regex.search(new_logs):  # Only check new logs for failures
-                logger.warning(f"Failure pattern detected in logs")
-                return False, f"Container startup failed (error pattern detected)", accumulated_logs
-        
-        # If container stopped, check exit code
-        if not is_running:
-            exit_result = subprocess.run(
-                ["docker", "inspect", "-f", "{{.State.ExitCode}}", container_name],
-                capture_output=True,
-                text=True
-            )
-            exit_code = exit_result.stdout.strip()
-            
-            if exit_code == "0":
-                return True, "Container completed successfully (exit code 0)", accumulated_logs
-            else:
-                return False, f"Container stopped with exit code {exit_code}", accumulated_logs
-        
-        time.sleep(check_interval)
-    
-    # Timeout reached - check if container is still running (might be a long-starting service)
-    result = subprocess.run(
-        ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
-        capture_output=True,
-        text=True
-    )
-    
-    if result.stdout.strip() == "true":
-        # Container is running but didn't emit success pattern - consider it ready
-        logger.warning("Container is running but no startup pattern detected - assuming ready")
-        return True, "Container is running (no startup pattern detected, assuming ready)", accumulated_logs
-    
-    return False, f"Container readiness timeout after {max_wait_time}s", accumulated_logs
+

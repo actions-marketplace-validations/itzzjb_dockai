@@ -1,5 +1,6 @@
 from unittest.mock import patch, MagicMock
-from dockai.graph import increment_retry, should_retry, check_security
+from dockai.graph import should_retry, check_security
+from dockai.nodes import increment_retry, scan_node, analyze_node, read_files_node, generate_node
 
 def test_increment_retry():
     """Test retry counter increment"""
@@ -20,7 +21,7 @@ def test_should_retry_on_validation_failure():
     }
     
     result = should_retry(state)
-    assert result == "increment_retry"
+    assert result == "reflect" # Updated expectation: goes to reflect first
 
 def test_should_retry_max_retries_reached():
     """Test that retry stops at max_retries"""
@@ -54,7 +55,7 @@ def test_should_retry_on_security_error():
     }
     
     result = should_retry(state)
-    assert result == "increment_retry"
+    assert result == "reflect" # Updated expectation: goes to reflect first
 
 def test_check_security_passes():
     """Test security check when no errors"""
@@ -72,7 +73,7 @@ def test_check_security_fails_with_retries():
     }
     
     result = check_security(state)
-    assert result == "increment_retry"
+    assert result == "reflect"
 
 def test_check_security_fails_max_retries():
     """Test security check failure at max retries"""
@@ -85,11 +86,9 @@ def test_check_security_fails_max_retries():
     result = check_security(state)
     assert result == "end"
 
-@patch("dockai.graph.get_file_tree")
+@patch("dockai.nodes.get_file_tree")
 def test_scan_node(mock_get_file_tree):
     """Test scan node"""
-    from dockai.graph import scan_node
-    
     mock_get_file_tree.return_value = ["app.py", "requirements.txt"]
     
     state = {"path": "/test/path"}
@@ -98,10 +97,9 @@ def test_scan_node(mock_get_file_tree):
     assert result["file_tree"] == ["app.py", "requirements.txt"]
     mock_get_file_tree.assert_called_once_with("/test/path")
 
-@patch("dockai.graph.analyze_repo_needs")
+@patch("dockai.nodes.analyze_repo_needs")
 def test_analyze_node(mock_analyze):
     """Test analyze node"""
-    from dockai.graph import analyze_node
     from dockai.schemas import AnalysisResult
     
     mock_result = AnalysisResult(
@@ -133,7 +131,6 @@ def test_analyze_node(mock_analyze):
 
 def test_read_files_node():
     """Test read_files node"""
-    from dockai.graph import read_files_node
     import tempfile
     import os
     
@@ -155,7 +152,6 @@ def test_read_files_node():
 
 def test_read_files_node_truncation():
     """Test that large files are truncated"""
-    from dockai.graph import read_files_node
     import tempfile
     import os
     
@@ -176,11 +172,10 @@ def test_read_files_node_truncation():
         
         assert "TRUNCATED" in result["file_contents"]
 
-@patch("dockai.graph.generate_dockerfile")
-@patch("dockai.graph.get_docker_tags")
+@patch("dockai.nodes.generate_dockerfile")
+@patch("dockai.nodes.get_docker_tags")
 def test_generate_node_first_attempt(mock_get_tags, mock_generate):
     """Test generate node on first attempt (uses cheaper model)"""
-    from dockai.graph import generate_node
     
     mock_get_tags.return_value = ["python:3.11-alpine", "python:3.11-slim"]
     mock_generate.return_value = (
@@ -212,12 +207,11 @@ def test_generate_node_first_attempt(mock_get_tags, mock_generate):
     # Should use MODEL_ANALYZER on first attempt
     assert result["usage_stats"][0]["model"] == "gpt-4o-mini"
 
-@patch("dockai.graph.generate_dockerfile")
-@patch("dockai.graph.get_docker_tags")
-@patch("dockai.graph.os.getenv")
+@patch("dockai.nodes.generate_dockerfile")
+@patch("dockai.nodes.get_docker_tags")
+@patch("dockai.nodes.os.getenv")
 def test_generate_node_retry(mock_getenv, mock_get_tags, mock_generate):
     """Test generate node on retry (uses more powerful model)"""
-    from dockai.graph import generate_node
     
     mock_getenv.side_effect = lambda key, default=None: {
         "MODEL_ANALYZER": "gpt-4o-mini",

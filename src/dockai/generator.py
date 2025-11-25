@@ -1,3 +1,12 @@
+"""
+DockAI Generator Module
+
+This module is responsible for generating the Dockerfile.
+It acts as the "Architect", using the analysis results and plan to create
+a production-ready Dockerfile. It supports both fresh generation and
+iterative improvement based on feedback.
+"""
+
 import os
 from typing import Tuple, Any, Dict, List, Optional
 from langchain_openai import ChatOpenAI
@@ -22,8 +31,22 @@ def generate_dockerfile(
     
     Uses LangChain and Pydantic to generate a structured Dockerfile.
     
-    NEW: Supports iterative improvement when previous_dockerfile and reflection are provided.
+    Supports iterative improvement when previous_dockerfile and reflection are provided.
     The AI will make targeted fixes instead of regenerating from scratch.
+
+    Args:
+        stack_info: Information about the technology stack.
+        file_contents: Content of critical files.
+        custom_instructions: Custom instructions from the user.
+        feedback_error: Error message from previous attempt (if any).
+        previous_dockerfile: Previous Dockerfile content (for iteration).
+        retry_history: History of previous retries.
+        current_plan: Current generation plan.
+        reflection: Reflection on previous failure.
+        **kwargs: Additional arguments (model_name, etc.).
+
+    Returns:
+        Tuple of (dockerfile_content, project_type, thought_process, usage_stats).
     """
     model_name = kwargs.get("model_name") or os.getenv("MODEL_GENERATOR", "gpt-4o")
     
@@ -110,50 +133,50 @@ Your Task:
 Generate a highly optimized, production-ready Dockerfile for this application. You must work with ANY technology stack.
 
 Process:
-1. REASON: Explain your thought process. Why are you choosing this base image? Why this build strategy?
-2. DRAFT: Create the Dockerfile content based on best practices for the detected technology.
+1.  **REASON**: Explain your thought process. Why are you choosing this base image? Why this build strategy?
+2.  **DRAFT**: Create the Dockerfile content based on best practices for the detected technology.
 
 Requirements (Apply intelligently based on the detected technology):
 
-1. Base Image Strategy (CRITICAL):
-   - BUILD STAGE: Use appropriate images with compilers, build tools, and system packages needed for building
-     - Choose images that include the necessary development dependencies for the detected technology
-   - RUNTIME STAGE: Use minimal/slim/distroless images appropriate for the technology for security and smaller size
-   - Use VERIFIED TAGS from the provided list - prefer specific version tags over 'latest'
+1.  **Base Image Strategy (CRITICAL)**:
+    -   **BUILD STAGE**: Use appropriate images with compilers, build tools, and system packages needed for building.
+        -   Choose images that include the necessary development dependencies for the detected technology.
+    -   **RUNTIME STAGE**: Use minimal/slim/distroless images appropriate for the technology for security and smaller size.
+    -   Use **VERIFIED TAGS** from the provided list - prefer specific version tags over 'latest'.
 
-2. Architecture: Use Multi-Stage builds when beneficial. Stage 1: Build/Compile with appropriate tools. Stage 2: Runtime with minimal dependencies.
+2.  **Architecture**: Use Multi-Stage builds when beneficial. Stage 1: Build/Compile with appropriate tools. Stage 2: Runtime with minimal dependencies.
 
-3. CRITICAL - SOURCE FILE COPYING:
-   - YOU MUST COPY ALL APPLICATION SOURCE FILES to the container
-   - Analyze the project structure and ensure ALL necessary files are copied
-   - Copy source files, templates, static assets, configuration files, and any runtime resources
-   - For compiled languages: Source files must be copied BEFORE compilation
-   - ALWAYS ensure either "COPY . ." or explicit copy of each required file/directory
-   - Copying ONLY dependency manifest files is NOT ENOUGH
-   - The runtime stage needs ALL files required to run the application
+3.  **CRITICAL - SOURCE FILE COPYING**:
+    -   **YOU MUST COPY ALL APPLICATION SOURCE FILES** to the container.
+    -   Analyze the project structure and ensure ALL necessary files are copied.
+    -   Copy source files, templates, static assets, configuration files, and any runtime resources.
+    -   For compiled languages: Source files must be copied BEFORE compilation.
+    -   ALWAYS ensure either "COPY . ." or explicit copy of each required file/directory.
+    -   Copying ONLY dependency manifest files is NOT ENOUGH.
+    -   The runtime stage needs ALL files required to run the application.
 
-4. Security: Run as non-root user. Use proper user/group creation syntax appropriate for the base image's distribution.
+4.  **Security**: Run as non-root user. Use proper user/group creation syntax appropriate for the base image's distribution.
 
-5. Optimization: Combine RUN commands where appropriate. Clean package caches after installation.
+5.  **Optimization**: Combine RUN commands where appropriate. Clean package caches after installation.
 
-6. Configuration: Set appropriate env vars, WORKDIR, and expose correct ports based on project analysis.
+6.  **Configuration**: Set appropriate env vars, WORKDIR, and expose correct ports based on project analysis.
 
-7. Commands: Use the provided 'Build Command' and 'Start Command' if they are valid.
+7.  **Commands**: Use the provided 'Build Command' and 'Start Command' if they are valid.
 
-8. MULTI-STAGE BUILD PATTERNS:
-   - For interpreted languages with package dependencies: Ensure dependencies installed in build stage are available in runtime stage
-   - For compiled languages: Build in full image, copy only the binary/artifacts to minimal runtime image
-   - Ensure binary compatibility between build and runtime stages (same OS family or static linking)
+8.  **MULTI-STAGE BUILD PATTERNS**:
+    -   For interpreted languages with package dependencies: Ensure dependencies installed in build stage are available in runtime stage.
+    -   For compiled languages: Build in full image, copy only the binary/artifacts to minimal runtime image.
+    -   Ensure binary compatibility between build and runtime stages (same OS family or static linking).
 
-9. CRITICAL Binary/Runtime Compatibility:
-   - Ensure compatibility between build and runtime environments
-   - If using different base images, ensure dependencies and binaries are compatible
-   - For native extensions or compiled code, match the build environment with runtime, or use static linking
+9.  **CRITICAL Binary/Runtime Compatibility**:
+    -   Ensure compatibility between build and runtime environments.
+    -   If using different base images, ensure dependencies and binaries are compatible.
+    -   For native extensions or compiled code, match the build environment with runtime, or use static linking.
 
-10. GENERAL BEST PRACTICES:
-   - Don't assume tools exist in minimal images - install explicitly if needed
-   - User creation syntax may differ between distributions - use appropriate commands
-   - Clean up package manager caches to reduce image size
+10. **GENERAL BEST PRACTICES**:
+    -   Don't assume tools exist in minimal images - install explicitly if needed.
+    -   User creation syntax may differ between distributions - use appropriate commands.
+    -   Clean up package manager caches to reduce image size.
 
 {plan_context}
 
@@ -187,7 +210,19 @@ Consider using this image strategy.
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_template),
-        ("user", "Stack: {stack}\n\nVerified Base Images: {verified_tags}\n\nDetected Build Command: {build_cmd}\nDetected Start Command: {start_cmd}\n\nFile Contents:\n{file_contents}\n\nCustom Instructions: {custom_instructions}")
+        ("user", """Stack: {stack}
+
+Verified Base Images: {verified_tags}
+
+Detected Build Command: {build_cmd}
+Detected Start Command: {start_cmd}
+
+File Contents:
+{file_contents}
+
+Custom Instructions: {custom_instructions}
+
+Generate the Dockerfile and explain your reasoning in the thought process.""")
     ])
     
     # Create Chain
@@ -249,17 +284,17 @@ CRITICAL: You are NOT starting from scratch. You are IMPROVING an existing Docke
 based on specific feedback about what went wrong.
 
 ITERATION RULES:
-1. PRESERVE what was working - don't change things that weren't causing issues
-2. APPLY specific fixes from the reflection - these are targeted solutions
-3. MAKE MINIMAL CHANGES - surgical fixes, not rewrites
-4. LEARN from the failure - understand WHY it failed to ensure the fix is correct
+1.  **PRESERVE** what was working - don't change things that weren't causing issues.
+2.  **APPLY** specific fixes from the reflection - these are targeted solutions.
+3.  **MAKE MINIMAL CHANGES** - surgical fixes, not rewrites.
+4.  **LEARN** from the failure - understand WHY it failed to ensure the fix is correct.
 
 COMMON ISSUES TO CHECK (Apply intelligently based on the technology):
-- Missing source files: Ensure ALL application source files are COPIED (not just dependency/manifest files)
-- Verify all source code files required for the detected technology are properly copied
-- Multi-stage builds: If copying from builder, ensure builder stage has ALL files to copy
-- Dependency artifacts: Ensure package manager outputs are available in runtime stage
-- Binary compatibility: Ensure build and runtime environments are compatible
+-   **Missing source files**: Ensure ALL application source files are COPIED (not just dependency/manifest files).
+-   **Verify all source code files** required for the detected technology are properly copied.
+-   **Multi-stage builds**: If copying from builder, ensure builder stage has ALL files to copy.
+-   **Dependency artifacts**: Ensure package manager outputs are available in runtime stage.
+-   **Binary compatibility**: Ensure build and runtime environments are compatible.
 
 REFLECTION ANALYSIS:
 Root Cause: {root_cause}
@@ -314,7 +349,7 @@ KEY FILE CONTENTS:
 {file_contents}
 
 Apply the specific fixes and return an improved Dockerfile.
-Explain what you changed and why.""")
+Explain what you changed and why in the thought process.""")
     ])
     
     chain = prompt | structured_llm
