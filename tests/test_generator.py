@@ -116,5 +116,5 @@ def test_generate_dockerfile_with_feedback(mock_openai):
     messages = call_args[1]['messages']
     system_prompt = messages[0]['content']
     
-    assert "IMPORTANT: The previous Dockerfile you generated failed" in system_prompt
+    assert "CRITICAL - DOCKERFILE VALIDATION FAILED" in system_prompt
     assert error_msg in system_prompt
