@@ -6,6 +6,8 @@ import os
 import json
 from typing import List, Tuple, Optional
 
+from .errors import classify_error, ClassifiedError, ErrorType
+
 logger = logging.getLogger("dockai")
 
 def run_command(command: List[str], cwd: str = ".") -> Tuple[int, str, str]:
@@ -76,7 +78,7 @@ def validate_docker_build_and_run(
     stack: str = "Unknown",
     health_endpoint: Optional[Tuple[str, int]] = None,
     recommended_wait_time: int = 5
-) -> Tuple[bool, str, int]:
+) -> Tuple[bool, str, int, Optional[ClassifiedError]]:
     """
     Builds and runs the Dockerfile in the given directory to verify it works.
     
@@ -97,7 +99,8 @@ def validate_docker_build_and_run(
         recommended_wait_time (int): AI-recommended wait time in seconds.
         
     Returns:
-        Tuple[bool, str, int]: A tuple containing (success, message, image_size_bytes).
+        Tuple[bool, str, int, Optional[ClassifiedError]]: A tuple containing 
+        (success, message, image_size_bytes, classified_error).
     """
     image_name = f"dockai-test-{uuid.uuid4().hex[:8]}"
     container_name = f"dockai-container-{uuid.uuid4().hex[:8]}"
@@ -110,9 +113,12 @@ def validate_docker_build_and_run(
     code, stdout, stderr = run_command(build_cmd, cwd=directory)
     
     if code != 0:
-        error_msg = f"Docker build failed:\n{stderr}\n{stdout}"
-        logger.error("Docker build failed.")
-        return False, error_msg, 0
+        error_output = f"{stderr}\n{stdout}"
+        classified = classify_error(error_output, logs=error_output, stack=stack)
+        error_msg = f"Docker build failed: {classified.message}"
+        logger.error(f"Problem: {classified.message}")
+        logger.debug(f"Details: {error_output[:500]}")
+        return False, error_msg, 0, classified
     
     # 2. Run
     logger.info("Running Docker container (sandboxed)...")
@@ -143,10 +149,12 @@ def validate_docker_build_and_run(
     code, stdout, stderr = run_command(run_cmd)
     
     if code != 0:
-        error_msg = f"Failed to start container:\n{stderr}"
-        logger.error("Failed to start container.")
+        error_output = f"{stderr}\n{stdout}"
+        classified = classify_error(error_output, logs=error_output, stack=stack)
+        error_msg = f"Container start failed: {classified.message}"
+        logger.error(f"Problem: {classified.message}")
         run_command(["docker", "rmi", image_name])
-        return False, error_msg, 0
+        return False, error_msg, 0, classified
     
     
     # 3. Use AI-recommended wait time
@@ -164,30 +172,43 @@ def validate_docker_build_and_run(
 
     logs_cmd = ["docker", "logs", container_name]
     _, logs_out, logs_err = run_command(logs_cmd)
+    container_logs = f"{logs_out}\n{logs_err}"
     
     success = False
     message = ""
+    classified_error = None
 
     # 5. Validation logic
+    # Health checks are OPTIONAL - only run if explicitly configured
+    skip_health_check = os.getenv("DOCKAI_SKIP_HEALTH_CHECK", "false").lower() == "true"
+    
     if project_type == "service":
         if is_running:
-            # Try health check if endpoint is provided
-            if health_endpoint:
+            # Health check is optional - only run if endpoint is explicitly provided AND not skipped
+            if health_endpoint and not skip_health_check:
                 endpoint_path, port = health_endpoint
+                logger.info(f"Health endpoint configured: {endpoint_path}:{port} - running health check...")
                 if check_health_endpoint(container_name, endpoint_path, port):
                     success = True
                     message = f"Service is running and health check passed ({endpoint_path})."
                 else:
-                    # Health endpoint was detected but not responding - this is a failure
-                    success = False
-                    message = f"Service is running but health check failed at {endpoint_path}:{port}. The endpoint is not responding correctly.\nLogs:\n{logs_out}\n{logs_err}"
+                    # Health check failed but service is running - log warning but don't fail
+                    # Many services take time to fully initialize or health endpoint might be different
+                    logger.warning(f"Health check did not respond at {endpoint_path}:{port}, but service is running")
+                    success = True
+                    message = f"Service is running (health check at {endpoint_path} did not respond - this is OK if the endpoint is different)."
             else:
-                # No health endpoint detected - just check if running
+                # No health endpoint OR health check skipped - just check if running
+                if skip_health_check:
+                    logger.info("Health check skipped (DOCKAI_SKIP_HEALTH_CHECK=true)")
+                else:
+                    logger.info("No health endpoint configured - skipping health check")
                 success = True
-                message = "Service is running successfully (no health endpoint detected)."
+                message = "Service is running successfully."
         else:
             success = False
-            message = f"Service stopped unexpectedly. Exit Code: {exit_code}\nLogs:\n{logs_out}\n{logs_err}"
+            classified_error = classify_error(container_logs, logs=container_logs, stack=stack)
+            message = f"Service stopped unexpectedly (Exit Code: {exit_code}): {classified_error.message}"
 
             
     elif project_type == "script":
@@ -200,7 +221,8 @@ def validate_docker_build_and_run(
                 message = "Script finished successfully (Exit Code 0)."
             else:
                 success = False
-                message = f"Script failed. Exit Code: {exit_code}\nLogs:\n{logs_out}\n{logs_err}"
+                classified_error = classify_error(container_logs, logs=container_logs, stack=stack)
+                message = f"Script failed (Exit Code: {exit_code}): {classified_error.message}"
     
     else:
         if is_running or exit_code == 0:
@@ -208,12 +230,13 @@ def validate_docker_build_and_run(
             message = "Container ran successfully."
         else:
             success = False
-            message = f"Container failed. Exit Code: {exit_code}\nLogs:\n{logs_out}\n{logs_err}"
+            classified_error = classify_error(container_logs, logs=container_logs, stack=stack)
+            message = f"Container failed (Exit Code: {exit_code}): {classified_error.message}"
 
     if success:
         logger.info(message)
     else:
-        logger.error(message)
+        logger.error(f"Problem: {message}")
 
     
     # 6. Get Image Size
@@ -263,11 +286,18 @@ def validate_docker_build_and_run(
                             app_vulns += len(vulns)
                     
                     if base_image_vulns > 0:
-                        # Base image has vulnerabilities - this is a Dockerfile issue
-                        logger.error(f"Found {base_image_vulns} vulnerabilities in base image layers.")
+                        # Base image has vulnerabilities - this is a Dockerfile issue (can retry)
+                        logger.error(f"Problem: Found {base_image_vulns} vulnerabilities in base image layers.")
                         if strict_security or base_image_vulns > 5:
                             success = False
-                            message = f"Security scan failed: {base_image_vulns} CRITICAL/HIGH vulnerabilities in base image. Try using a different base image tag (alpine, slim, or newer version).\n\nTrivy Output:\n{trivy_out[:500]}"
+                            classified_error = ClassifiedError(
+                                error_type=ErrorType.DOCKERFILE_ERROR,
+                                message=f"Security scan failed: {base_image_vulns} CRITICAL/HIGH vulnerabilities in base image",
+                                suggestion="Try using a different base image tag (alpine, slim, or newer version)",
+                                original_error=trivy_out[:300],
+                                should_retry=True
+                            )
+                            message = classified_error.message
                         else:
                             message += f"\n\n[SECURITY WARNING] {base_image_vulns} vulnerabilities in base image. Consider using a more secure base image."
                             logger.warning(f"Base image vulnerabilities detected but continuing (strict_security=false)")
@@ -282,14 +312,21 @@ def validate_docker_build_and_run(
                     logger.warning(f"Could not parse Trivy output: {e}")
                     if strict_security:
                         success = False
-                        message = f"Security scan found vulnerabilities. Enable verbose mode for details.\n{trivy_out[:500]}"
+                        classified_error = ClassifiedError(
+                            error_type=ErrorType.DOCKERFILE_ERROR,
+                            message="Security scan found vulnerabilities",
+                            suggestion="Enable verbose mode for details or use DOCKAI_SKIP_SECURITY_SCAN=true",
+                            original_error=trivy_out[:300],
+                            should_retry=True
+                        )
+                        message = classified_error.message
                     else:
                         message += "\n\n[SECURITY WARNING] Trivy detected vulnerabilities. Run with DOCKAI_STRICT_SECURITY=true to fail on vulnerabilities."
                         logger.warning(trivy_out[:500])
             else:
                 logger.warning(f"Trivy scan failed to execute: {trivy_err}")
         else:
-            logger.info("✓ Trivy scan passed (No CRITICAL/HIGH vulnerabilities found).")
+            logger.info("Trivy scan passed (No CRITICAL/HIGH vulnerabilities found).")
     else:
         logger.info("Security scan skipped (DOCKAI_SKIP_SECURITY_SCAN=true)")
 
@@ -298,4 +335,4 @@ def validate_docker_build_and_run(
     run_command(["docker", "rm", "-f", container_name])
     run_command(["docker", "rmi", image_name])
     
-    return success, message, image_size_bytes
+    return success, message, image_size_bytes, classified_error

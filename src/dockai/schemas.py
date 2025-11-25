@@ -2,7 +2,7 @@ from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 
 class HealthEndpoint(BaseModel):
-    path: str = Field(description="The path of the health check endpoint, e.g., '/health' or '/'")
+    path: str = Field(description="The path of the health check endpoint, e.g., '/health' or '/api/health'")
     port: int = Field(description="The port the service listens on")
 
 class AnalysisResult(BaseModel):
@@ -13,7 +13,10 @@ class AnalysisResult(BaseModel):
     build_command: Optional[str] = Field(description="The command to build the application (e.g., 'npm run build', 'go build')")
     start_command: Optional[str] = Field(description="The command to start the application (e.g., 'npm start', 'python app.py')")
     suggested_base_image: str = Field(description="The official Docker Hub image name for this stack (e.g., 'python', 'node', 'golang', 'rust', 'ruby')")
-    health_endpoint: Optional[HealthEndpoint] = Field(description="Detected health endpoint details, if any")
+    health_endpoint: Optional[HealthEndpoint] = Field(
+        default=None,
+        description="Health endpoint details if CLEARLY defined in routing files (e.g., /health, /api/health). Set to null if no health endpoint is found - do NOT guess."
+    )
     recommended_wait_time: int = Field(description="Estimated initialization time in seconds (3-30)", ge=3, le=60)
 
 class DockerfileResult(BaseModel):

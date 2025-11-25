@@ -1,12 +1,15 @@
 import os
+import sys
 import logging
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.logging import RichHandler
+from rich.table import Table
 from dotenv import load_dotenv
 
 from .graph import create_graph
+from .errors import ErrorType, format_error_for_display, ClassifiedError
 
 # Load environment variables from .env file
 load_dotenv()
@@ -15,11 +18,12 @@ app = typer.Typer()
 console = Console()
 
 # Configure logging with RichHandler for beautiful output
+# Disable rich_tracebacks to prevent verbose traceback output
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
     datefmt="[%X]",
-    handlers=[RichHandler(console=console, rich_tracebacks=True, show_path=False)]
+    handlers=[RichHandler(console=console, rich_tracebacks=False, show_path=False)]
 )
 logger = logging.getLogger("dockai")
 
@@ -68,7 +72,7 @@ def load_instructions(path: str):
                         analyzer_instructions += f"\nFrom .dockai file:\n{shared_instructions}\n"
                         generator_instructions += f"\nFrom .dockai file:\n{shared_instructions}\n"
                         
-            console.print(f"[green]✓[/green] Loaded custom instructions from {dockai_file_path}")
+            console.print(f"[green]Loaded custom instructions from {dockai_file_path}[/green]")
             logger.info(f"Loaded custom instructions from {dockai_file_path}")
         except Exception as e:
             console.print(f"[yellow]Warning:[/yellow] Could not read .dockai file: {e}")
@@ -91,21 +95,21 @@ def run(
     # Validate input path
     if not os.path.exists(path):
         console.print(f"[bold red]Error:[/bold red] Path '{path}' does not exist.")
-        logger.error(f"Path '{path}' does not exist.")
+        logger.error(f"Problem: Path '{path}' does not exist.")
         raise typer.Exit(code=1)
         
     # Validate API key
     if not os.getenv("OPENAI_API_KEY"):
         console.print("[bold red]Error:[/bold red] OPENAI_API_KEY not found in environment variables.")
         console.print("Please create a .env file with your API key.")
-        logger.error("OPENAI_API_KEY missing")
+        logger.error("Problem: OPENAI_API_KEY missing")
         raise typer.Exit(code=1)
 
     # Validate model configuration
     if not os.getenv("MODEL_ANALYZER") or not os.getenv("MODEL_GENERATOR"):
         console.print("[bold red]Error:[/bold red] Model configuration missing.")
         console.print("Please set MODEL_ANALYZER and MODEL_GENERATOR in your .env file.")
-        logger.error("Model configuration missing")
+        logger.error("Problem: Model configuration missing")
         raise typer.Exit(code=1)
 
     console.print(Panel.fit("[bold blue]DockAI[/bold blue]\n[italic]Agentic Workflow powered by LangGraph[/italic]"))
@@ -125,6 +129,7 @@ def run(
         "retry_count": 0,
         "max_retries": int(os.getenv("MAX_RETRIES", "5")),
         "error": None,
+        "error_details": None,
         "logs": [],
         "usage_stats": [],
         "config": {
@@ -136,8 +141,26 @@ def run(
     # Create and Run Graph
     workflow = create_graph()
     
-    with console.status("[bold green]Running DockAI Agent...[/bold green]", spinner="dots"):
-        final_state = workflow.invoke(initial_state)
+    try:
+        with console.status("[bold green]Running DockAI Agent...[/bold green]", spinner="dots"):
+            final_state = workflow.invoke(initial_state)
+    except Exception as e:
+        # Handle any unexpected errors gracefully
+        error_msg = str(e)
+        
+        # Check for common LangGraph errors
+        if "GraphRecursionError" in error_msg or "recursion" in error_msg.lower():
+            console.print("\n[bold red]Max Retries Exceeded[/bold red]")
+            console.print("[yellow]The system reached the maximum retry limit while trying to generate a valid Dockerfile.[/yellow]\n")
+            console.print("[bold]Check the error details above for specific guidance on how to fix the issue.[/bold]")
+            console.print("[dim]You can also increase MAX_RETRIES in .env or run with --verbose for more details.[/dim]\n")
+        else:
+            console.print(f"\n[bold red]Unexpected Error[/bold red]")
+            console.print(f"[yellow]{error_msg[:200]}[/yellow]\n")
+            if verbose:
+                console.print_exception()
+        
+        raise typer.Exit(code=1)
 
     # Process Results
     validation_result = final_state["validation_result"]
@@ -162,8 +185,60 @@ def run(
             border_style="blue"
         ))
     else:
-        console.print(f"[bold red]Failed to generate a valid Dockerfile.[/bold red]")
-        console.print(f"[red]Last Error: {final_state.get('error')}[/red]")
+        console.print(f"\n[bold red]Failed to generate a valid Dockerfile[/bold red]\n")
+        
+        # Display classified error information if available
+        error_details = final_state.get("error_details")
+        
+        if error_details:
+            error_type = error_details.get("error_type", "unknown_error")
+            
+            # Create error type display
+            error_type_icons = {
+                "project_error": "Project Error",
+                "dockerfile_error": "Dockerfile Error", 
+                "environment_error": "Environment Error",
+                "unknown_error": "Unknown Error"
+            }
+            
+            error_type_display = error_type_icons.get(error_type, "Error")
+            
+            # Build error panel
+            error_content = f"[bold]{error_type_display}[/bold]\n\n"
+            error_content += f"[red]Problem:[/red] {error_details.get('message', 'Unknown error')}\n\n"
+            error_content += f"[green]Solution:[/green] {error_details.get('suggestion', 'Check the logs for details')}"
+            
+            # Add retry info
+            if error_type == "project_error":
+                error_content += "\n\n[yellow]This is a project configuration issue that cannot be fixed by retrying.[/yellow]"
+                error_content += "\n[yellow]Please fix the issue in your project and try again.[/yellow]"
+            elif error_type == "environment_error":
+                error_content += "\n\n[yellow]This is a local environment issue.[/yellow]"
+                error_content += "\n[yellow]Please fix your Docker/system configuration and try again.[/yellow]"
+            
+            console.print(Panel(
+                error_content,
+                title="Error Details",
+                border_style="red"
+            ))
+        else:
+            # Fallback to simple error message
+            error_msg = final_state.get('error', 'Unknown error occurred')
+            console.print(f"[red]Error: {error_msg[:300]}[/red]")
+        
+        # Show retry count
+        retry_count = final_state.get("retry_count", 0)
+        max_retries = final_state.get("max_retries", 5)
+        if retry_count > 0:
+            console.print(f"\n[dim]Attempted {retry_count} of {max_retries} retries before stopping.[/dim]")
+        
+        # Show token usage even on failure
+        total_tokens = 0
+        for stat in final_state.get("usage_stats", []):
+            total_tokens += stat["total_tokens"]
+        if total_tokens > 0:
+            console.print(f"[dim]Tokens used: {total_tokens}[/dim]")
+        
         raise typer.Exit(code=1)
 
 if __name__ == "__main__":

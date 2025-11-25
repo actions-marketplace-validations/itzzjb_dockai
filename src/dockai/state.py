@@ -10,6 +10,7 @@ class DockAIState(TypedDict):
     retry_count: int
     max_retries: int
     error: Optional[str]
+    error_details: Optional[Dict[str, Any]]  # Classified error details
     logs: List[str]
     usage_stats: List[Dict[str, Any]]
     config: Dict[str, Any]

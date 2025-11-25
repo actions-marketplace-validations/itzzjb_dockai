@@ -10,6 +10,7 @@ from .analyzer import analyze_repo_needs
 from .generator import generate_dockerfile
 from .reviewer import review_dockerfile
 from .validator import validate_docker_build_and_run
+from .errors import classify_error, ClassifiedError, ErrorType, format_error_for_display
 
 logger = logging.getLogger("dockai")
 
@@ -83,6 +84,11 @@ def generate_node(state: DockAIState) -> DockAIState:
     instructions = config.get("generator_instructions", "")
     feedback_error = state.get("error")
     
+    # Get AI suggestions from previous error analysis (if any)
+    error_details = state.get("error_details", {})
+    dockerfile_fix = error_details.get("dockerfile_fix") if error_details else None
+    image_suggestion = error_details.get("image_suggestion") if error_details else None
+    
     # Fetch verified tags dynamically based on analysis
     suggested_image = state["analysis_result"].get("suggested_base_image", "").strip()
     verified_tags = []
@@ -126,7 +132,9 @@ def generate_node(state: DockAIState) -> DockAIState:
         verified_tags=verified_tags_str,
         build_command=build_cmd,
         start_command=start_cmd,
-        model_name=model_name
+        model_name=model_name,
+        dockerfile_fix=dockerfile_fix,
+        image_suggestion=image_suggestion
     )
     
     # Log the thought process
@@ -207,9 +215,16 @@ def validate_node(state: DockAIState) -> DockAIState:
         f.write(dockerfile_content)
         
     logger.info("Validating Dockerfile...")
-    success, message, image_size = validate_docker_build_and_run(
+    success, message, image_size, classified_error = validate_docker_build_and_run(
         path, project_type, stack, health_endpoint, recommended_wait_time
     )
+    
+    # Store classified error details for better error handling
+    error_details = None
+    if classified_error:
+        error_details = classified_error.to_dict()
+        # Log the classified error for better visibility
+        logger.info(format_error_for_display(classified_error, verbose=False))
     
     # Check for image size optimization (configurable)
     try:
@@ -225,9 +240,17 @@ def validate_node(state: DockAIState) -> DockAIState:
             size_mb = image_size / (1024 * 1024)
             warning_msg = f"Image size is {size_mb:.2f}MB, which exceeds the {max_size_mb}MB limit. Try to optimize using 'alpine' or 'slim' base images if compatible, or use multi-stage builds."
             logger.warning(warning_msg)
+            # Image size issues are Dockerfile errors (can be fixed by retry)
+            error_details = {
+                "error_type": ErrorType.DOCKERFILE_ERROR.value,
+                "message": warning_msg,
+                "suggestion": "Use alpine or slim base images, or enable multi-stage builds",
+                "should_retry": True
+            }
             return {
                 "validation_result": {"success": False, "message": warning_msg},
-                "error": warning_msg
+                "error": warning_msg,
+                "error_details": error_details
             }
 
     
@@ -237,7 +260,8 @@ def validate_node(state: DockAIState) -> DockAIState:
 
     return {
         "validation_result": {"success": success, "message": message},
-        "error": message if not success else None
+        "error": message if not success else None,
+        "error_details": error_details
     }
 
 
@@ -248,7 +272,32 @@ def increment_retry(state: DockAIState) -> DockAIState:
     logger.debug(f"Incrementing retry count from {current_count} to {current_count + 1}")
     return {"retry_count": current_count + 1}
 
+
 def should_retry(state: DockAIState) -> Literal["increment_retry", "end"]:
+    """
+    Determine if we should retry based on error classification.
+    
+    Only retry for DOCKERFILE_ERROR and UNKNOWN_ERROR types.
+    Do NOT retry for PROJECT_ERROR or ENVIRONMENT_ERROR.
+    """
+    # Check if we have error details with classification
+    error_details = state.get("error_details")
+    
+    if error_details:
+        error_type = error_details.get("error_type", "")
+        should_retry_flag = error_details.get("should_retry", True)
+        
+        # Don't retry for project errors or environment errors
+        if error_type in [ErrorType.PROJECT_ERROR.value, ErrorType.ENVIRONMENT_ERROR.value]:
+            logger.error(f"Problem: {error_details.get('message', 'Unknown error')}")
+            logger.info(f"Solution: {error_details.get('suggestion', 'Check the error and try again')}")
+            return "end"
+        
+        # If classified error says don't retry, respect that
+        if not should_retry_flag:
+            logger.error(f"Problem: {error_details.get('message', 'Unknown error')}")
+            return "end"
+    
     # Check if we have a validation result
     validation_result = state.get("validation_result")
     
@@ -260,7 +309,7 @@ def should_retry(state: DockAIState) -> Literal["increment_retry", "end"]:
             logger.warning(f"Security check failed. Retrying (attempt {retry_count + 1}/{max_retries})...")
             return "increment_retry"
         else:
-            logger.error("Max retries reached. Security check failed.")
+            logger.error("Problem: Max retries reached - security check failed.")
             return "end"
 
     # If we have a validation result, check success
@@ -275,7 +324,7 @@ def should_retry(state: DockAIState) -> Literal["increment_retry", "end"]:
             logger.warning(f"Validation failed. Retrying (attempt {retry_count + 1}/{max_retries})...")
             return "increment_retry"
         
-        logger.error("Max retries reached. Validation failed.")
+        logger.error("Problem: Max retries reached - validation failed.")
         return "end"
         
     return "end"
