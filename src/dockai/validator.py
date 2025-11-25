@@ -74,7 +74,7 @@ def validate_docker_build_and_run(
     stack: str = "Unknown",
     health_endpoint: Optional[Tuple[str, int]] = None,
     recommended_wait_time: int = 5
-) -> Tuple[bool, str]:
+) -> Tuple[bool, str, int]:
     """
     Builds and runs the Dockerfile in the given directory to verify it works.
     
@@ -95,7 +95,7 @@ def validate_docker_build_and_run(
         recommended_wait_time (int): AI-recommended wait time in seconds.
         
     Returns:
-        Tuple[bool, str]: A tuple containing (success, message).
+        Tuple[bool, str, int]: A tuple containing (success, message, image_size_bytes).
     """
     image_name = f"dockai-test-{uuid.uuid4().hex[:8]}"
     container_name = f"dockai-container-{uuid.uuid4().hex[:8]}"
@@ -110,7 +110,7 @@ def validate_docker_build_and_run(
     if code != 0:
         error_msg = f"Docker build failed:\n{stderr}\n{stdout}"
         logger.error("Docker build failed.")
-        return False, error_msg
+        return False, error_msg, 0
     
     # 2. Run
     logger.info("Running Docker container (sandboxed)...")
@@ -139,7 +139,7 @@ def validate_docker_build_and_run(
         error_msg = f"Failed to start container:\n{stderr}"
         logger.error("Failed to start container.")
         run_command(["docker", "rmi", image_name])
-        return False, error_msg
+        return False, error_msg, 0
     
     
     # 3. Use AI-recommended wait time
@@ -205,8 +205,42 @@ def validate_docker_build_and_run(
     else:
         logger.error(message)
 
+    # 6. Get Image Size
+    size_cmd = ["docker", "inspect", "-f", "{{.Size}}", image_name]
+    _, size_out, _ = run_command(size_cmd)
+    image_size_bytes = int(size_out.strip()) if size_out.strip().isdigit() else 0
+    
+    # 7. Trivy Security Scan
+    logger.info("Running Trivy security scan (CRITICAL/HIGH vulnerabilities)...")
+    trivy_cmd = [
+        "docker", "run", "--rm",
+        "-v", "/var/run/docker.sock:/var/run/docker.sock",
+        "aquasec/trivy", "image",
+        "--severity", "CRITICAL,HIGH",
+        "--exit-code", "1",
+        "--no-progress",
+        "--scanners", "vuln", # Only scan for vulnerabilities for speed
+        image_name
+    ]
+    
+    trivy_code, trivy_out, trivy_err = run_command(trivy_cmd)
+    
+    if trivy_code != 0:
+        # Trivy found vulnerabilities or failed to run
+        if "Trivy" in trivy_out or "vulnerabilities" in trivy_out:
+            logger.warning("Trivy found vulnerabilities!")
+            # We don't fail the build yet, but we append it to the message
+            # Ideally, we would fail here if strict security is required.
+            # For now, let's log it clearly.
+            message += "\n\n[SECURITY WARNING] Trivy detected CRITICAL/HIGH vulnerabilities. Check logs."
+            logger.warning(trivy_out)
+        else:
+             logger.warning(f"Trivy scan failed to execute: {trivy_err}")
+    else:
+        logger.info("Trivy scan passed (No CRITICAL/HIGH vulnerabilities found).")
+
     # Cleanup
     run_command(["docker", "rm", "-f", container_name])
     run_command(["docker", "rmi", image_name])
     
-    return success, message
+    return success, message, image_size_bytes

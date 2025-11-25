@@ -33,14 +33,26 @@ inputs:
     default: '3'
 
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
-  args:
-    - ${{ inputs.path }}
-  env:
-    OPENAI_API_KEY: ${{ inputs.openai_api_key }}
-    MODEL_ANALYZER: ${{ inputs.model_analyzer }}
-    MODEL_GENERATOR: ${{ inputs.model_generator }}
-    DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
-    DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
-    MAX_RETRIES: ${{ inputs.max_retries }}
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install DockAI
+      shell: bash
+      run: |
+        pip install .
+        
+    - name: Run DockAI
+      shell: bash
+      env:
+        OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        MODEL_ANALYZER: ${{ inputs.model_analyzer }}
+        MODEL_GENERATOR: ${{ inputs.model_generator }}
+        DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
+        DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
+        MAX_RETRIES: ${{ inputs.max_retries }}
+      run: |
+        dockai "${{ inputs.path }}"
