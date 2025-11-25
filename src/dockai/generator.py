@@ -12,7 +12,7 @@ def generate_dockerfile(stack_info: str, file_contents: str, custom_instructions
     
     Uses LangChain and Pydantic to generate a structured Dockerfile.
     """
-    model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
+    model_name = kwargs.get("model_name") or os.getenv("MODEL_GENERATOR", "gpt-4o")
     
     # Initialize Chat Model
     llm = ChatOpenAI(
@@ -40,6 +40,7 @@ Requirements:
 3. Security: Run as non-root user. Drop all capabilities.
 4. Optimization: Combine RUN commands. Clean package caches (apt-get clean, npm cache clean).
 5. Configuration: Set env vars, WORKDIR, expose correct ports.
+6. Commands: Use the provided 'Build Command' and 'Start Command' if they are valid.
 
 {error_context}
 """
@@ -55,7 +56,7 @@ You MUST analyze this error and fix it in the new Dockerfile.
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_template),
-        ("user", "Stack: {stack}\n\nVerified Base Images: {verified_tags}\n\nFile Contents:\n{file_contents}\n\nCustom Instructions: {custom_instructions}")
+        ("user", "Stack: {stack}\n\nVerified Base Images: {verified_tags}\n\nDetected Build Command: {build_cmd}\nDetected Start Command: {start_cmd}\n\nFile Contents:\n{file_contents}\n\nCustom Instructions: {custom_instructions}")
     ])
     
     # Create Chain
@@ -68,6 +69,8 @@ You MUST analyze this error and fix it in the new Dockerfile.
         {
             "stack": stack_info,
             "verified_tags": kwargs.get("verified_tags", "None provided. Use your best judgement."),
+            "build_cmd": kwargs.get("build_command", "None detected"),
+            "start_cmd": kwargs.get("start_command", "None detected"),
             "file_contents": file_contents,
             "custom_instructions": custom_instructions,
             "error_context": error_context

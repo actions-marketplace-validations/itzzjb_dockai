@@ -55,6 +55,19 @@ def read_files_node(state: DockAIState) -> DockAIState:
         try:
             with open(abs_file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
+                
+                # Truncate if too large (50KB limit)
+                MAX_SIZE = 50 * 1024
+                if len(content) > MAX_SIZE:
+                    content = content[:MAX_SIZE] + "\n... [TRUNCATED DUE TO SIZE] ..."
+                    logger.warning(f"Truncated large file: {rel_path}")
+                
+                # Truncate if too many lines (1000 lines limit)
+                lines = content.splitlines()
+                if len(lines) > 1000:
+                    content = "\n".join(lines[:1000]) + "\n... [TRUNCATED DUE TO LENGTH] ..."
+                    logger.warning(f"Truncated long file: {rel_path}")
+                    
                 file_contents_str += f"--- FILE: {rel_path} ---\n{content}\n\n"
         except Exception as e:
             logger.warning(f"Could not read {rel_path}: {e}")
@@ -70,21 +83,50 @@ def generate_node(state: DockAIState) -> DockAIState:
     instructions = config.get("generator_instructions", "")
     feedback_error = state.get("error")
     
-    # Fetch verified tags
+    # Fetch verified tags dynamically based on analysis
+    suggested_image = state["analysis_result"].get("suggested_base_image", "").strip()
     verified_tags = []
-    if "node" in stack.lower():
-        verified_tags = get_docker_tags("node")
-    elif "python" in stack.lower():
-        verified_tags = get_docker_tags("python")
-    elif "go" in stack.lower() or "golang" in stack.lower():
-        verified_tags = get_docker_tags("golang")
     
-    verified_tags_str = ", ".join(verified_tags) if verified_tags else "None found"
+    if suggested_image:
+        logger.info(f"Fetching tags for suggested image: {suggested_image}")
+        verified_tags = get_docker_tags(suggested_image)
+    else:
+        # Fallback if analysis didn't provide an image (should be rare)
+        logger.warning("No suggested base image found. Falling back to heuristic.")
+        if "node" in stack.lower(): verified_tags = get_docker_tags("node")
+        elif "python" in stack.lower(): verified_tags = get_docker_tags("python")
+        elif "go" in stack.lower(): verified_tags = get_docker_tags("golang")
+        elif "rust" in stack.lower(): verified_tags = get_docker_tags("rust")
+        elif "java" in stack.lower(): verified_tags = get_docker_tags("openjdk")
+    
+    verified_tags_str = ", ".join(verified_tags) if verified_tags else "Verification Skipped - Use your best judgement based on the suggested image."
     logger.info(f"Fetched verified base images: {verified_tags_str}")
     
+    # Get extracted commands
+    build_cmd = state["analysis_result"].get("build_command", "None detected")
+    start_cmd = state["analysis_result"].get("start_command", "None detected")
+    
+    # Dynamic Model Selection
+    # Retry 0: Use cheaper model (Analyzer Model)
+    # Retry > 0: Use stronger model (Generator Model)
+    retry_count = state.get("retry_count", 0)
+    if retry_count == 0:
+        model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
+        logger.info(f"Using Draft Model ({model_name}) for initial generation.")
+    else:
+        model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
+        logger.info(f"Using Expert Model ({model_name}) for retry {retry_count}.")
+
     logger.info("Generating Dockerfile...")
     dockerfile_content, project_type, thought_process, usage = generate_dockerfile(
-        stack, file_contents, instructions, feedback_error, verified_tags=verified_tags_str
+        stack, 
+        file_contents, 
+        instructions, 
+        feedback_error, 
+        verified_tags=verified_tags_str,
+        build_command=build_cmd,
+        start_command=start_cmd,
+        model_name=model_name
     )
     
     # Log the thought process

@@ -123,7 +123,7 @@ def run(
         "dockerfile_content": "",
         "validation_result": {"success": False, "message": ""},
         "retry_count": 0,
-        "max_retries": int(os.getenv("MAX_RETRIES", "3")),
+        "max_retries": int(os.getenv("MAX_RETRIES", "5")),
         "error": None,
         "logs": [],
         "usage_stats": [],

@@ -38,8 +38,10 @@ Your Tasks:
 3. IDENTIFY STACK: Determine the primary programming language, framework, and package manager.
 4. CLASSIFY TYPE: Determine if the project is a "service" (long-running) or a "script" (runs once).
 5. SELECT FILES: Identify specific files needed to understand dependencies, entrypoints, and build config.
-6. DETECT HEALTH ENDPOINT: Analyze routing/API patterns to predict health check endpoint.
-7. ESTIMATE WAIT TIME: Estimate initialization time (3-30s).
+6. EXTRACT COMMANDS: Predict the 'build_command' and 'start_command' based on standard conventions.
+7. IDENTIFY IMAGE: Predict the 'suggested_base_image' (official Docker Hub repo name) for this stack.
+8. DETECT HEALTH ENDPOINT: Analyze routing/API patterns to predict health check endpoint.
+9. ESTIMATE WAIT TIME: Estimate initialization time (3-30s).
 
 User Custom Instructions:
 {custom_instructions}

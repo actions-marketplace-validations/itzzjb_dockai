@@ -10,6 +10,9 @@ class AnalysisResult(BaseModel):
     stack: str = Field(description="Detailed description of the technology stack")
     project_type: Literal["service", "script"] = Field(description="Type of the project: 'service' (long-running) or 'script' (runs once)")
     files_to_read: List[str] = Field(description="List of critical files to read for context")
+    build_command: Optional[str] = Field(description="The command to build the application (e.g., 'npm run build', 'go build')")
+    start_command: Optional[str] = Field(description="The command to start the application (e.g., 'npm start', 'python app.py')")
+    suggested_base_image: str = Field(description="The official Docker Hub image name for this stack (e.g., 'python', 'node', 'golang', 'rust', 'ruby')")
     health_endpoint: Optional[HealthEndpoint] = Field(description="Detected health endpoint details, if any")
     recommended_wait_time: int = Field(description="Estimated initialization time in seconds (3-30)", ge=3, le=60)
 

@@ -6,23 +6,52 @@ logger = logging.getLogger("dockai")
 
 def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
     """
-    Fetches valid tags for a given Docker image from Docker Hub.
+    Fetches valid tags for a given Docker image from Docker Hub, GCR, or Quay.io.
     Prioritizes 'alpine' and 'slim' tags for optimization.
     """
-    # Handle official images (e.g., 'node' -> 'library/node')
-    if "/" not in image_name:
-        image_name = f"library/{image_name}"
-        
-    url = f"https://hub.docker.com/v2/repositories/{image_name}/tags"
+    tags = []
     
     try:
-        response = httpx.get(url, params={"page_size": 100}, timeout=5.0)
-        response.raise_for_status()
-        data = response.json()
-        
-        results = data.get("results", [])
-        tags = [r["name"] for r in results]
-        
+        # 1. GCR (Google Container Registry)
+        if "gcr.io" in image_name:
+            # Format: gcr.io/project/image
+            # API: https://gcr.io/v2/project/image/tags/list
+            repo_path = image_name.split("/", 1)[1]
+            domain = image_name.split("/")[0] # gcr.io, us.gcr.io, etc.
+            url = f"https://{domain}/v2/{repo_path}/tags/list"
+            response = httpx.get(url, timeout=5.0)
+            if response.status_code == 200:
+                tags = response.json().get("tags", [])
+
+        # 2. Quay.io
+        elif "quay.io" in image_name:
+            # Format: quay.io/namespace/image
+            # API: https://quay.io/api/v1/repository/namespace/image/tag
+            repo_path = image_name.split("/", 1)[1]
+            url = f"https://quay.io/api/v1/repository/{repo_path}/tag"
+            response = httpx.get(url, timeout=5.0)
+            if response.status_code == 200:
+                data = response.json().get("tags", [])
+                tags = [t["name"] for t in data]
+
+        # 3. Docker Hub (Default)
+        else:
+            # Handle official images (e.g., 'node' -> 'library/node')
+            hub_image_name = image_name
+            if "/" not in hub_image_name:
+                hub_image_name = f"library/{hub_image_name}"
+            elif hub_image_name.startswith("docker.io/"):
+                hub_image_name = hub_image_name.replace("docker.io/", "")
+                
+            url = f"https://hub.docker.com/v2/repositories/{hub_image_name}/tags"
+            response = httpx.get(url, params={"page_size": 100}, timeout=5.0)
+            if response.status_code == 200:
+                results = response.json().get("results", [])
+                tags = [r["name"] for r in results]
+
+        if not tags:
+            return []
+
         # Filter out 'latest', 'stable', etc. to find version numbers
         version_tags = [t for t in tags if t not in ["latest", "stable", "edge", "nightly"]]
         
@@ -54,7 +83,16 @@ def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
                 return 2
                 
             sorted_tags = sorted(version_specific_tags, key=sort_key)
-            return [f"{image_name.replace('library/', '')}:{t}" for t in sorted_tags]
+            # Ensure we keep the registry prefix if it existed
+            prefix = ""
+            if "gcr.io" in image_name or "quay.io" in image_name:
+                prefix = f"{image_name}:"
+            else:
+                # For Docker Hub, we standardized on library/image, but we want to return just image:tag or library/image:tag
+                # Let's return exactly what was passed or the standard form
+                prefix = f"{image_name.replace('library/', '')}:"
+
+            return [f"{prefix}{t}" for t in sorted_tags]
         
         # Fallback: If no version detected, use the mix strategy
         # Categorize tags
@@ -68,14 +106,21 @@ def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
         selected_tags.extend(slim_tags[:2])
         selected_tags.extend(standard_tags[:1])
         
+        # Prefix handling for return
+        prefix = ""
+        if "gcr.io" in image_name or "quay.io" in image_name:
+            prefix = f"{image_name}:"
+        else:
+            prefix = f"{image_name.replace('library/', '')}:"
+
         # If we have selected tags, return them
         if len(selected_tags) >= 3:
             # Remove duplicates and format
             unique_tags = sorted(list(set(selected_tags)), reverse=True)
-            return [f"{image_name.replace('library/', '')}:{t}" for t in unique_tags]
+            return [f"{prefix}{t}" for t in unique_tags]
             
         # Fallback: If we didn't find enough categorized tags, just return the top N tags
-        return [f"{image_name.replace('library/', '')}:{t}" for t in tags[:limit]]
+        return [f"{prefix}{t}" for t in tags[:limit]]
         
     except Exception as e:
         logger.warning(f"Failed to fetch tags for {image_name}: {e}")
