@@ -1,90 +1,242 @@
+import os
 from unittest.mock import patch, MagicMock
-from dockai.validator import validate_docker_build_and_run
+from dockai.validator import validate_docker_build_and_run, check_health_endpoint
 
 @patch("dockai.validator.run_command")
-@patch("dockai.validator.time.sleep") # Skip sleep
-def test_validate_success(mock_sleep, mock_run_command):
-    """Test successful validation"""
-    # Mock sequence of calls:
-    # 1. build -> (0, "success", "")
-    # 2. run -> (0, "container_id", "")
-    # 3. inspect running -> (0, "true", "")
-    # 4. rm -> (0, "", "")
-    # 5. rmi -> (0, "", "")
+@patch("dockai.validator.time.sleep")
+@patch("dockai.validator.os.getenv")
+def test_validate_success_service(mock_getenv, mock_sleep, mock_run_command):
+    """Test successful service validation"""
+    # Mock env vars
+    mock_getenv.side_effect = lambda key, default=None: {
+        "DOCKAI_VALIDATION_MEMORY": "512m",
+        "DOCKAI_VALIDATION_CPUS": "1.0",
+        "DOCKAI_VALIDATION_PIDS": "100",
+        "DOCKAI_SKIP_SECURITY_SCAN": "true",  # Skip Trivy for test
+    }.get(key, default)
     
+    # Mock sequence: build, run, inspect running, inspect exit code, logs, inspect size, rm, rmi
     mock_run_command.side_effect = [
-        (0, "Build success", ""), # build
-        (0, "container_id", ""),  # run
-        (0, "true", ""),          # inspect running
-        (0, "0", ""),             # inspect exit code
-        (0, "logs", ""),          # logs
-        (0, "", ""),              # rm
-        (0, "", "")               # rmi
+        (0, "Build success", ""),  # build
+        (0, "container_id", ""),   # run
+        (0, "true", ""),           # inspect running
+        (0, "0", ""),              # inspect exit code
+        (0, "Service started", ""),# logs
+        (0, "104857600", ""),      # inspect size (100MB)
+        (0, "", ""),               # rm
+        (0, "", "")                # rmi
     ]
     
-    success, msg = validate_docker_build_and_run(".")
+    success, msg, size = validate_docker_build_and_run(".", project_type="service")
     
     assert success is True
-    assert "Service is running successfully" in msg
+    assert "running successfully" in msg.lower()
+    assert size == 104857600
+
+@patch("dockai.validator.run_command")
+@patch("dockai.validator.time.sleep")
+@patch("dockai.validator.os.getenv")
+def test_validate_success_script(mock_getenv, mock_sleep, mock_run_command):
+    """Test successful script validation (exits with code 0)"""
+    mock_getenv.side_effect = lambda key, default=None: {
+        "DOCKAI_SKIP_SECURITY_SCAN": "true",
+    }.get(key, default)
+    
+    # Script runs and exits successfully
+    mock_run_command.side_effect = [
+        (0, "Build success", ""),  # build
+        (0, "container_id", ""),   # run
+        (0, "false", ""),          # inspect running (not running - script finished)
+        (0, "0", ""),              # inspect exit code (0 = success)
+        (0, "Script output", ""),  # logs
+        (0, "52428800", ""),       # inspect size (50MB)
+        (0, "", ""),               # rm
+        (0, "", "")                # rmi
+    ]
+    
+    success, msg, size = validate_docker_build_and_run(".", project_type="script")
+    
+    assert success is True
+    assert "finished successfully" in msg.lower()
 
 @patch("dockai.validator.run_command")
 def test_validate_build_failure(mock_run_command):
     """Test build failure"""
-    # 1. build -> (1, "", "Build failed")
-    
     mock_run_command.side_effect = [
-        (1, "", "Build failed error message"), # build
+        (1, "", "Build failed error message"),  # build fails
     ]
     
-    success, msg = validate_docker_build_and_run(".")
+    success, msg, size = validate_docker_build_and_run(".")
     
     assert success is False
     assert "Docker build failed" in msg
     assert "Build failed error message" in msg
+    assert size == 0
 
 @patch("dockai.validator.run_command")
 @patch("dockai.validator.time.sleep")
-def test_validate_run_failure_immediate(mock_sleep, mock_run_command):
-    """Test container fails to start immediately (docker run returns non-zero)"""
-    # 1. build -> (0, "", "")
-    # 2. run -> (1, "", "Cannot start container")
-    # 3. rmi -> (0, "", "")
+@patch("dockai.validator.os.getenv")
+def test_validate_with_health_check_success(mock_getenv, mock_sleep, mock_run_command):
+    """Test service with health check that passes"""
+    mock_getenv.side_effect = lambda key, default=None: {
+        "DOCKAI_SKIP_SECURITY_SCAN": "true",
+    }.get(key, default)
+    
+    # Mock sequence including health check
+    mock_run_command.side_effect = [
+        (0, "Build success", ""),  # build
+        (0, "container_id", ""),   # run
+        (0, "true", ""),           # inspect running
+        (0, "0", ""),              # inspect exit code
+        (0, "Service started", ""),# logs
+        (0, "200", ""),            # health check (HTTP 200)
+        (0, "104857600", ""),      # inspect size
+        (0, "", ""),               # rm
+        (0, "", "")                # rmi
+    ]
+    
+    success, msg, size = validate_docker_build_and_run(
+        ".", 
+        project_type="service",
+        health_endpoint=("/health", 8080)
+    )
+    
+    assert success is True
+    assert "health check passed" in msg.lower()
+
+@patch("dockai.validator.run_command")
+@patch("dockai.validator.time.sleep")
+@patch("dockai.validator.os.getenv")
+def test_validate_with_health_check_failure(mock_getenv, mock_sleep, mock_run_command):
+    """Test service with health check that fails"""
+    mock_getenv.side_effect = lambda key, default=None: {
+        "DOCKAI_SKIP_SECURITY_SCAN": "true",
+    }.get(key, default)
+    
+    # Health check returns non-200 multiple times
+    mock_run_command.side_effect = [
+        (0, "Build success", ""),  # build
+        (0, "container_id", ""),   # run
+        (0, "true", ""),           # inspect running
+        (0, "0", ""),              # inspect exit code
+        (0, "Service started", ""),# logs
+        (0, "500", ""),            # health check attempt 1 (HTTP 500)
+        (0, "500", ""),            # health check attempt 2
+        (0, "500", ""),            # health check attempt 3
+        (0, "500", ""),            # health check attempt 4
+        (0, "500", ""),            # health check attempt 5
+        (0, "500", ""),            # health check attempt 6 (final)
+        (0, "104857600", ""),      # inspect size
+        (0, "", ""),               # rm
+        (0, "", "")                # rmi
+    ]
+    
+    success, msg, size = validate_docker_build_and_run(
+        ".", 
+        project_type="service",
+        health_endpoint=("/health", 8080)
+    )
+    
+    assert success is False
+    assert "health check failed" in msg.lower()
+
+@patch("dockai.validator.run_command")
+@patch("dockai.validator.time.sleep")
+@patch("dockai.validator.os.getenv")
+def test_validate_service_crash(mock_getenv, mock_sleep, mock_run_command):
+    """Test service that crashes after starting"""
+    mock_getenv.side_effect = lambda key, default=None: {
+        "DOCKAI_SKIP_SECURITY_SCAN": "true",
+    }.get(key, default)
     
     mock_run_command.side_effect = [
+        (0, "Build success", ""),  # build
+        (0, "container_id", ""),   # run
+        (0, "false", ""),          # inspect running (crashed)
+        (0, "1", ""),              # inspect exit code (non-zero)
+        (0, "Error: crash", ""),   # logs
+        (0, "104857600", ""),      # inspect size
+        (0, "", ""),               # rm
+        (0, "", "")                # rmi
+    ]
+    
+    success, msg, size = validate_docker_build_and_run(".", project_type="service")
+    
+    assert success is False
+    assert "stopped unexpectedly" in msg.lower()
+    assert "Error: crash" in msg
+
+@patch("dockai.validator.run_command")
+@patch("dockai.validator.time.sleep")
+@patch("dockai.validator.os.getenv")
+def test_validate_script_failure(mock_getenv, mock_sleep, mock_run_command):
+    """Test script that exits with non-zero code"""
+    mock_getenv.side_effect = lambda key, default=None: {
+        "DOCKAI_SKIP_SECURITY_SCAN": "true",
+    }.get(key, default)
+    
+    mock_run_command.side_effect = [
+        (0, "Build success", ""),  # build
+        (0, "container_id", ""),   # run
+        (0, "false", ""),          # inspect running (finished)
+        (0, "1", ""),              # inspect exit code (failed)
+        (0, "Error occurred", ""), # logs
+        (0, "52428800", ""),       # inspect size
+        (0, "", ""),               # rm
+        (0, "", "")                # rmi
+    ]
+    
+    success, msg, size = validate_docker_build_and_run(".", project_type="script")
+    
+    assert success is False
+    assert "failed" in msg.lower()
+    assert "Exit Code: 1" in msg
+
+@patch("dockai.validator.run_command")
+def test_validate_container_start_failure(mock_run_command):
+    """Test container fails to start"""
+    mock_run_command.side_effect = [
         (0, "Build success", ""),      # build
-        (1, "", "Cannot start container"), # run
+        (1, "", "Cannot start container"), # run fails
         (0, "", "")                    # rmi
     ]
     
-    success, msg = validate_docker_build_and_run(".")
+    success, msg, size = validate_docker_build_and_run(".")
     
     assert success is False
     assert "Failed to start container" in msg
+    assert size == 0
 
-@patch("dockai.validator.run_command")
-@patch("dockai.validator.time.sleep")
-def test_validate_run_failure_crash(mock_sleep, mock_run_command):
-    """Test container starts but crashes (inspect returns false)"""
-    # 1. build -> (0, "", "")
-    # 2. run -> (0, "id", "")
-    # 3. inspect running -> (0, "false", "")
-    # 4. inspect exit code -> (0, "1", "")
-    # 5. logs -> (0, "Error: crash", "")
-    # 6. rm -> (0, "", "")
-    # 7. rmi -> (0, "", "")
-    
-    mock_run_command.side_effect = [
-        (0, "Build success", ""), # build
-        (0, "id", ""),            # run
-        (0, "false", ""),         # inspect running
-        (0, "1", ""),             # inspect exit code
-        (0, "Error: crash", ""),  # logs
-        (0, "", ""),              # rm
-        (0, "", "")               # rmi
-    ]
-    
-    success, msg = validate_docker_build_and_run(".")
-    
-    assert success is False
-    assert "Service stopped unexpectedly" in msg
-    assert "Error: crash" in msg
+def test_configurable_resource_limits():
+    """Test that resource limits are configurable"""
+    with patch("dockai.validator.run_command") as mock_run:
+        with patch("dockai.validator.time.sleep"):
+            with patch("dockai.validator.os.getenv") as mock_getenv:
+                # Set custom resource limits
+                mock_getenv.side_effect = lambda key, default=None: {
+                    "DOCKAI_VALIDATION_MEMORY": "2g",
+                    "DOCKAI_VALIDATION_CPUS": "2.0",
+                    "DOCKAI_VALIDATION_PIDS": "200",
+                    "DOCKAI_SKIP_SECURITY_SCAN": "true",
+                }.get(key, default)
+                
+                mock_run.side_effect = [
+                    (0, "Build success", ""),
+                    (0, "container_id", ""),
+                    (0, "true", ""),
+                    (0, "0", ""),
+                    (0, "logs", ""),
+                    (0, "104857600", ""),
+                    (0, "", ""),
+                    (0, "", "")
+                ]
+                
+                validate_docker_build_and_run(".")
+                
+                # Check that docker run was called with custom limits
+                run_call = mock_run.call_args_list[1]
+                run_command = run_call[0][0]
+                
+                assert "--memory=2g" in run_command
+                assert "--cpus=2.0" in run_command
+                assert "--pids-limit=200" in run_command
