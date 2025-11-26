@@ -1,9 +1,35 @@
 # DockAI 🐳🤖
 > **The Universal AI DevOps Architect for Dockerizing Applications**
 
+[![PyPI version](https://badge.fury.io/py/dockai-cli.svg)](https://badge.fury.io/py/dockai-cli)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+
 DockAI is a powerful, agentic CLI tool that autonomously generates, validates, and optimizes production-ready Dockerfiles for **ANY** application. 
 
 Unlike simple template generators, DockAI acts as a **Universal DevOps Architect**. It uses a stateful, cyclic workflow to reason from first principles, allowing it to containerize not just standard stacks (Node, Python, Go) but also legacy systems and **future technologies** it has never seen before.
+
+## 📑 Table of Contents
+
+- [Key Features](#-key-features)
+- [The 10 AI Agents](#-the-10-ai-agents)
+- [Architecture Deep Dive](#%EF%B8%8F-architecture-deep-dive)
+  - [Project Structure](#project-structure)
+  - [The Agentic Workflow](#the-agentic-workflow)
+  - [Supporting Modules](#supporting-modules)
+  - [Pydantic Schemas](#pydantic-schemas-schemasspy)
+  - [The Graph](#the-graph)
+  - [State Management](#state-management-statepy)
+- [Technology Stack](#%EF%B8%8F-technology-stack)
+- [Getting Started](#-getting-started)
+- [GitHub Actions Integration](#-github-actions-integration)
+- [Configuration](#%EF%B8%8F-configuration)
+- [Custom Instructions](#-custom-instructions)
+- [Custom AI Prompts (Advanced)](#-custom-ai-prompts-advanced)
+- [How It Works](#-how-it-works-quick-summary)
+- [FAQ](#-faq)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ---
 
@@ -58,6 +84,7 @@ DockAI is built on **LangGraph**, enabling a cyclic, stateful workflow that mimi
 
 ```
 src/dockai/
+├── __init__.py      # Package initialization
 ├── main.py          # CLI entry point and workflow initialization
 ├── graph.py         # LangGraph state machine definition
 ├── state.py         # DockAIState TypedDict with full workflow state
@@ -206,6 +233,7 @@ All LLM outputs are validated against Pydantic models for type safety and struct
 | `HealthEndpointDetectionResult` | Health endpoint discovery with confidence |
 | `ReadinessPatternResult` | Startup patterns with timing estimates |
 | `HealthEndpoint` | Health check endpoint path and port |
+| `ErrorAnalysisResult` | Error classification with fix suggestions (in `errors.py`) |
 
 ### The Graph
 
@@ -274,6 +302,22 @@ The `DockAIState` TypedDict maintains the full workflow state:
 | **UI/CLI** | [Rich](https://github.com/Textualize/rich) & [Typer](https://typer.tiangolo.com/) | Beautiful terminal interface |
 | **Security** | [Trivy](https://github.com/aquasecurity/trivy) | CVE scanning |
 | **HTTP Client** | [httpx](https://www.python-httpx.org/) | Registry API integration |
+| **Path Matching** | [pathspec](https://github.com/cpburnz/python-pathspec) | .gitignore/.dockerignore parsing |
+| **Environment** | [python-dotenv](https://github.com/theskumar/python-dotenv) | .env file loading |
+
+### Dependencies
+
+```
+openai>=2.0.0
+httpx>=0.27.0
+typer>=0.12.0
+rich>=13.7.0
+python-dotenv>=1.0.0
+pathspec>=0.11.0
+langgraph>=0.2.0
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+```
 
 ---
 
@@ -284,6 +328,17 @@ The `DockAIState` TypedDict maintains the full workflow state:
 *   **Docker**: Must be installed and running.
 *   **Python**: Version 3.10 or higher.
 *   **OpenAI API Key**: Access to GPT-4o is recommended for best results.
+*   **Trivy** (Optional): For security vulnerability scanning. Install via:
+    ```bash
+    # macOS
+    brew install trivy
+    
+    # Linux (Debian/Ubuntu)
+    sudo apt-get install trivy
+    
+    # Or via Docker (DockAI will use this automatically if available)
+    docker pull aquasec/trivy
+    ```
 
 ### Installation
 
@@ -664,6 +719,83 @@ When loading prompts, DockAI uses this priority (highest to lowest):
 
 ---
 
+## 📋 How It Works (Quick Summary)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           DockAI Workflow                                │
+├─────────────────────────────────────────────────────────────────────────┤
+│  1. SCAN      → Discover project files (respects .gitignore)            │
+│  2. ANALYZE   → AI deduces technology stack from first principles       │
+│  3. READ      → Fetch critical files (smart truncation)                 │
+│  4. DETECT    → Find health endpoints & startup patterns                │
+│  5. PLAN      → Strategic thinking (base image, multi-stage, security)  │
+│  6. GENERATE  → Create Dockerfile from plan                             │
+│  7. REVIEW    → Security audit (auto-fix if possible)                   │
+│  8. VALIDATE  → Build & run in sandbox (Trivy scan)                     │
+│  9. REFLECT   → If failed: analyze root cause, learn, retry             │
+│ 10. OUTPUT    → Production-ready Dockerfile                             │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## ❓ FAQ
+
+### What makes DockAI different from other Dockerfile generators?
+
+DockAI uses **first-principles reasoning** instead of templates. It can containerize applications it has never seen before by analyzing file structures, build scripts, and runtime requirements. It also has a **self-correcting workflow** that learns from failures.
+
+### Which AI models does DockAI use?
+
+- **GPT-4o-mini** (default): For analysis, planning, detection, and review (fast & cheap)
+- **GPT-4o** (default): For generation and reflection on retries (more capable)
+
+You can customize both via `MODEL_ANALYZER` and `MODEL_GENERATOR` environment variables.
+
+### How much does it cost to run?
+
+Token usage varies by project complexity. A typical run uses:
+- Small projects: ~5,000-10,000 tokens (~$0.01-0.03)
+- Medium projects: ~15,000-30,000 tokens (~$0.05-0.15)
+- Complex projects with retries: ~50,000+ tokens (~$0.20+)
+
+DockAI reports token usage after each run for transparency.
+
+### Can I use it with private registries?
+
+Yes! DockAI supports:
+- **Docker Hub** (default)
+- **Google Container Registry (GCR)**
+- **Quay.io**
+- **AWS ECR** (limited - skips tag verification due to auth requirements)
+
+### What if my project has unusual requirements?
+
+Use **custom instructions** to guide the AI:
+```bash
+export DOCKAI_GENERATOR_INSTRUCTIONS="This project requires libmagic and poppler-utils at runtime"
+```
+
+Or create a `.dockai` file in your project root with specific guidance.
+
+### Does it work offline?
+
+No. DockAI requires internet access to:
+1. Call OpenAI APIs for AI reasoning
+2. Verify Docker image tags against registries
+3. (Optionally) Run Trivy security scans
+
+### How do I skip security scanning?
+
+```bash
+export DOCKAI_SKIP_SECURITY_SCAN=true
+```
+
+Or in GitHub Actions: `skip_security_scan: 'true'`
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
@@ -675,12 +807,23 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 git clone https://github.com/itzzjb/dockai.git
 cd dockai
 
-# Install in development mode
-pip install -e .
+# Install in development mode with test dependencies
+pip install -e ".[test]"
 
 # Run tests
 pytest tests/
 ```
+
+### Test Coverage
+
+The project includes tests for core modules:
+
+| Test File | Module Tested | Coverage |
+|-----------|---------------|----------|
+| `test_scanner.py` | File tree scanning | .gitignore parsing, file filtering |
+| `test_registry.py` | Registry client | Tag fetching, multi-registry support |
+| `test_validator.py` | Docker validation | Build/run testing, health checks |
+| `test_graph.py` | LangGraph workflow | State transitions, retry logic |
 
 ### Project Structure for Contributors
 
@@ -693,6 +836,12 @@ src/dockai/
 ├── prompts.py       # Add new prompts or modify existing ones
 ├── schemas.py       # Pydantic models - add new structured outputs
 └── ...
+
+tests/
+├── test_scanner.py  # Scanner unit tests
+├── test_registry.py # Registry client tests
+├── test_validator.py# Validation tests
+└── test_graph.py    # Workflow integration tests
 ```
 
 ---
