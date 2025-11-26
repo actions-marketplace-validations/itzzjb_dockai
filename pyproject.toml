@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dockai-cli"
 version = "2.0.0"
-description = "A LLM Pipeline for generating optimized Dockerfiles"
+description = "The Universal AI DevOps Architect for Dockerizing Applications"
 readme = "README.md"
 authors = [
   { name = "Januda Bethmin", email = "desilvabethmin@gmail.com" },
