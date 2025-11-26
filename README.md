@@ -200,4 +200,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-**Built with ❤️ by Januda Bethmin*
+**Built with ❤️ by Januda Bethmin**
