@@ -399,12 +399,14 @@ def detect_health_endpoints(
     # Use a faster, lighter model for this pattern matching task
     model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     
+    # Initialize the ChatOpenAI client with temperature 0 for deterministic analysis
     llm = ChatOpenAI(
         model=model_name,
         temperature=0,  # Deterministic output required
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
+    # Configure the LLM to return a structured output matching the HealthEndpointDetectionResult schema
     structured_llm = llm.with_structured_output(HealthEndpointDetectionResult)
     
     # Define the default system prompt for the "Code Analyst" persona
@@ -452,6 +454,7 @@ STEP 4 - ASSESS CONFIDENCE:
     # Get custom prompt if configured, otherwise use default
     system_prompt = get_prompt("health_detector", default_prompt)
 
+    # Create the chat prompt template
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("user", """Analyze these files to detect health check endpoints.
@@ -465,9 +468,13 @@ Find any health check endpoints and their port configurations.
 Explain your reasoning in the thought process.""")
     ])
     
+    # Create the execution chain: Prompt -> LLM -> Structured Output
     chain = prompt | structured_llm
+    
+    # Initialize callback to track token usage
     callback = TokenUsageCallback()
     
+    # Execute the chain (with rate limit handling)
     result = safe_invoke_chain(
         chain,
         {
@@ -503,12 +510,14 @@ def detect_readiness_patterns(
     # Use a cost-effective model for pattern recognition
     model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     
+    # Initialize the ChatOpenAI client with temperature 0 for deterministic analysis
     llm = ChatOpenAI(
         model=model_name,
         temperature=0,  # Deterministic output required
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
+    # Configure the LLM to return a structured output matching the ReadinessPatternResult schema
     structured_llm = llm.with_structured_output(ReadinessPatternResult)
     
     # Define the default system prompt for the "Startup Pattern Expert" persona
@@ -556,6 +565,7 @@ STEP 4 - ESTIMATE TIMING:
     # Get custom prompt if configured, otherwise use default
     system_prompt = get_prompt("readiness_detector", default_prompt)
 
+    # Create the chat prompt template
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("user", """Analyze these files to determine startup patterns.
@@ -570,9 +580,13 @@ Identify log patterns that indicate successful startup or failure.
 Explain your reasoning in the thought process.""")
     ])
     
+    # Create the execution chain: Prompt -> LLM -> Structured Output
     chain = prompt | structured_llm
+    
+    # Initialize callback to track token usage
     callback = TokenUsageCallback()
     
+    # Execute the chain (with rate limit handling)
     result = safe_invoke_chain(
         chain,
         {
@@ -621,12 +635,14 @@ def generate_iterative_dockerfile(
     # Use a high-capability model for code generation and complex modification
     model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
     
+    # Initialize the ChatOpenAI client with temperature 0 for deterministic code generation
     llm = ChatOpenAI(
         model=model_name,
         temperature=0,  # Deterministic output required for code generation
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
+    # Configure the LLM to return a structured output matching the IterativeDockerfileResult schema
     structured_llm = llm.with_structured_output(IterativeDockerfileResult)
     
     # Define the default system prompt for the "Senior Docker Engineer" persona
@@ -681,6 +697,7 @@ Verified images: {verified_tags}
     # Get custom prompt if configured, otherwise use default
     system_prompt = get_prompt("iterative_improver", default_prompt)
 
+    # Create the chat prompt template
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("user", """Improve this Dockerfile based on the reflection.
@@ -700,9 +717,13 @@ Apply the fixes and return an improved Dockerfile.
 Explain your changes in the thought process.""")
     ])
     
+    # Create the execution chain: Prompt -> LLM -> Structured Output
     chain = prompt | structured_llm
+    
+    # Initialize callback to track token usage
     callback = TokenUsageCallback()
     
+    # Execute the chain (with rate limit handling)
     result = safe_invoke_chain(
         chain,
         {

@@ -126,7 +126,7 @@ Analyze for security vulnerabilities and provide:
 3. A corrected Dockerfile if critical/high issues are found""")
     ])
     
-    # Create the execution chain
+    # Create the execution chain: Prompt -> LLM -> Structured Output
     chain = prompt | structured_llm
     
     # Initialize callback to track token usage

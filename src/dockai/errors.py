@@ -236,7 +236,7 @@ Container/Build Logs:
 Classify this error and provide guidance.""")
         ])
         
-        # Create the execution chain
+        # Create the execution chain: Prompt -> LLM -> Structured Output
         chain = prompt | structured_llm
         
         # Initialize callback to track token usage

@@ -322,10 +322,10 @@ def _generate_iterative_dockerfile(
         Tuple[str, str, str, Any]: Improved Dockerfile content, project type, thought process, usage stats.
     """
     
-    # Configure the LLM for iterative output
+    # Configure the LLM to return a structured output matching the IterativeDockerfileResult schema
     structured_llm = llm.with_structured_output(IterativeDockerfileResult)
     
-    # Build reflection context string
+    # Build reflection context string from the specific fixes identified
     specific_fixes = reflection.get("specific_fixes", [])
     fixes_str = "\n".join([f"  - {fix}" for fix in specific_fixes]) if specific_fixes else "No specific fixes provided"
     
@@ -438,8 +438,10 @@ Apply the specific fixes and return an improved Dockerfile.
 Explain what you changed and why in the thought process.""")
     ])
     
-    # Create the execution chain
+    # Create the execution chain: Prompt -> LLM -> Structured Output
     chain = prompt | structured_llm
+    
+    # Initialize callback to track token usage
     callback = TokenUsageCallback()
     
     # Execute the chain
