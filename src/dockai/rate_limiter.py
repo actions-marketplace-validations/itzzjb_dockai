@@ -1,0 +1,279 @@
+"""
+Rate Limit Handler for DockAI.
+
+This module provides intelligent rate limit detection, exponential backoff,
+and retry logic for API calls to OpenAI and Docker Hub.
+"""
+
+import time
+import logging
+from typing import Callable, Any, Optional, Dict
+from functools import wraps
+import openai
+
+logger = logging.getLogger("dockai")
+
+
+class RateLimitHandler:
+    """
+    Handles rate limiting with exponential backoff and jitter.
+    
+    Attributes:
+        base_delay (float): Initial delay in seconds (default: 1)
+        max_delay (float): Maximum delay in seconds (default: 60)
+        max_retries (int): Maximum number of retry attempts (default: 5)
+        backoff_factor (float): Multiplier for exponential backoff (default: 2)
+    """
+    
+    def __init__(
+        self,
+        base_delay: float = 1.0,
+        max_delay: float = 60.0,
+        max_retries: int = 5,
+        backoff_factor: float = 2.0
+    ):
+        self.base_delay = base_delay
+        self.max_delay = max_delay
+        self.max_retries = max_retries
+        self.backoff_factor = backoff_factor
+        self.retry_count = 0
+    
+    def calculate_delay(self, attempt: int, retry_after: Optional[int] = None) -> float:
+        """
+        Calculate delay with exponential backoff and optional jitter.
+        
+        Args:
+            attempt (int): Current retry attempt number
+            retry_after (Optional[int]): Retry-After header value in seconds
+            
+        Returns:
+            float: Delay duration in seconds
+        """
+        if retry_after:
+            # Honor the Retry-After header if provided
+            return min(retry_after, self.max_delay)
+        
+        # Calculate exponential backoff: base_delay * (backoff_factor ^ attempt)
+        delay = min(
+            self.base_delay * (self.backoff_factor ** attempt),
+            self.max_delay
+        )
+        
+        # Add jitter (randomness) to prevent thundering herd
+        import random
+        jitter = random.uniform(0, delay * 0.1)  # 10% jitter
+        
+        return delay + jitter
+    
+    def reset(self):
+        """Reset retry counter."""
+        self.retry_count = 0
+
+
+def with_rate_limit_handling(
+    max_retries: int = 5,
+    base_delay: float = 1.0,
+    max_delay: float = 60.0
+):
+    """
+    Decorator to add rate limit handling to any function.
+    
+    Catches rate limit errors and retries with exponential backoff.
+    
+    Args:
+        max_retries (int): Maximum number of retry attempts
+        base_delay (float): Initial delay in seconds
+        max_delay (float): Maximum delay in seconds
+        
+    Returns:
+        Decorated function with rate limit handling
+        
+    Example:
+        @with_rate_limit_handling(max_retries=3)
+        def call_openai_api():
+            # Your API call here
+            pass
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            handler = RateLimitHandler(
+                base_delay=base_delay,
+                max_delay=max_delay,
+                max_retries=max_retries
+            )
+            
+            last_exception = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    # Execute the function
+                    result = func(*args, **kwargs)
+                    
+                    # Reset retry count on success
+                    if attempt > 0:
+                        logger.info(f"✓ Retry succeeded after {attempt} attempts")
+                    
+                    return result
+                
+                except openai.RateLimitError as e:
+                    last_exception = e
+                    
+                    if attempt >= max_retries:
+                        logger.error(f"✗ Max retries ({max_retries}) exceeded for rate limit")
+                        raise RateLimitExceededError(
+                            f"Rate limit exceeded after {max_retries} retries. "
+                            f"Please wait a few minutes and try again, or upgrade your OpenAI API tier."
+                        ) from e
+                   
+                    # Extract retry-after from headers if available
+                    retry_after = None
+                    if hasattr(e, 'response') and e.response:
+                        retry_after = e.response.headers.get('Retry-After')
+                        if retry_after:
+                            try:
+                                retry_after = int(retry_after)
+                            except (ValueError, TypeError):
+                                retry_after = None
+                    
+                    # Calculate delay
+                    delay = handler.calculate_delay(attempt, retry_after)
+                    
+                    logger.warning(
+                        f"⚠ Rate limit hit (attempt {attempt + 1}/{max_retries}). "
+                        f"Waiting {delay:.1f}s before retry..."
+                    )
+                    
+                    time.sleep(delay)
+                    continue
+                
+                except Exception as e:
+                    # Don't retry on other exceptions
+                    raise
+            
+            # If we get here, we've exhausted all retries
+            raise last_exception
+        
+        return wrapper
+    return decorator
+
+
+class RateLimitExceededError(Exception):
+    """
+    Raised when rate limits are exceeded after all retry attempts.
+    
+    This is a custom exception that provides clear messaging to users
+    about rate limit issues and suggests actionable solutions.
+    """
+    pass
+
+
+def create_rate_limited_llm(model_name: str, api_key: str, temperature: float = 0, **kwargs):
+    """
+    Create a ChatOpenAI instance with built-in rate limit handling.
+    
+    This wrapper ensures all LLM calls automatically handle rate limits
+    with exponential backoff.
+    
+    Args:
+        model_name (str): The OpenAI model to use
+        api_key (str): OpenAI API key
+        temperature (float): LLM temperature setting
+        **kwargs: Additional arguments to pass to ChatOpenAI
+        
+    Returns:
+        ChatOpenAI instance with rate limit handling
+    """
+    from langchain_openai import ChatOpenAI
+    
+    # Create the LLM with standard parameters
+    llm = ChatOpenAI(
+        model=model_name,
+        temperature=temperature,
+        api_key=api_key,
+        # Add timeout to prevent hanging
+        request_timeout=60,
+        # Add retry configuration for transient errors
+        max_retries=3,
+        **kwargs
+    )
+    
+    return llm
+
+
+def handle_registry_rate_limit(func: Callable) -> Callable:
+    """
+    Decorator specifically for Container Registry API calls (Docker Hub, GCR, Quay).
+    
+    Registries often have strict rate limits for unauthenticated requests.
+    
+    Args:
+        func: Function making Registry API calls
+        
+    Returns:
+        Wrapped function with Registry rate limit handling
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        max_retries = 3
+        base_delay = 5.0
+        
+        for attempt in range(max_retries + 1):
+            try:
+                return func(*args, **kwargs)
+            
+            except Exception as e:
+                error_str = str(e).lower()
+                
+                # Check if this is a rate limit error
+                if 'rate limit' in error_str or '429' in error_str or 'too many requests' in error_str:
+                    
+                    if attempt >= max_retries:
+                        logger.warning(
+                            "⚠ Registry rate limit exceeded. "
+                            "This won't prevent Dockerfile generation, but image tag verification may be skipped."
+                        )
+                        # Return None (or empty list depending on usage) to indicate failure without crashing
+                        # The original function returns list, so we should probably return empty list if it expects list
+                        # But the decorator returns None in the original code. 
+                        # Let's check usage in registry.py. get_docker_tags returns List[str].
+                        # So returning [] is safer.
+                        return []
+                    
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(
+                        f"⚠ Registry API rate limit (attempt {attempt + 1}/{max_retries}). "
+                        f"Waiting {delay:.0f}s..."
+                    )
+                    time.sleep(delay)
+                    continue
+                else:
+                    # Not a rate limit error, don't retry
+                    raise
+        
+        return []
+    
+    return wrapper
+
+
+def get_rate_limit_status() -> Dict[str, Any]:
+    """
+    Get current rate limit status information.
+    
+    This can be expanded to track API usage and provide warnings
+    before limits are hit.
+    
+    Returns:
+        Dict with rate limit information
+    """
+    # This is a placeholder for future implementation
+    # Could track:
+    # - Number of API calls made in current session
+    # - Estimated tokens used
+    # - Time until rate limits reset
+    
+    return {
+        "calls_made": 0,
+        "tokens_used": 0,
+        "status": "ok"
+    }

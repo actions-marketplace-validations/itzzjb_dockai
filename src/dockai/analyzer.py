@@ -17,6 +17,13 @@ from langchain_core.prompts import ChatPromptTemplate
 # Internal imports for data schemas and callbacks
 from .schemas import AnalysisResult
 from .callbacks import TokenUsageCallback
+from .rate_limiter import with_rate_limit_handling
+
+
+@with_rate_limit_handling(max_retries=5, base_delay=2.0, max_delay=60.0)
+def safe_invoke_chain(chain, input_data: Dict[str, Any], callbacks: list) -> Any:
+    """Safely invoke a LangChain chain with rate limit handling."""
+    return chain.invoke(input_data, config={"callbacks": callbacks})
 
 
 def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[AnalysisResult, Dict[str, int]]:
@@ -97,13 +104,14 @@ Analyze the project and provide a detailed thought process explaining your reaso
     # Convert file list to JSON string for better formatting in the prompt
     file_list_str = json.dumps(file_list)
     
-    # Execute the chain
-    result = chain.invoke(
+    # Execute the chain (with rate limit handling)
+    result = safe_invoke_chain(
+        chain,
         {
             "custom_instructions": custom_instructions, 
             "file_list": file_list_str
         },
-        config={"callbacks": [callback]}
+        [callback]
     )
     
     return result, callback.get_usage()

@@ -10,10 +10,13 @@ import httpx
 import logging
 from typing import List
 
+from .rate_limiter import handle_registry_rate_limit
+
 # Initialize logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
 
 
+@handle_registry_rate_limit
 def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
     """
     Fetches valid tags for a given Docker image from supported registries.

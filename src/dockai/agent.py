@@ -34,9 +34,28 @@ from .schemas import (
     IterativeDockerfileResult
 )
 from .callbacks import TokenUsageCallback
+from .rate_limiter import with_rate_limit_handling, create_rate_limited_llm
 
 # Initialize the logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
+
+
+@with_rate_limit_handling(max_retries=5, base_delay=2.0, max_delay=60.0)
+def safe_invoke_chain(chain, input_data: Dict[str, Any], callbacks: list) -> Any:
+    """
+    Safely invoke a LangChain chain with rate limit handling.
+    
+    This wrapper adds automatic retry with exponential backoff for rate limit errors.
+    
+    Args:
+        chain: The LangChain chain to invoke
+        input_data: Input data dictionary
+        callbacks: List of callbacks
+        
+    Returns:
+        Chain invocation result
+    """
+    return chain.invoke(input_data, config={"callbacks": callbacks})
 
 
 def create_plan(
@@ -161,8 +180,9 @@ Start by explaining your thought process in detail.""")
     # Initialize callback to track token usage
     callback = TokenUsageCallback()
     
-    # Execute the chain with the provided context
-    result = chain.invoke(
+    # Execute the chain with the provided context (with rate limit handling)
+    result = safe_invoke_chain(
+        chain,
         {
             "stack": analysis_result.get("stack", "Unknown"),
             "project_type": analysis_result.get("project_type", "service"),
@@ -173,10 +193,11 @@ Start by explaining your thought process in detail.""")
             "retry_context": retry_context,
             "custom_instructions": custom_instructions
         },
-        config={"callbacks": [callback]}
+        [callback]
     )
     
     return result, callback.get_usage()
+
 
 
 def reflect_on_failure(
@@ -297,8 +318,9 @@ Start by explaining your root cause analysis in the thought process.""")
     # Initialize token usage tracking
     callback = TokenUsageCallback()
     
-    # Execute the chain
-    result = chain.invoke(
+    # Execute the chain (with rate limit handling)
+    result = safe_invoke_chain(
+        chain,
         {
             "dockerfile": dockerfile_content,
             "error_message": error_message,
@@ -309,7 +331,7 @@ Start by explaining your root cause analysis in the thought process.""")
             "container_logs": container_logs[:3000] if container_logs else "No logs available",
             "retry_context": retry_context
         },
-        config={"callbacks": [callback]}
+        [callback]
     )
     
     return result, callback.get_usage()
@@ -385,12 +407,13 @@ Explain your reasoning in the thought process.""")
     chain = prompt | structured_llm
     callback = TokenUsageCallback()
     
-    result = chain.invoke(
+    result = safe_invoke_chain(
+        chain,
         {
             "stack": analysis_result.get("stack", "Unknown"),
             "file_contents": file_contents[:10000]  # Limit size to avoid context overflow
         },
-        config={"callbacks": [callback]}
+        [callback]
     )
     
     return result, callback.get_usage()
@@ -470,13 +493,14 @@ Explain your reasoning in the thought process.""")
     chain = prompt | structured_llm
     callback = TokenUsageCallback()
     
-    result = chain.invoke(
+    result = safe_invoke_chain(
+        chain,
         {
             "stack": analysis_result.get("stack", "Unknown"),
             "project_type": analysis_result.get("project_type", "service"),
             "file_contents": file_contents[:8000]  # Limit size
         },
-        config={"callbacks": [callback]}
+        [callback]
     )
     
     return result, callback.get_usage()
@@ -581,7 +605,8 @@ Explain your changes in the thought process.""")
     chain = prompt | structured_llm
     callback = TokenUsageCallback()
     
-    result = chain.invoke(
+    result = safe_invoke_chain(
+        chain,
         {
             "previous_dockerfile": previous_dockerfile,
             "root_cause": reflection.get("root_cause_analysis", "Unknown"),
@@ -602,7 +627,7 @@ Explain your changes in the thought process.""")
             "file_contents": file_contents[:6000],
             "custom_instructions": custom_instructions
         },
-        config={"callbacks": [callback]}
+        [callback]
     )
     
     return result, callback.get_usage()
