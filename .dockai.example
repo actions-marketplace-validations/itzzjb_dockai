@@ -1,18 +1,225 @@
-# Example .dockai file
-# You can use natural language to give specific instructions to the AI.
-# Use [analyzer] and [generator] sections to target specific stages.
+# ============================================
+# DockAI Custom Configuration File
+# ============================================
+# Copy this file to .dockai in your project root to customize DockAI's behavior.
+#
+# This file supports two types of customization:
+# 1. Custom Instructions: High-level guidance for the analyzer and generator phases
+# 2. Custom Prompts: Complete replacement of AI agent personas/prompts
+#
+# ============================================
+
+# ============================================
+# SECTION 1: CUSTOM INSTRUCTIONS (Simple)
+# ============================================
+# Use these sections to add extra guidance without replacing the entire prompt.
+# These are appended to the default prompts.
 
 [analyzer]
-# Instructions for the analyzer (file selection stage)
+# Instructions for the analysis phase (stack detection, file selection)
+# Example:
+# Focus on identifying microservices architecture.
+# Look for any .env.example files to understand environment variables.
 Always include package-lock.json or yarn.lock if they exist.
 Look for any .env.example files to understand environment variables.
 Include docker-compose.yml if present.
 
 [generator]
-# Instructions for the generator (Dockerfile creation stage)
+# Instructions for the Dockerfile generation phase
+# Example:
+# Use Alpine-based images where possible.
+# Define an environment variable 'APP_ENV' with value 'production'.
 Ensure the container runs as a non-root user named 'appuser'.
 Do not expose any ports other than 8080.
-Install 'curl' and 'vim' for debugging purposes.
-Ensure 'ffmpeg' is installed if this is a media processing application.
+Install 'curl' for health checks.
 Set the timezone to 'UTC'.
 Define an environment variable 'APP_ENV' with value 'production'.
+
+# ============================================
+# SECTION 2: CUSTOM PROMPTS (Advanced)
+# ============================================
+# Use these sections to completely replace the default AI agent prompts.
+# Each section corresponds to a specific AI persona in the DockAI workflow.
+#
+# WARNING: Custom prompts are powerful but should be used carefully.
+# The default prompts are carefully designed to work with any technology stack.
+# Only customize if you have specific requirements.
+#
+# Available prompt sections:
+# - [prompt_analyzer]           - The Build Engineer (analyzes project structure)
+# - [prompt_planner]            - The DevOps Architect (plans build strategy)
+# - [prompt_generator]          - The Docker Architect (generates fresh Dockerfiles)
+# - [prompt_generator_iterative]- The Docker Engineer (iterative improvement)
+# - [prompt_reviewer]           - The Security Engineer (security review)
+# - [prompt_reflector]          - The Principal DevOps Engineer (failure analysis)
+# - [prompt_health_detector]    - The Code Analyst (detects health endpoints)
+# - [prompt_readiness_detector] - The Startup Expert (detects readiness patterns)
+# - [prompt_error_analyzer]     - The DevOps Engineer (error classification)
+# - [prompt_iterative_improver] - The Senior Docker Engineer (applies fixes)
+
+# ============================================
+# EXAMPLE: Custom Analyzer Prompt
+# ============================================
+# Uncomment and modify to use a custom analyzer prompt:
+#
+# [prompt_analyzer]
+# You are a specialized Build Engineer for {YOUR_TECHNOLOGY} projects.
+# 
+# Your Goal: Analyze the project structure and identify:
+# 1. The main technology stack
+# 2. Required dependencies and build tools
+# 3. Entry points and startup commands
+#
+# Focus specifically on:
+# - {Your specific requirements}
+# - {Your custom analysis rules}
+#
+# User Custom Instructions:
+# {custom_instructions}
+
+# ============================================
+# EXAMPLE: Custom Generator Prompt
+# ============================================
+# Uncomment and modify to use a custom generator prompt:
+#
+# [prompt_generator]
+# You are a Docker Architect specialized in {YOUR_TECHNOLOGY}.
+#
+# Requirements:
+# 1. Always use multi-stage builds
+# 2. Use specific base images for your technology
+# 3. Follow your organization's security policies
+#
+# {plan_context}
+# {retry_context}
+# {error_context}
+
+# ============================================
+# EXAMPLE: Custom Security Reviewer Prompt
+# ============================================
+# Uncomment and modify to use a custom reviewer prompt:
+#
+# [prompt_reviewer]
+# You are a Security Engineer following {YOUR_ORGANIZATION} security policies.
+#
+# Security Requirements:
+# 1. All containers MUST run as non-root
+# 2. Only approved base images are allowed: {list}
+# 3. No secrets in Dockerfiles
+# 4. {Your additional security rules}
+#
+# Review the Dockerfile and ensure compliance with all policies.
+
+# ============================================
+# EXAMPLE: Custom Planner Prompt
+# ============================================
+# Uncomment and modify to use a custom planner prompt:
+#
+# [prompt_planner]
+# You are a DevOps Architect planning containerization for {YOUR_ENVIRONMENT}.
+#
+# Planning Guidelines:
+# 1. Consider infrastructure constraints
+# 2. Follow {YOUR_ORGANIZATION} standards
+# 3. Optimize for {your priorities: size/speed/security}
+#
+# {retry_context}
+# {custom_instructions}
+
+# ============================================
+# EXAMPLE: Custom Reflector Prompt
+# ============================================
+# Uncomment and modify to use a custom reflector prompt:
+#
+# [prompt_reflector]
+# You are a Principal DevOps Engineer debugging Docker failures.
+#
+# When analyzing failures:
+# 1. Check for common issues in {YOUR_TECHNOLOGY}
+# 2. Consider {your environment-specific factors}
+# 3. Apply {your organization's debugging practices}
+#
+# {retry_context}
+
+# ============================================
+# EXAMPLE: Custom Health Detector Prompt
+# ============================================
+# Uncomment and modify to use a custom health detector prompt:
+#
+# [prompt_health_detector]
+# You are analyzing code for health check endpoints.
+#
+# Look for:
+# 1. Your organization's standard health endpoint patterns
+# 2. Technology-specific health implementations
+# 3. Custom health check mechanisms
+#
+# Required health endpoint paths: {your paths}
+
+# ============================================
+# EXAMPLE: Custom Readiness Detector Prompt
+# ============================================
+# Uncomment and modify to use a custom readiness detector prompt:
+#
+# [prompt_readiness_detector]
+# You are detecting application startup patterns.
+#
+# For {YOUR_TECHNOLOGY} applications, look for:
+# 1. Your standard startup messages
+# 2. Technology-specific ready indicators
+# 3. Custom readiness signals
+#
+# Expected startup time range: {your range}
+
+# ============================================
+# EXAMPLE: Custom Error Analyzer Prompt
+# ============================================
+# Uncomment and modify to use a custom error analyzer prompt:
+#
+# [prompt_error_analyzer]
+# You are analyzing Docker errors for {YOUR_ENVIRONMENT}.
+#
+# Classification rules:
+# 1. PROJECT_ERROR: {your project error criteria}
+# 2. DOCKERFILE_ERROR: {your dockerfile error criteria}
+# 3. ENVIRONMENT_ERROR: {your environment error criteria}
+#
+# Always consider {your technology-specific error patterns}.
+
+# ============================================
+# EXAMPLE: Custom Iterative Improver Prompt
+# ============================================
+# Uncomment and modify to use a custom iterative improver prompt:
+#
+# [prompt_iterative_improver]
+# You are a Senior Docker Engineer fixing a failed Dockerfile.
+#
+# Fix Guidelines:
+# 1. Make minimal changes - preserve what works
+# 2. Apply the specific fixes from reflection
+# 3. Follow {YOUR_ORGANIZATION} standards
+#
+# REFLECTION GUIDANCE:
+# - Root cause: {root_cause}
+# - Specific fixes: {specific_fixes}
+#
+# VERIFIED BASE IMAGES: {verified_tags}
+# {custom_instructions}
+
+# ============================================
+# NOTES ON TEMPLATE VARIABLES
+# ============================================
+# Some prompts support template variables that will be replaced at runtime:
+#
+# Common variables:
+# - {custom_instructions}  - User's custom instructions
+# - {retry_context}        - Context from previous failed attempts
+# - {plan_context}         - Current build plan context
+# - {error_context}        - Error details from failed builds
+#
+# Generator-specific variables:
+# - {root_cause}, {why_it_failed}, {lesson_learned} - Reflection data
+# - {specific_fixes}, {verified_tags} - Fix guidance
+# - {image_change_guidance}, {strategy_change_guidance} - Strategy updates
+#
+# You can include these in your custom prompts to maintain dynamic behavior.

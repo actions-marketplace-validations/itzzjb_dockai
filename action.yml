@@ -61,6 +61,80 @@ inputs:
     description: 'Custom instructions for the generator phase'
     required: false
     default: ''
+  # Additional Custom Instructions (all phases)
+  planner_instructions:
+    description: 'Custom instructions for the planner phase'
+    required: false
+    default: ''
+  generator_iterative_instructions:
+    description: 'Custom instructions for iterative Dockerfile improvement'
+    required: false
+    default: ''
+  reviewer_instructions:
+    description: 'Custom instructions for security review'
+    required: false
+    default: ''
+  reflector_instructions:
+    description: 'Custom instructions for failure analysis'
+    required: false
+    default: ''
+  health_detector_instructions:
+    description: 'Custom instructions for health endpoint detection'
+    required: false
+    default: ''
+  readiness_detector_instructions:
+    description: 'Custom instructions for readiness pattern detection'
+    required: false
+    default: ''
+  error_analyzer_instructions:
+    description: 'Custom instructions for error classification'
+    required: false
+    default: ''
+  iterative_improver_instructions:
+    description: 'Custom instructions for applying fixes'
+    required: false
+    default: ''
+  # Custom AI Prompts (Advanced - Complete Replacement)
+  prompt_analyzer:
+    description: 'Custom prompt for the Build Engineer (project analysis)'
+    required: false
+    default: ''
+  prompt_planner:
+    description: 'Custom prompt for the DevOps Architect (build planning)'
+    required: false
+    default: ''
+  prompt_generator:
+    description: 'Custom prompt for the Docker Architect (Dockerfile generation)'
+    required: false
+    default: ''
+  prompt_generator_iterative:
+    description: 'Custom prompt for the Docker Engineer (iterative improvement)'
+    required: false
+    default: ''
+  prompt_reviewer:
+    description: 'Custom prompt for the Security Engineer (security review)'
+    required: false
+    default: ''
+  prompt_reflector:
+    description: 'Custom prompt for the Principal DevOps Engineer (failure analysis)'
+    required: false
+    default: ''
+  prompt_health_detector:
+    description: 'Custom prompt for the Code Analyst (health endpoint detection)'
+    required: false
+    default: ''
+  prompt_readiness_detector:
+    description: 'Custom prompt for the Startup Expert (readiness pattern detection)'
+    required: false
+    default: ''
+  prompt_error_analyzer:
+    description: 'Custom prompt for the DevOps Engineer (error classification)'
+    required: false
+    default: ''
+  prompt_iterative_improver:
+    description: 'Custom prompt for the Senior Docker Engineer (applying fixes)'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -90,6 +164,24 @@ runs:
         DOCKAI_VALIDATION_PIDS: ${{ inputs.validation_pids }}
         DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
         DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
+        DOCKAI_PLANNER_INSTRUCTIONS: ${{ inputs.planner_instructions }}
+        DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS: ${{ inputs.generator_iterative_instructions }}
+        DOCKAI_REVIEWER_INSTRUCTIONS: ${{ inputs.reviewer_instructions }}
+        DOCKAI_REFLECTOR_INSTRUCTIONS: ${{ inputs.reflector_instructions }}
+        DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS: ${{ inputs.health_detector_instructions }}
+        DOCKAI_READINESS_DETECTOR_INSTRUCTIONS: ${{ inputs.readiness_detector_instructions }}
+        DOCKAI_ERROR_ANALYZER_INSTRUCTIONS: ${{ inputs.error_analyzer_instructions }}
+        DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS: ${{ inputs.iterative_improver_instructions }}
+        DOCKAI_PROMPT_ANALYZER: ${{ inputs.prompt_analyzer }}
+        DOCKAI_PROMPT_PLANNER: ${{ inputs.prompt_planner }}
+        DOCKAI_PROMPT_GENERATOR: ${{ inputs.prompt_generator }}
+        DOCKAI_PROMPT_GENERATOR_ITERATIVE: ${{ inputs.prompt_generator_iterative }}
+        DOCKAI_PROMPT_REVIEWER: ${{ inputs.prompt_reviewer }}
+        DOCKAI_PROMPT_REFLECTOR: ${{ inputs.prompt_reflector }}
+        DOCKAI_PROMPT_HEALTH_DETECTOR: ${{ inputs.prompt_health_detector }}
+        DOCKAI_PROMPT_READINESS_DETECTOR: ${{ inputs.prompt_readiness_detector }}
+        DOCKAI_PROMPT_ERROR_ANALYZER: ${{ inputs.prompt_error_analyzer }}
+        DOCKAI_PROMPT_ITERATIVE_IMPROVER: ${{ inputs.prompt_iterative_improver }}
       run: |
         echo "🐳 Starting DockAI Agent..."
         dockai build ${{ inputs.project_path }} --no-cache

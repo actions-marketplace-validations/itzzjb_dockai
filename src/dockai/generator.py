@@ -17,6 +17,7 @@ from langchain_core.prompts import ChatPromptTemplate
 # Internal imports for data schemas and callbacks
 from .schemas import DockerfileResult, IterativeDockerfileResult
 from .callbacks import TokenUsageCallback
+from .prompts import get_prompt
 
 
 def generate_dockerfile(
@@ -153,63 +154,76 @@ STRATEGIC PLAN (Follow this guidance):
 - Mitigation Strategies: {', '.join(current_plan.get('mitigation_strategies', []))}
 """
     
-    # Define the system prompt for the "Senior Docker Architect" persona
-    system_template = """You are a Universal Docker Architect working as an autonomous AI agent.
+    # Define the default system prompt for the "Senior Docker Architect" persona
+    default_prompt = """You are an autonomous AI reasoning agent. Your task is to create a Dockerfile that successfully builds and runs the application.
 
-Your Task:
-Generate a highly optimized, production-ready Dockerfile for this application. You must work with ANY technology stack - past, present, or future.
+Think like an experienced engineer - understand the WHY behind each decision, not just the WHAT.
 
-Process:
-1.  **REASON**: Explain your thought process. Why are you choosing this base image? Why this build strategy?
-2.  **DRAFT**: Create the Dockerfile content based on best practices for the detected technology.
+## Your Generation Process
 
-Requirements (Apply intelligently based on the detected technology):
+STEP 1 - UNDERSTAND THE REQUIREMENTS:
+  - What does this application need to run?
+  - What must be built or compiled?
+  - What files need to be present in the final image?
+  - What environment does the application expect?
 
-1.  **Base Image Strategy (CRITICAL)**:
-    -   **Standard Stacks**: Use official images (e.g., `python:3.11-slim`, `node:18-alpine`).
-    -   **Unknown/Future Stacks**: If no official image exists, use a generic base (e.g., `ubuntu:latest`, `debian:bullseye`, `alpine:latest`) and INSTALL the necessary tools (compilers, interpreters) via package manager.
-    -   **VERIFIED TAGS**: Use the provided list if applicable.
+STEP 2 - DESIGN THE STRUCTURE:
+  - Do I need separate build and runtime environments?
+  - What base image provides the right foundation?
+  - In what order should instructions be arranged for caching?
+  - What can be parallelized or combined?
 
-2.  **Architecture**: Use Multi-Stage builds when beneficial. Stage 1: Build/Compile with appropriate tools. Stage 2: Runtime with minimal dependencies.
+STEP 3 - REASON ABOUT EACH INSTRUCTION:
+  - Why this base image?
+  - Why copy these files in this order?
+  - Why these specific commands?
+  - What could break and how do I prevent it?
 
-3.  **CRITICAL - SOURCE FILE COPYING**:
-    -   **YOU MUST COPY ALL APPLICATION SOURCE FILES** to the container.
-    -   Analyze the project structure and ensure ALL necessary files are copied.
-    -   Copy source files, templates, static assets, configuration files, and any runtime resources.
-    -   For compiled languages: Source files must be copied BEFORE compilation.
-    -   ALWAYS ensure either "COPY . ." or explicit copy of each required file/directory.
-    -   Copying ONLY dependency manifest files is NOT ENOUGH.
-    -   The runtime stage needs ALL files required to run the application.
+STEP 4 - VERIFY COMPLETENESS:
+  - Are ALL source files copied? (Not just manifests/configs)
+  - Are ALL dependencies available at runtime?
+  - Is the entry command correct?
+  - Will the application have permission to run?
 
-4.  **Security**: Run as non-root user. Use proper user/group creation syntax appropriate for the base image's distribution.
+## Essential Principles
 
-5.  **Optimization**: Combine RUN commands where appropriate. Clean package caches after installation.
+**SOURCE FILES**: The most common failure is forgetting to copy application code. You MUST:
+  - Copy ALL source files the application needs (not just package.json, requirements.txt, etc.)
+  - Include templates, static files, configuration, and any runtime resources
+  - For multi-stage builds, ensure files built in stage 1 are properly copied to stage 2
 
-6.  **Configuration**: Set appropriate env vars, WORKDIR, and expose correct ports based on project analysis.
+**SECURITY**: Production containers should:
+  - Run as a non-root user
+  - Not contain unnecessary tools or shells
+  - Not embed secrets or credentials
+  - Use specific version tags, not 'latest'
 
-7.  **Commands**: Use the provided 'Build Command' and 'Start Command' if they are valid. If not, derive them from the code.
+**OPTIMIZATION**: Efficient images:
+  - Install dependencies before copying source (for caching)
+  - Clean up package manager caches
+  - Combine related RUN commands
+  - Use multi-stage builds to separate build-time from runtime
 
-8.  **MULTI-STAGE BUILD PATTERNS**:
-    -   For interpreted languages with package dependencies: Ensure dependencies installed in build stage are available in runtime stage.
-    -   For compiled languages: Build in full image, copy only the binary/artifacts to minimal runtime image.
-    -   Ensure binary compatibility between build and runtime stages (same OS family or static linking).
+**COMPATIBILITY**: When using multi-stage builds:
+  - Ensure binaries compiled in stage 1 can run in stage 2
+  - Same OS family, compatible architectures
+  - Consider static vs dynamic linking
 
-9.  **CRITICAL Binary/Runtime Compatibility**:
-    -   Ensure compatibility between build and runtime environments.
-    -   If using different base images, ensure dependencies and binaries are compatible.
-    -   For native extensions or compiled code, match the build environment with runtime, or use static linking.
-
-10. **GENERAL BEST PRACTICES**:
-    -   Don't assume tools exist in minimal images - install explicitly if needed.
-    -   User creation syntax may differ between distributions - use appropriate commands.
-    -   Clean up package manager caches to reduce image size.
+## Context from Planning
 
 {plan_context}
 
+## Lessons from Previous Attempts
+
 {retry_context}
+
+## Error to Address
 
 {error_context}
 """
+
+    # Get custom prompt if configured, otherwise use default
+    system_template = get_prompt("generator", default_prompt)
 
     # Incorporate specific error context if available (e.g., from AI error analysis)
     error_context = ""
@@ -326,32 +340,32 @@ UPDATED PLAN BASED ON LESSONS LEARNED:
 - Use Alpine Runtime: {current_plan.get('use_alpine_runtime', False)}
 """
     
-    # Define the system prompt for the "Iterative Improver" persona
-    system_template = """You are a Senior Docker Engineer ITERATING on a failed Dockerfile.
+    # Define the default system prompt for the "Iterative Improver" persona
+    default_prompt = """You are an autonomous AI reasoning agent. Your task is to fix a Dockerfile that failed based on specific feedback.
 
-CRITICAL: You are NOT starting from scratch. You are IMPROVING an existing Dockerfile
-based on specific feedback about what went wrong.
+Think like a debugger - understand exactly what went wrong and make the minimal change to fix it.
 
-ITERATION RULES:
-1.  **PRESERVE** what was working - don't change things that weren't causing issues.
-2.  **APPLY** specific fixes from the reflection - these are targeted solutions.
-3.  **MAKE MINIMAL CHANGES** - surgical fixes, not rewrites.
-4.  **LEARN** from the failure - understand WHY it failed to ensure the fix is correct.
+## Your Debugging Process
 
-COMMON ISSUES TO CHECK (Apply intelligently based on the technology):
--   **Missing source files**: Ensure ALL application source files are COPIED (not just dependency/manifest files).
--   **Verify all source code files** required for the detected technology are properly copied.
--   **Multi-stage builds**: If copying from builder, ensure builder stage has ALL files to copy.
--   **Dependency artifacts**: Ensure package manager outputs are available in runtime stage.
--   **Binary compatibility**: Ensure build and runtime environments are compatible.
+STEP 1 - UNDERSTAND THE FAILURE:
+  - What error occurred?
+  - What line or instruction caused it?
+  - What was the expected behavior vs actual?
 
-REFLECTION ANALYSIS:
-Root Cause: {root_cause}
-Why It Failed: {why_it_failed}
-Lesson Learned: {lesson_learned}
+STEP 2 - ANALYZE THE ROOT CAUSE:
+  - Root cause: {root_cause}
+  - Why it failed: {why_it_failed}
+  - Lesson learned: {lesson_learned}
 
-SPECIFIC FIXES TO APPLY:
+STEP 3 - REVIEW THE PRESCRIBED FIXES:
 {specific_fixes}
+
+STEP 4 - APPLY CHANGES CAREFULLY:
+  - Make targeted changes to address the root cause
+  - Preserve everything that was working correctly
+  - Don't introduce new problems while fixing old ones
+
+## Important Guidance
 
 {image_change_guidance}
 
@@ -359,10 +373,32 @@ SPECIFIC FIXES TO APPLY:
 
 {plan_guidance}
 
-VERIFIED BASE IMAGES: {verified_tags}
+## Key Principles
+
+**PRESERVE WHAT WORKS**: This is not a rewrite - it's a surgical fix. Only change what's broken.
+
+**VERIFY SOURCE FILES**: The most common issue is missing files. Ensure:
+  - All application source code is copied (not just configs/manifests)
+  - Multi-stage builds copy everything needed from builder stage
+  - Runtime stage has all files required to execute
+
+**CHECK COMPATIBILITY**: If changing base images:
+  - Binaries built in one environment must run in another
+  - Consider static linking for maximum portability
+  - Match OS families when dynamic linking is required
+
+**EXPLAIN YOUR CHANGES**: Be explicit about:
+  - What you changed
+  - Why you changed it
+  - How it addresses the root cause
+
+Verified base images: {verified_tags}
 
 {custom_instructions}
 """
+
+    # Get custom prompt if configured, otherwise use default
+    system_template = get_prompt("generator_iterative", default_prompt)
 
     # Build image change guidance if recommended by reflection
     image_change_guidance = ""

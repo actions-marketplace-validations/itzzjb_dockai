@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 
 from .graph import create_graph
 from . import ui
+from .prompts import load_prompts, set_prompt_config
 
 # Load environment variables from .env file
 load_dotenv()
@@ -31,71 +32,34 @@ logger = ui.setup_logging()
 
 def load_instructions(path: str):
     """
-    Loads custom instructions for the AI agent from various sources.
+    Loads custom instructions and prompts for the AI agent from various sources.
 
-    Instructions can be provided via:
-    1. Environment variables (DOCKAI_ANALYZER_INSTRUCTIONS, DOCKAI_GENERATOR_INSTRUCTIONS).
+    Instructions and prompts can be provided via:
+    1. Environment variables (DOCKAI_*_INSTRUCTIONS, DOCKAI_PROMPT_*)
     2. A local `.dockai` file in the target directory.
 
-    The `.dockai` file supports sections `[analyzer]` and `[generator]` to target specific
-    phases of the pipeline.
+    The `.dockai` file supports sections:
+    - [analyzer], [generator] - Legacy sections for backward compatibility
+    - [instructions_*] - Extra instructions appended to default prompts
+    - [prompt_*] - Complete prompt replacements
 
     Args:
         path (str): The absolute path to the target directory where `.dockai` might exist.
 
     Returns:
-        Tuple[str, str]: A tuple containing (analyzer_instructions, generator_instructions).
+        Tuple[str, str]: A tuple containing (analyzer_instructions, generator_instructions) for backward compatibility.
     """
-    analyzer_instructions = ""
-    generator_instructions = ""
+    # Load and set custom prompts and instructions configuration
+    # This handles all 10 prompts and their instructions from env vars and .dockai file
+    prompt_config = load_prompts(path)
+    set_prompt_config(prompt_config)
+    logger.debug("Custom prompts and instructions configuration loaded")
     
-    # Check environment variables first
-    if os.getenv("DOCKAI_ANALYZER_INSTRUCTIONS"):
-        analyzer_instructions += f"\nFrom Environment Variable:\n{os.getenv('DOCKAI_ANALYZER_INSTRUCTIONS')}\n"
-        
-    if os.getenv("DOCKAI_GENERATOR_INSTRUCTIONS"):
-        generator_instructions += f"\nFrom Environment Variable:\n{os.getenv('DOCKAI_GENERATOR_INSTRUCTIONS')}\n"
-        
-    # Check for a .dockai file in the target directory
-    dockai_file_path = os.path.join(path, ".dockai")
-    if os.path.exists(dockai_file_path):
-        try:
-            with open(dockai_file_path, "r") as f:
-                content = f.read()
-                
-                # Parse sections: [analyzer] and [generator]
-                if "[analyzer]" in content.lower() or "[generator]" in content.lower():
-                    # Split by sections
-                    lines = content.split('\n')
-                    current_section = None
-                    section_content = {"analyzer": [], "generator": []}
-                    
-                    for line in lines:
-                        line_lower = line.strip().lower()
-                        if line_lower == "[analyzer]":
-                            current_section = "analyzer"
-                        elif line_lower == "[generator]":
-                            current_section = "generator"
-                        elif current_section and line.strip() and not line.strip().startswith('#'):
-                            section_content[current_section].append(line)
-                    
-                    if section_content["analyzer"]:
-                        analyzer_instructions += f"\nFrom .dockai file:\n" + "\n".join(section_content["analyzer"]) + "\n"
-                    if section_content["generator"]:
-                        generator_instructions += f"\nFrom .dockai file:\n" + "\n".join(section_content["generator"]) + "\n"
-                else:
-                    # No sections found, apply instructions to both phases
-                    shared_instructions = content.strip()
-                    if shared_instructions:
-                        analyzer_instructions += f"\nFrom .dockai file:\n{shared_instructions}\n"
-                        generator_instructions += f"\nFrom .dockai file:\n{shared_instructions}\n"
-                        
-            logger.info(f"Loaded custom instructions from {dockai_file_path}")
-        except Exception as e:
-            ui.print_warning(f"Could not read .dockai file: {e}")
-            logger.warning(f"Could not read .dockai file: {e}")
-
-    return analyzer_instructions, generator_instructions
+    # Return analyzer and generator instructions for backward compatibility with the config dict
+    return (
+        prompt_config.analyzer_instructions or "",
+        prompt_config.generator_instructions or ""
+    )
 
 @app.command()
 def run(

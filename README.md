@@ -257,6 +257,29 @@ jobs:
 | `validation_pids` | Max processes for validation. | No | `100` |
 | `analyzer_instructions` | Custom instructions for analyzer. | No | - |
 | `generator_instructions` | Custom instructions for generator. | No | - |
+| `planner_instructions` | Custom instructions for planner. | No | - |
+| `reviewer_instructions` | Custom instructions for security reviewer. | No | - |
+| `reflector_instructions` | Custom instructions for reflector. | No | - |
+| `health_detector_instructions` | Custom instructions for health detector. | No | - |
+| `readiness_detector_instructions` | Custom instructions for readiness detector. | No | - |
+| `error_analyzer_instructions` | Custom instructions for error analyzer. | No | - |
+| `iterative_improver_instructions` | Custom instructions for iterative improver. | No | - |
+| `generator_iterative_instructions` | Custom instructions for iterative generator. | No | - |
+
+**Custom AI Prompts** (Advanced - see [Custom Prompts](#-custom-ai-prompts-advanced)):
+
+| Input | Description | Required |
+|-------|-------------|----------|
+| `prompt_analyzer` | Custom prompt for the Build Engineer. | No |
+| `prompt_planner` | Custom prompt for the DevOps Architect. | No |
+| `prompt_generator` | Custom prompt for the Docker Architect. | No |
+| `prompt_generator_iterative` | Custom prompt for iterative improvement. | No |
+| `prompt_reviewer` | Custom prompt for the Security Engineer. | No |
+| `prompt_reflector` | Custom prompt for failure analysis. | No |
+| `prompt_health_detector` | Custom prompt for health endpoint detection. | No |
+| `prompt_readiness_detector` | Custom prompt for readiness pattern detection. | No |
+| `prompt_error_analyzer` | Custom prompt for error classification. | No |
+| `prompt_iterative_improver` | Custom prompt for applying fixes. | No |
 
 ---
 
@@ -290,12 +313,22 @@ jobs:
 
 ### Custom Instructions
 
+DockAI supports custom instructions for all 10 AI agent personas. Instructions are **appended** to the default prompts, allowing you to provide additional guidance without replacing the entire behavior.
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DOCKAI_ANALYZER_INSTRUCTIONS` | Custom instructions for the analyzer phase. | - |
+| `DOCKAI_PLANNER_INSTRUCTIONS` | Custom instructions for the planner phase. | - |
 | `DOCKAI_GENERATOR_INSTRUCTIONS` | Custom instructions for the generator phase. | - |
+| `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Custom instructions for iterative generation. | - |
+| `DOCKAI_REVIEWER_INSTRUCTIONS` | Custom instructions for security review. | - |
+| `DOCKAI_REFLECTOR_INSTRUCTIONS` | Custom instructions for failure reflection. | - |
+| `DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS` | Custom instructions for health detection. | - |
+| `DOCKAI_READINESS_DETECTOR_INSTRUCTIONS` | Custom instructions for readiness detection. | - |
+| `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Custom instructions for error analysis. | - |
+| `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Custom instructions for iterative improvement. | - |
 
-> **Note**: Custom instructions can also be provided via a `.dockai` file in your project root. See the [Custom Instructions](#-custom-instructions) section.
+> **Note**: Custom instructions and prompts can also be provided via a `.dockai` file in your project root. See the [Custom Instructions](#-custom-instructions) and [Custom AI Prompts](#-custom-ai-prompts-advanced) sections.
 
 ---
 
@@ -303,24 +336,146 @@ jobs:
 
 You can customize DockAI's behavior by providing instructions through:
 
-1. **Environment Variables**: Set `DOCKAI_ANALYZER_INSTRUCTIONS` and/or `DOCKAI_GENERATOR_INSTRUCTIONS`.
+1. **Environment Variables**: Set `DOCKAI_*_INSTRUCTIONS` for any agent.
 2. **A `.dockai` file** in your project root.
 
-### `.dockai` File Format
+### Instructions vs Prompts
+
+- **Instructions** are **appended** to the default prompt. Use these to add extra guidance while keeping the default behavior.
+- **Prompts** completely **replace** the default prompt. Use these when you need full control over an agent's behavior.
+
+### `.dockai` File Format for Instructions
 
 ```ini
 [analyzer]
-# Instructions for the analysis phase
+# Instructions for the analysis phase (legacy format, still supported)
 Focus on identifying microservices architecture.
 Look for any .env.example files to understand environment variables.
 
 [generator]
-# Instructions for the Dockerfile generation phase
+# Instructions for the Dockerfile generation phase (legacy format, still supported)
 Use Alpine-based images where possible.
 Define an environment variable 'APP_ENV' with value 'production'.
+
+[instructions_planner]
+# Instructions for the planner phase
+Consider our organization's approved base images.
+Prefer multi-stage builds for compiled languages.
+
+[instructions_reviewer]
+# Instructions for security review
+Our compliance requires all containers to run as non-root.
+Check for hardcoded secrets and API keys.
+
+[instructions_reflector]
+# Instructions for failure reflection
+When suggesting fixes, prefer Alpine-compatible solutions.
+
+[instructions_health_detector]
+# Instructions for health detection
+Our apps always expose health at /api/health instead of /health.
+
+[instructions_readiness_detector]
+# Instructions for readiness detection
+Look for "Application started" log messages.
+
+[instructions_error_analyzer]
+# Instructions for error analysis
+Common issues in our stack: missing libssl, missing python3-dev.
+
+[instructions_iterative_improver]
+# Instructions for iterative improvement
+When fixing issues, add comments explaining the fix.
 ```
 
-If no sections are specified, the instructions apply to both phases.
+The legacy `[analyzer]` and `[generator]` sections are still supported for backward compatibility.
+
+---
+
+## 🎨 Custom AI Prompts (Advanced)
+
+DockAI uses 10 specialized AI agent personas throughout its workflow. You can completely customize each agent's behavior by providing custom prompts.
+
+### Available Prompts
+
+| Prompt Name | Environment Variable | `.dockai` Section | Description |
+|-------------|---------------------|-------------------|-------------|
+| **Analyzer** | `DOCKAI_PROMPT_ANALYZER` | `[prompt_analyzer]` | The Build Engineer that analyzes project structure |
+| **Planner** | `DOCKAI_PROMPT_PLANNER` | `[prompt_planner]` | The DevOps Architect that plans build strategy |
+| **Generator** | `DOCKAI_PROMPT_GENERATOR` | `[prompt_generator]` | The Docker Architect that generates Dockerfiles |
+| **Generator Iterative** | `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | `[prompt_generator_iterative]` | The Docker Engineer for iterative improvement |
+| **Reviewer** | `DOCKAI_PROMPT_REVIEWER` | `[prompt_reviewer]` | The Security Engineer for vulnerability review |
+| **Reflector** | `DOCKAI_PROMPT_REFLECTOR` | `[prompt_reflector]` | The Principal DevOps Engineer for failure analysis |
+| **Health Detector** | `DOCKAI_PROMPT_HEALTH_DETECTOR` | `[prompt_health_detector]` | The Code Analyst for health endpoint detection |
+| **Readiness Detector** | `DOCKAI_PROMPT_READINESS_DETECTOR` | `[prompt_readiness_detector]` | The Startup Expert for readiness patterns |
+| **Error Analyzer** | `DOCKAI_PROMPT_ERROR_ANALYZER` | `[prompt_error_analyzer]` | The DevOps Engineer for error classification |
+| **Iterative Improver** | `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | `[prompt_iterative_improver]` | The Senior Docker Engineer for applying fixes |
+
+### Setting Custom Prompts via Environment Variables
+
+```bash
+# Example: Custom security reviewer with strict policies
+export DOCKAI_PROMPT_REVIEWER="You are a Security Engineer following strict enterprise policies.
+
+Security Requirements:
+1. All containers MUST run as non-root user 'appuser' with UID 1000
+2. Only these base images are allowed: python:3.11-slim, node:18-alpine, golang:1.21-alpine
+3. No secrets or credentials in Dockerfiles
+4. All packages must be pinned to specific versions
+
+Review the Dockerfile and ensure compliance."
+```
+
+### Setting Custom Prompts via `.dockai` File
+
+```ini
+[prompt_reviewer]
+You are a Security Engineer following our organization's container security policies.
+
+Security Requirements:
+1. All containers MUST run as non-root
+2. Use approved base images only
+3. No hardcoded secrets
+4. All exposed ports must be documented
+
+Review the Dockerfile and provide actionable fixes for any violations.
+
+[prompt_generator]
+You are a Docker Architect specialized in our microservices platform.
+
+Requirements:
+1. Always use multi-stage builds
+2. Use our private registry: registry.company.com
+3. Include standard labels for tracing
+4. Follow our naming conventions
+
+{plan_context}
+{retry_context}
+{error_context}
+```
+
+### Template Variables
+
+Custom prompts can include template variables that are replaced at runtime:
+
+| Variable | Available In | Description |
+|----------|--------------|-------------|
+| `{custom_instructions}` | All prompts | User's custom instructions |
+| `{retry_context}` | Planner, Reflector, Generators | History of failed attempts |
+| `{plan_context}` | Generators | Current build plan |
+| `{error_context}` | Generators | Error details from failed builds |
+| `{root_cause}` | Iterative prompts | Root cause from reflection |
+| `{specific_fixes}` | Iterative prompts | List of fixes to apply |
+| `{verified_tags}` | Generators | Verified Docker image tags |
+
+### Priority Order
+
+When loading prompts, DockAI uses this priority (highest to lowest):
+1. **Environment Variables** (`DOCKAI_PROMPT_*`)
+2. **`.dockai` file** (`[prompt_*]` sections)
+3. **Default prompts** (built-in)
+
+> ⚠️ **Warning**: Custom prompts are powerful but should be used carefully. The default prompts are designed to work with any technology stack. Only customize if you have specific organizational requirements.
 
 ---
 

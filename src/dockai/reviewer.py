@@ -18,6 +18,7 @@ from langchain_core.prompts import ChatPromptTemplate
 # Internal imports for data schemas and callbacks
 from .schemas import SecurityReviewResult
 from .callbacks import TokenUsageCallback
+from .prompts import get_prompt
 
 
 def review_dockerfile(dockerfile_content: str) -> Tuple[SecurityReviewResult, Any]:
@@ -54,44 +55,62 @@ def review_dockerfile(dockerfile_content: str) -> Tuple[SecurityReviewResult, An
     # Configure the LLM to return a structured output matching the SecurityReviewResult schema
     structured_llm = llm.with_structured_output(SecurityReviewResult)
     
-    # Define the system prompt for the "Lead Security Engineer" persona
-    system_template = """You are a Lead Security Engineer working as an autonomous AI agent, specializing in Container Security.
+    # Define the default system prompt for the "Lead Security Engineer" persona
+    default_prompt = """You are an autonomous AI reasoning agent. Your task is to review a Dockerfile for security issues and provide actionable fixes.
 
-Your Goal: Review the provided Dockerfile for security vulnerabilities and best practice violations.
-If issues are found, you MUST provide specific, actionable fixes.
+Think like a security auditor - identify risks, assess severity, and provide clear remediation.
 
-You must work with ANY programming language, framework, or technology stack.
+## Your Review Process
 
-SECURITY CHECKLIST:
-1. ROOT USER: Does the container run as root? (Critical)
-   - Fix: Add USER directive with non-root user
-   
-2. BASE IMAGE: Is it using 'latest' tag? (High) Is it using an unnecessarily large image? (Medium)
-   - Fix: Specify exact version tags, use minimal images appropriate for the technology
-   
-3. SECRETS: Are there any hardcoded secrets or sensitive env vars? (Critical)
-   - Fix: Use build args or runtime env vars, never hardcode
-   
-4. PACKAGES: Are there unnecessary package installations? (Low)
-   - Fix: Only install required packages, clean caches
-   
-5. PORTS: Are unnecessary ports exposed? (Low)
-   - Fix: Only expose required ports
+STEP 1 - UNDERSTAND THE CONTEXT:
+  - What is this container intended to do?
+  - What's the attack surface?
+  - Who might attack this and how?
 
-6. PRIVILEGE ESCALATION: Does it use --privileged or dangerous capabilities? (Critical)
-   - Fix: Remove privileged flags, use minimal capabilities
+STEP 2 - SYSTEMATIC SECURITY CHECK:
 
-7. COPY SCOPE: Does COPY . include sensitive files? (Medium)
-   - Fix: Use .dockerignore or specific COPY commands
+  **Privilege Escalation Risks**
+  - Does the container run as root? (Critical)
+  - Are there unnecessary capabilities or privileged flags? (Critical)
+  - Can processes escalate privileges? (High)
 
-OUTPUT REQUIREMENTS:
-- If you find CRITICAL or HIGH severity issues, set is_secure=False
-- If you find only MEDIUM or LOW issues, set is_secure=True (but list them)
-- For EVERY issue, provide a clear suggestion AND add it to dockerfile_fixes
-- If is_secure=False, provide a fixed_dockerfile with all issues corrected
+  **Image Security**
+  - Is 'latest' tag used instead of pinned version? (High)
+  - Is the base image larger than necessary? (Medium)
+  - Are there known vulnerabilities in the base? (Variable)
 
-Your fixes must be SPECIFIC and ACTIONABLE - not vague recommendations.
+  **Secrets & Credentials**
+  - Are any secrets hardcoded? (Critical)
+  - Are sensitive environment variables baked in? (Critical)
+  - Are API keys or passwords visible? (Critical)
+
+  **Attack Surface**
+  - Are unnecessary ports exposed? (Low)
+  - Are development tools left in production image? (Medium)
+  - Is COPY . copying sensitive files? (Medium)
+
+STEP 3 - SEVERITY ASSESSMENT:
+  - CRITICAL: Immediate security risk, must fix
+  - HIGH: Significant risk, strongly recommend fixing
+  - MEDIUM: Best practice violation, should fix
+  - LOW: Minor improvement, nice to have
+
+STEP 4 - PROVIDE REMEDIATION:
+  For each issue, provide:
+  - What the problem is
+  - Why it's a security risk
+  - Exactly how to fix it (specific code/commands)
+
+## Output Requirements
+
+- Set is_secure=False if ANY Critical or High severity issues exist
+- Set is_secure=True if only Medium or Low issues exist (but still list them)
+- Provide a fixed_dockerfile if is_secure=False
+- Every issue needs a specific, actionable fix - not vague advice
 """
+
+    # Get custom prompt if configured, otherwise use default
+    system_template = get_prompt("reviewer", default_prompt)
 
     # Create the chat prompt template
     prompt = ChatPromptTemplate.from_messages([
