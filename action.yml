@@ -1,36 +1,32 @@
-name: 'DockAI - Dockerfile Generator'
-description: 'Automatically generate an optimized, production-ready Dockerfile for your repository using AI.'
-author: 'Januda Bethmin'
+name: 'DockAI - Universal DevOps Architect'
+description: 'Autonomously generate, validate, and build production-ready Dockerfiles using AI.'
+author: 'DockAI Team'
 branding:
-  icon: 'box'
+  icon: 'anchor'
   color: 'blue'
 
 inputs:
   openai_api_key:
-    description: 'Your OpenAI API Key'
+    description: 'OpenAI API Key for the AI agent'
     required: true
-  path:
-    description: 'Path to the repository to analyze (relative to the root)'
+  project_path:
+    description: 'Path to the project to dockerize'
     required: false
     default: '.'
-  model_analyzer:
-    description: 'Model to use for Stage 1 (Analysis)'
-    required: true
-  model_generator:
-    description: 'Model to use for Stage 2 (Generation)'
-    required: true
-  analyzer_instructions:
-    description: 'Optional custom instructions for the analyzer stage'
+  push_image:
+    description: 'Whether to push the image to a registry after successful build (true/false)'
     required: false
-    default: ''
-  generator_instructions:
-    description: 'Optional custom instructions for the generator stage'
+    default: 'false'
+  image_name:
+    description: 'Name of the image to build (e.g., myuser/myapp)'
     required: false
-    default: ''
-  max_retries:
-    description: 'Maximum number of retries for self-correction'
+    default: 'dockai-app'
+  registry_username:
+    description: 'Docker Registry Username (required if push_image is true)'
     required: false
-    default: '3'
+  registry_password:
+    description: 'Docker Registry Password (required if push_image is true)'
+    required: false
 
 runs:
   using: "composite"
@@ -39,20 +35,32 @@ runs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-    
+
     - name: Install DockAI
       shell: bash
-      run: |
-        pip install .
-        
-    - name: Run DockAI
+      run: pip install dockai
+
+    - name: Run DockAI Agent
       shell: bash
       env:
         OPENAI_API_KEY: ${{ inputs.openai_api_key }}
-        MODEL_ANALYZER: ${{ inputs.model_analyzer }}
-        MODEL_GENERATOR: ${{ inputs.model_generator }}
-        DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
-        DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
-        MAX_RETRIES: ${{ inputs.max_retries }}
       run: |
-        dockai "${{ inputs.path }}"
+        echo "🐳 Starting DockAI Agent..."
+        dockai build ${{ inputs.project_path }} --no-cache
+
+    - name: Login to Docker Registry
+      if: inputs.push_image == 'true'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ inputs.registry_username }}
+        password: ${{ inputs.registry_password }}
+
+    - name: Build and Push Final Image
+      if: inputs.push_image == 'true'
+      shell: bash
+      run: |
+        echo "🚀 Building and pushing final image..."
+        # DockAI generates the Dockerfile in the project path
+        docker build -t ${{ inputs.image_name }}:latest ${{ inputs.project_path }}
+        docker push ${{ inputs.image_name }}:latest
+        echo "✅ Image pushed to ${{ inputs.image_name }}:latest"

@@ -156,6 +156,50 @@ Universal AI DevOps Architect
 
 ---
 
+## 🤖 GitHub Actions Integration
+
+DockAI can run as a GitHub Action to automatically containerize your applications in your CI/CD pipeline.
+
+### Usage Example
+
+Create a workflow file `.github/workflows/dockerize.yml`:
+
+```yaml
+name: Auto-Dockerize with DockAI
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  dockai:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run DockAI
+        uses: yourusername/dockai@main
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          push_image: 'true'
+          image_name: 'myuser/myapp'
+          registry_username: ${{ secrets.DOCKERHUB_USERNAME }}
+          registry_password: ${{ secrets.DOCKERHUB_TOKEN }}
+```
+
+**Inputs:**
+
+| Input | Description | Required | Default |
+|-------|-------------|----------|---------|
+| `openai_api_key` | Your OpenAI API Key. | **Yes** | - |
+| `project_path` | Path to the project root. | No | `.` |
+| `push_image` | Set to `true` to build and push the image. | No | `false` |
+| `image_name` | Name of the image (e.g., `user/repo`). | No | `dockai-app` |
+| `registry_username` | Docker Registry username. | No | - |
+| `registry_password` | Docker Registry password/token. | No | - |
+
+---
+
 ## ⚙️ Configuration
 
 | Variable | Description | Default |
