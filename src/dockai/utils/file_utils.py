@@ -1,5 +1,8 @@
 
 import os
+import logging
+
+logger = logging.getLogger("dockai")
 
 def smart_truncate(content: str, filename: str, max_chars: int, max_lines: int) -> str:
     """
@@ -31,3 +34,65 @@ def smart_truncate(content: str, filename: str, max_chars: int, max_lines: int) 
         return f"{head}\n\n... [TRUNCATED {total_lines - keep_lines} LINES] ...\n\n{tail}"
         
     return content
+
+def read_critical_files(path: str, files_to_read: list[str]) -> str:
+    """
+    Reads critical files from the repository with smart truncation.
+    
+    Args:
+        path: Root path of the repository.
+        files_to_read: List of relative paths to read.
+        
+    Returns:
+        String containing concatenated file contents.
+    """
+    file_contents_str = ""
+    files_read = 0
+    files_failed = []
+    
+    # Files that should be read fully if possible (dependencies)
+    CRITICAL_DEPENDENCY_FILES = ["package.json", "requirements.txt", "Gemfile", "go.mod", "Cargo.toml", "pom.xml", "build.gradle"]
+    # Files to skip
+    SKIP_FILES = ["package-lock.json", "yarn.lock", "pnpm-lock.yaml", "Gemfile.lock", "go.sum", "Cargo.lock"]
+
+    # Get limits from env or use defaults
+    try:
+        MAX_CHARS = int(os.getenv("DOCKAI_MAX_FILE_CHARS", "200000"))
+        MAX_LINES = int(os.getenv("DOCKAI_MAX_FILE_LINES", "5000"))
+    except ValueError:
+        MAX_CHARS = 200000
+        MAX_LINES = 5000
+
+    for rel_path in files_to_read:
+        basename = os.path.basename(rel_path)
+        
+        if basename in SKIP_FILES:
+            logger.info(f"Skipping lock file: {rel_path}")
+            continue
+            
+        abs_file_path = os.path.join(path, rel_path)
+        try:
+            with open(abs_file_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+                
+                # Determine limits based on file type
+                is_dependency_file = basename in CRITICAL_DEPENDENCY_FILES
+                
+                # Dependency files get double the line limit but same char limit
+                current_max_lines = MAX_LINES * 2 if is_dependency_file else MAX_LINES
+                current_max_chars = MAX_CHARS
+                
+                original_len = len(content)
+                content = smart_truncate(content, basename, current_max_chars, current_max_lines)
+                
+                if len(content) < original_len:
+                    logger.warning(f"Truncated {rel_path}: {original_len} -> {len(content)} chars")
+                    
+                file_contents_str += f"--- FILE: {rel_path} ---\n{content}\n\n"
+                files_read += 1
+        except Exception as e:
+            logger.warning(f"Could not read {rel_path}: {e}")
+            files_failed.append(rel_path)
+    
+    logger.info(f"Successfully read {files_read} files" + (f", {len(files_failed)} failed" if files_failed else ""))
+    return file_contents_str

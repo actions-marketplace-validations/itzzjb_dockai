@@ -79,13 +79,51 @@ That's it. DockAI handles the rest.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Three Ways to Use DockAI
 
-### Installation
+DockAI is designed to fit into any workflow, whether you are a developer, a DevOps engineer, or an AI user.
+
+### 1. The CLI (For Developers)
+Perfect for running locally on your machine.
 
 ```bash
+# Install
 pip install dockai-cli
+
+# Run
+dockai build .
 ```
+
+### 2. GitHub Actions (For CI/CD)
+Automate Dockerfile generation in your pipelines.
+
+```yaml
+steps:
+  - uses: actions/checkout@v3
+  - uses: itzzjb/dockai@v2
+    with:
+      openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+```
+
+### 3. MCP Server (For AI Agents)
+Use DockAI directly inside **Claude Desktop**, **Cursor**, or any MCP-compliant tool.
+
+1.  Install `dockai-cli`.
+2.  Configure your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "dockai": {
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"]
+    }
+  }
+}
+```
+3.  Ask your AI: *"Analyze this project and generate a Dockerfile for it."*
+
+---
 
 ### Configuration
 
@@ -233,14 +271,14 @@ See [GitHub Actions Guide](./docs/github-actions.md) for all options.
 | Document | Description |
 |----------|-------------|
 | [**Getting Started**](./docs/getting-started.md) | Installation, configuration, first run |
-| [**Architecture**](./docs/architecture.md) | Deep dive into the agentic workflow |
-| [**Configuration**](./docs/configuration.md) | All environment variables and options |
+| [**Architecture**](./docs/architecture.md) | Deep dive into the internal design |
+| [**Configuration**](./docs/configuration.md) | Full reference for env vars and inputs |
 | [**Customization**](./docs/customization.md) | Tuning agents for your organization |
 | [**API Reference**](./docs/api-reference.md) | Module and function documentation |
 | [**GitHub Actions**](./docs/github-actions.md) | CI/CD integration guide |
 | [**FAQ**](./docs/faq.md) | Frequently asked questions |
 
-> 💡 **Platform Engineers**: DockAI is ideal for embedding into Internal Developer Platforms, CI/CD pipelines, and self-service portals to auto-generate Dockerfiles at scale.
+> 💡 **MCP Support**: Expose DockAI as a [Model Context Protocol](https://modelcontextprotocol.io/) server for use in any MCP client.forms, CI/CD pipelines, and self-service portals to auto-generate Dockerfiles at scale.
 
 ---
 

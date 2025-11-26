@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dockai-cli"
-version = "2.1.1"
+version = "2.2.0"
 description = "The Customizable AI Dockerfile Generation Framework"
 readme = "README.md"
 authors = [
@@ -28,6 +28,7 @@ dependencies = [
     "langchain-openai>=0.2.0",
     "langchain-google-genai>=2.0.0",
     "langchain-anthropic>=0.3.0",
+    "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]

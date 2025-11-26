@@ -160,8 +160,8 @@ def test_read_files_node_truncation():
         # Create large file
         test_file = os.path.join(tmpdir, "large.py")
         with open(test_file, "w") as f:
-            # Write more than 1000 lines
-            for i in range(1500):
+            # Write more than 5000 lines (new default limit)
+            for i in range(6000):
                 f.write(f"line {i}\n")
         
         state = {
