@@ -1,3 +1,4 @@
+"""Tests for the validator module."""
 import os
 from unittest.mock import patch, MagicMock
 from dockai.utils.validator import validate_docker_build_and_run, check_health_endpoint

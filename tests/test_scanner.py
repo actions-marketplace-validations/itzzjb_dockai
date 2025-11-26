@@ -1,3 +1,4 @@
+"""Tests for the scanner module."""
 import os
 import tempfile
 import shutil

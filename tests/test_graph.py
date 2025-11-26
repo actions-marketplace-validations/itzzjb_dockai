@@ -1,3 +1,4 @@
+"""Tests for the workflow graph module."""
 from unittest.mock import patch, MagicMock
 from dockai.workflow.graph import should_retry, check_security
 from dockai.workflow.nodes import increment_retry, scan_node, analyze_node, read_files_node, generate_node

@@ -1,3 +1,4 @@
+"""Tests for the registry module."""
 from unittest.mock import patch, MagicMock
 from dockai.utils.registry import get_docker_tags, _get_image_prefix
 
