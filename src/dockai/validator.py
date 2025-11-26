@@ -57,38 +57,60 @@ def check_health_endpoint(container_name: str, endpoint: str, port: int, max_att
     """
     Check if a health endpoint is responding with HTTP 200.
     
-    This function executes `curl` *inside* the container to verify that the
-    application is responding correctly on the specified path and port.
+    This function first attempts to execute `curl` *inside* the container.
+    If that fails (e.g., distroless image without curl), it falls back to
+    checking from the *host* machine using the mapped port.
     
     Args:
         container_name (str): Name of the Docker container.
         endpoint (str): Health check endpoint path (e.g., '/health').
         port (int): Port the service is listening on.
-        max_attempts (int): Maximum number of attempts (default 6 = 30 seconds with 5s intervals).
+        max_attempts (int): Maximum number of attempts (default 6 = 30 seconds).
         
     Returns:
         bool: True if health check passed, False otherwise.
     """
-    logger.info(f"Checking health endpoint: http://localhost:{port}{endpoint}")
+    import urllib.request
+    import urllib.error
     
+    logger.info(f"Checking health endpoint: {endpoint} on port {port}")
+    
+    # First, try to find the mapped port on the host
+    host_port = None
+    try:
+        inspect_cmd = ["docker", "inspect", "-f", "{{(index (index .NetworkSettings.Ports \"" + str(port) + "/tcp\") 0).HostPort}}", container_name]
+        code, stdout, _ = run_command(inspect_cmd)
+        if code == 0 and stdout.strip():
+            host_port = stdout.strip()
+    except Exception:
+        logger.warning("Could not determine host port mapping")
+
     for attempt in range(1, max_attempts + 1):
-        # Use docker exec to curl from inside the container
+        # Strategy 1: Container-internal check (preferred as it tests internal networking)
         # We check for curl existence first to avoid errors in minimal images
         health_cmd = [
             "docker", "exec", container_name,
             "sh", "-c", 
-            f"command -v curl >/dev/null 2>&1 && curl -f -s -o /dev/null -w '%{{http_code}}' http://localhost:{port}{endpoint} || echo '000'"
+            f"command -v curl >/dev/null 2>&1 && curl -f -s -o /dev/null -w '%{{http_code}}' http://localhost:{port}{endpoint} || echo 'MISSING_CURL'"
         ]
         
         code, stdout, stderr = run_command(health_cmd)
+        http_code = stdout.strip()
         
-        if code == 0:
-            http_code = stdout.strip()
-            if http_code == "200":
-                logger.info(f"Health check passed on attempt {attempt}/{max_attempts}")
-                return True
-            elif http_code != "000":
-                logger.debug(f"Health check attempt {attempt}/{max_attempts}: HTTP {http_code}")
+        if code == 0 and http_code == "200":
+            logger.info(f"Health check passed (internal curl) on attempt {attempt}/{max_attempts}")
+            return True
+            
+        # Strategy 2: Host-based check (fallback for distroless/minimal images)
+        if (http_code == "MISSING_CURL" or code != 0) and host_port:
+            try:
+                url = f"http://localhost:{host_port}{endpoint}"
+                with urllib.request.urlopen(url, timeout=2) as response:
+                    if response.getcode() == 200:
+                        logger.info(f"Health check passed (host fallback) on attempt {attempt}/{max_attempts}")
+                        return True
+            except (urllib.error.URLError, ConnectionResetError):
+                pass # Connection failed, wait and retry
         
         if attempt < max_attempts:
             time.sleep(5)

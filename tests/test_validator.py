@@ -100,6 +100,7 @@ def test_validate_with_health_check_success(mock_getenv, mock_sleep, mock_run_co
         (0, "true", ""),           # inspect running
         (0, "0", ""),              # inspect exit code
         (0, "Service started", ""),# logs
+        (0, "8080", ""),           # inspect host port (NEW)
         (0, "200", ""),            # health check (HTTP 200)
         (0, "104857600", ""),      # inspect size
         (0, "", ""),               # rm
@@ -131,6 +132,7 @@ def test_validate_with_health_check_failure_but_running(mock_getenv, mock_sleep,
         (0, "true", ""),           # inspect running
         (0, "0", ""),              # inspect exit code
         (0, "Service started", ""),# logs
+        (0, "8080", ""),           # inspect host port (NEW)
         (0, "500", ""),            # health check attempt 1 (HTTP 500)
         (0, "500", ""),            # health check attempt 2
         (0, "500", ""),            # health check attempt 3

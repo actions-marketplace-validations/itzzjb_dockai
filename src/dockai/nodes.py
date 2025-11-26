@@ -120,11 +120,12 @@ def read_files_node(state: DockAIState) -> DockAIState:
     Reads critical files identified by the analyzer.
     
     This node fetches the actual content of the files that the AI determined
-    are necessary for understanding the project's build and runtime requirements
-    (e.g., package.json, requirements.txt, main.py).
+    are necessary for understanding the project's build and runtime requirements.
     
-    It includes safeguards to truncate extremely large files to prevent
-    context window overflow.
+    Improvements:
+    - Skips lock files (package-lock.json, yarn.lock) to save tokens.
+    - Smart truncation: Keeps head AND tail of large files.
+    - Higher limits for dependency files (package.json, requirements.txt).
 
     Args:
         state (DockAIState): The current state with analysis results.
@@ -140,23 +141,42 @@ def read_files_node(state: DockAIState) -> DockAIState:
     files_read = 0
     files_failed = []
     
+    # Files that should be read fully if possible (dependencies)
+    CRITICAL_DEPENDENCY_FILES = ["package.json", "requirements.txt", "Gemfile", "go.mod", "Cargo.toml", "pom.xml", "build.gradle"]
+    # Files to skip
+    SKIP_FILES = ["package-lock.json", "yarn.lock", "pnpm-lock.yaml", "Gemfile.lock", "go.sum", "Cargo.lock"]
+
     for rel_path in files_to_read:
+        basename = os.path.basename(rel_path)
+        
+        if basename in SKIP_FILES:
+            logger.info(f"Skipping lock file: {rel_path}")
+            continue
+            
         abs_file_path = os.path.join(path, rel_path)
         try:
             with open(abs_file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
                 
-                # Truncate if too large (50KB limit) to save tokens
-                MAX_SIZE = 50 * 1024
-                if len(content) > MAX_SIZE:
-                    content = content[:MAX_SIZE] + "\n... [TRUNCATED DUE TO SIZE] ..."
-                    logger.warning(f"Truncated large file: {rel_path}")
+                # Determine limits based on file type
+                is_dependency_file = basename in CRITICAL_DEPENDENCY_FILES
+                max_lines = 2000 if is_dependency_file else 1000
+                max_chars = 100 * 1024 if is_dependency_file else 50 * 1024
                 
-                # Truncate if too many lines (1000 lines limit)
+                # Truncate if too large (Char limit)
+                if len(content) > max_chars:
+                    half_chars = max_chars // 2
+                    content = content[:half_chars] + f"\n... [TRUNCATED {len(content)-max_chars} CHARS] ...\n" + content[-half_chars:]
+                    logger.warning(f"Truncated large file (chars): {rel_path}")
+                
+                # Truncate if too many lines
                 lines = content.splitlines()
-                if len(lines) > 1000:
-                    content = "\n".join(lines[:1000]) + "\n... [TRUNCATED DUE TO LENGTH] ..."
-                    logger.warning(f"Truncated long file: {rel_path}")
+                if len(lines) > max_lines:
+                    half_lines = max_lines // 2
+                    head = "\n".join(lines[:half_lines])
+                    tail = "\n".join(lines[-half_lines:])
+                    content = f"{head}\n... [TRUNCATED {len(lines)-max_lines} LINES] ...\n{tail}"
+                    logger.warning(f"Truncated long file (lines): {rel_path}")
                     
                 file_contents_str += f"--- FILE: {rel_path} ---\n{content}\n\n"
                 files_read += 1
