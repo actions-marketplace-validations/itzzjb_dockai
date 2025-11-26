@@ -189,6 +189,13 @@ jobs:
 |-------|-------------|----------|---------|
 | `openai_api_key` | Your OpenAI API Key. | **Yes** | - |
 | `project_path` | Path to the project root. | No | `.` |
+| `model_generator` | Model for generation. | No | `gpt-4o` |
+| `model_analyzer` | Model for analysis. | No | `gpt-4o-mini` |
+| `max_retries` | Max retry attempts. | No | `3` |
+| `skip_security_scan` | Skip Trivy scan. | No | `false` |
+| `strict_security` | Fail on any vulnerability. | No | `false` |
+| `max_image_size_mb` | Max image size in MB. | No | `500` |
+| `skip_health_check` | Skip health checks. | No | `false` |
 
 ---
 

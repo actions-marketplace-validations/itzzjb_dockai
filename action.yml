@@ -13,6 +13,34 @@ inputs:
     description: 'Path to the project to dockerize'
     required: false
     default: '.'
+  model_generator:
+    description: 'Model for generation/reflection (default: gpt-4o)'
+    required: false
+    default: 'gpt-4o'
+  model_analyzer:
+    description: 'Model for analysis/planning (default: gpt-4o-mini)'
+    required: false
+    default: 'gpt-4o-mini'
+  max_retries:
+    description: 'Max attempts to fix a failing Dockerfile'
+    required: false
+    default: '3'
+  skip_security_scan:
+    description: 'Skip Trivy security scan (true/false)'
+    required: false
+    default: 'false'
+  strict_security:
+    description: 'Fail on any vulnerability (true/false)'
+    required: false
+    default: 'false'
+  max_image_size_mb:
+    description: 'Max image size in MB (0 to disable)'
+    required: false
+    default: '500'
+  skip_health_check:
+    description: 'Skip health checks during validation (true/false)'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -30,6 +58,13 @@ runs:
       shell: bash
       env:
         OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        MODEL_GENERATOR: ${{ inputs.model_generator }}
+        MODEL_ANALYZER: ${{ inputs.model_analyzer }}
+        MAX_RETRIES: ${{ inputs.max_retries }}
+        DOCKAI_SKIP_SECURITY_SCAN: ${{ inputs.skip_security_scan }}
+        DOCKAI_STRICT_SECURITY: ${{ inputs.strict_security }}
+        DOCKAI_MAX_IMAGE_SIZE_MB: ${{ inputs.max_image_size_mb }}
+        DOCKAI_SKIP_HEALTH_CHECK: ${{ inputs.skip_health_check }}
       run: |
         echo "🐳 Starting DockAI Agent..."
         dockai build ${{ inputs.project_path }} --no-cache
