@@ -80,17 +80,47 @@ def run(
         ui.print_error("Path Error", f"Path '{path}' does not exist.")
         logger.error(f"Problem: Path '{path}' does not exist.")
         raise typer.Exit(code=1)
-        
-    # Validate API key configuration
-    if not os.getenv("OPENAI_API_KEY"):
-        ui.print_error("Configuration Error", "OPENAI_API_KEY not found in environment variables.", "Please create a .env file with your API key or set the OPENAI_API_KEY environment variable.")
-        logger.error("Problem: OPENAI_API_KEY missing")
-        raise typer.Exit(code=1)
     
-    # Log model configuration (uses defaults if not set)
-    model_analyzer = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
-    model_generator = os.getenv("MODEL_GENERATOR", "gpt-4o")
-    logger.info(f"Using models - Analyzer: {model_analyzer}, Generator: {model_generator}")
+    # Import and initialize LLM provider configuration
+    from .llm_providers import get_llm_config, load_llm_config_from_env, set_llm_config, log_provider_info, LLMProvider
+    
+    # Load LLM configuration from environment
+    llm_config = load_llm_config_from_env()
+    set_llm_config(llm_config)
+    
+    # Validate API key configuration based on provider
+    if llm_config.provider == LLMProvider.OPENAI:
+        if not os.getenv("OPENAI_API_KEY"):
+            ui.print_error("Configuration Error", "OPENAI_API_KEY not found in environment variables.", 
+                          "Please create a .env file with your API key or set the OPENAI_API_KEY environment variable.")
+            logger.error("Problem: OPENAI_API_KEY missing")
+            raise typer.Exit(code=1)
+    elif llm_config.provider == LLMProvider.AZURE:
+        if not os.getenv("AZURE_OPENAI_API_KEY"):
+            ui.print_error("Configuration Error", "AZURE_OPENAI_API_KEY not found in environment variables.",
+                          "Please set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT environment variables.")
+            logger.error("Problem: AZURE_OPENAI_API_KEY missing")
+            raise typer.Exit(code=1)
+        if not llm_config.azure_endpoint:
+            ui.print_error("Configuration Error", "AZURE_OPENAI_ENDPOINT not found in environment variables.",
+                          "Please set the AZURE_OPENAI_ENDPOINT environment variable.")
+            logger.error("Problem: AZURE_OPENAI_ENDPOINT missing")
+            raise typer.Exit(code=1)
+    elif llm_config.provider == LLMProvider.GEMINI:
+        if not os.getenv("GOOGLE_API_KEY"):
+            ui.print_error("Configuration Error", "GOOGLE_API_KEY not found in environment variables.",
+                          "Please set the GOOGLE_API_KEY environment variable.")
+            logger.error("Problem: GOOGLE_API_KEY missing")
+            raise typer.Exit(code=1)
+    elif llm_config.provider == LLMProvider.ANTHROPIC:
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            ui.print_error("Configuration Error", "ANTHROPIC_API_KEY not found in environment variables.",
+                          "Please set the ANTHROPIC_API_KEY environment variable.")
+            logger.error("Problem: ANTHROPIC_API_KEY missing")
+            raise typer.Exit(code=1)
+    
+    # Log LLM provider and model configuration
+    log_provider_info()
 
     ui.print_welcome()
     logger.info(f"Starting analysis for: {path}")

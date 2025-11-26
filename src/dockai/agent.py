@@ -21,11 +21,10 @@ import re
 import logging
 from typing import Tuple, Any, List, Dict, Optional
 
-# Third-party imports for LangChain and OpenAI integration
-from langchain_openai import ChatOpenAI
+# Third-party imports for LangChain integration
 from langchain_core.prompts import ChatPromptTemplate
 
-# Internal imports for data schemas and callbacks
+# Internal imports for data schemas, callbacks, and LLM providers
 from .schemas import (
     PlanningResult,
     ReflectionResult,
@@ -36,6 +35,7 @@ from .schemas import (
 from .callbacks import TokenUsageCallback
 from .rate_limiter import with_rate_limit_handling, create_rate_limited_llm
 from .prompts import get_prompt
+from .llm_providers import create_llm
 
 # Initialize the logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
@@ -88,15 +88,8 @@ def create_plan(
             - The structured planning result (PlanningResult object).
             - A dictionary tracking token usage for cost monitoring.
     """
-    # Retrieve the model name from environment variables, defaulting to a cost-effective model
-    model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
-    
-    # Initialize the ChatOpenAI client with a low temperature for consistent, strategic output
-    llm = ChatOpenAI(
-        model=model_name,
-        temperature=0.2,  # Low temperature favors deterministic, logical planning
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
+    # Create LLM using the provider factory for the planner agent
+    llm = create_llm(agent_name="planner", temperature=0.2)
     
     # Configure the LLM to return a structured output matching the PlanningResult schema
     structured_llm = llm.with_structured_output(PlanningResult)
@@ -251,15 +244,8 @@ def reflect_on_failure(
             - The structured reflection result (ReflectionResult object) with specific fixes.
             - A dictionary tracking token usage.
     """
-    # Use a more capable model (e.g., GPT-4o) for complex reasoning required in debugging
-    model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
-    
-    # Initialize the LLM with temperature 0 for maximum determinism and analytical precision
-    llm = ChatOpenAI(
-        model=model_name,
-        temperature=0,
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
+    # Create LLM using the provider factory for the reflector agent
+    llm = create_llm(agent_name="reflector", temperature=0)
     
     # Configure structured output for consistent parsing of the reflection
     structured_llm = llm.with_structured_output(ReflectionResult)
@@ -396,15 +382,8 @@ def detect_health_endpoints(
             - The detection result (HealthEndpointDetectionResult object) with found endpoints.
             - A dictionary tracking token usage.
     """
-    # Use a faster, lighter model for this pattern matching task
-    model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
-    
-    # Initialize the ChatOpenAI client with temperature 0 for deterministic analysis
-    llm = ChatOpenAI(
-        model=model_name,
-        temperature=0,  # Deterministic output required
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
+    # Create LLM using the provider factory for the health detector agent
+    llm = create_llm(agent_name="health_detector", temperature=0)
     
     # Configure the LLM to return a structured output matching the HealthEndpointDetectionResult schema
     structured_llm = llm.with_structured_output(HealthEndpointDetectionResult)
@@ -507,15 +486,8 @@ def detect_readiness_patterns(
             - The readiness pattern result (ReadinessPatternResult object) with regex patterns.
             - A dictionary tracking token usage.
     """
-    # Use a cost-effective model for pattern recognition
-    model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
-    
-    # Initialize the ChatOpenAI client with temperature 0 for deterministic analysis
-    llm = ChatOpenAI(
-        model=model_name,
-        temperature=0,  # Deterministic output required
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
+    # Create LLM using the provider factory for the readiness detector agent
+    llm = create_llm(agent_name="readiness_detector", temperature=0)
     
     # Configure the LLM to return a structured output matching the ReadinessPatternResult schema
     structured_llm = llm.with_structured_output(ReadinessPatternResult)
@@ -632,15 +604,8 @@ def generate_iterative_dockerfile(
             - The result containing the improved Dockerfile (IterativeDockerfileResult object).
             - A dictionary tracking token usage.
     """
-    # Use a high-capability model for code generation and complex modification
-    model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
-    
-    # Initialize the ChatOpenAI client with temperature 0 for deterministic code generation
-    llm = ChatOpenAI(
-        model=model_name,
-        temperature=0,  # Deterministic output required for code generation
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
+    # Create LLM using the provider factory for the iterative improver agent
+    llm = create_llm(agent_name="iterative_improver", temperature=0)
     
     # Configure the LLM to return a structured output matching the IterativeDockerfileResult schema
     structured_llm = llm.with_structured_output(IterativeDockerfileResult)

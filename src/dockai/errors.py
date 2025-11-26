@@ -127,21 +127,14 @@ def analyze_error_with_ai(error_message: str, logs: str = "", stack: str = "") -
         ClassifiedError: An object containing the error type, summary, and suggested fix.
     """
     # Import locally to avoid circular dependencies if any
-    from langchain_openai import ChatOpenAI
     from langchain_core.prompts import ChatPromptTemplate
     from .callbacks import TokenUsageCallback
     from .prompts import get_prompt
-    
-    # Retrieve model name, defaulting to a cost-effective option
-    model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
+    from .llm_providers import create_llm
     
     try:
-        # Initialize the LLM with deterministic settings
-        llm = ChatOpenAI(
-            model=model_name,
-            temperature=0,
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
+        # Create LLM using the provider factory for the error analyzer agent
+        llm = create_llm(agent_name="error_analyzer", temperature=0)
         
         # Configure structured output
         structured_llm = llm.with_structured_output(ErrorAnalysisResult)

@@ -10,15 +10,15 @@ import os
 import json
 from typing import Tuple, Any, Dict, List
 
-# Third-party imports for LangChain and OpenAI integration
-from langchain_openai import ChatOpenAI
+# Third-party imports for LangChain integration
 from langchain_core.prompts import ChatPromptTemplate
 
-# Internal imports for data schemas and callbacks
+# Internal imports for data schemas, callbacks, and LLM providers
 from .schemas import AnalysisResult
 from .callbacks import TokenUsageCallback
 from .rate_limiter import with_rate_limit_handling
 from .prompts import get_prompt
+from .llm_providers import create_llm
 
 
 @with_rate_limit_handling(max_retries=5, base_delay=2.0, max_delay=60.0)
@@ -45,15 +45,8 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[
             - The structured analysis result (AnalysisResult object).
             - A dictionary tracking token usage for cost monitoring.
     """
-    # Retrieve the model name from environment variables, defaulting to a cost-effective model
-    model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
-    
-    # Initialize the ChatOpenAI client with temperature 0 for deterministic analysis
-    llm = ChatOpenAI(
-        model=model_name,
-        temperature=0,
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
+    # Create LLM using the provider factory for the analyzer agent
+    llm = create_llm(agent_name="analyzer", temperature=0)
     
     # Configure the LLM to return a structured output matching the AnalysisResult schema
     structured_llm = llm.with_structured_output(AnalysisResult)

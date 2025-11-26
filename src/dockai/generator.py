@@ -10,14 +10,14 @@ iterative improvement based on feedback.
 import os
 from typing import Tuple, Any, Dict, List, Optional
 
-# Third-party imports for LangChain and OpenAI integration
-from langchain_openai import ChatOpenAI
+# Third-party imports for LangChain integration
 from langchain_core.prompts import ChatPromptTemplate
 
-# Internal imports for data schemas and callbacks
+# Internal imports for data schemas, callbacks, and LLM providers
 from .schemas import DockerfileResult, IterativeDockerfileResult
 from .callbacks import TokenUsageCallback
 from .prompts import get_prompt
+from .llm_providers import create_llm
 
 
 def generate_dockerfile(
@@ -56,18 +56,12 @@ def generate_dockerfile(
             - The AI's thought process/explanation.
             - Token usage statistics.
     """
-    # Retrieve model name, defaulting to a high-capability model for code generation
-    model_name = kwargs.get("model_name") or os.getenv("MODEL_GENERATOR", "gpt-4o")
-    
-    # Initialize the ChatOpenAI client with temperature 0 for deterministic code generation
-    llm = ChatOpenAI(
-        model=model_name,
-        temperature=0,
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
-    
     # Determine if we should perform iterative improvement or fresh generation
     is_iterative = previous_dockerfile and reflection and len(previous_dockerfile.strip()) > 0
+    
+    # Create LLM using the provider factory - use different agents for fresh vs iterative
+    agent_name = "generator_iterative" if is_iterative else "generator"
+    llm = create_llm(agent_name=agent_name, temperature=0)
     
     if is_iterative:
         return _generate_iterative_dockerfile(

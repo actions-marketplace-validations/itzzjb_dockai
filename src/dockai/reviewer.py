@@ -11,14 +11,14 @@ to automatically fix identified issues.
 import os
 from typing import Tuple, Any
 
-# Third-party imports for LangChain and OpenAI integration
-from langchain_openai import ChatOpenAI
+# Third-party imports for LangChain integration
 from langchain_core.prompts import ChatPromptTemplate
 
-# Internal imports for data schemas and callbacks
+# Internal imports for data schemas, callbacks, and LLM providers
 from .schemas import SecurityReviewResult
 from .callbacks import TokenUsageCallback
 from .prompts import get_prompt
+from .llm_providers import create_llm
 
 
 def review_dockerfile(dockerfile_content: str) -> Tuple[SecurityReviewResult, Any]:
@@ -42,15 +42,8 @@ def review_dockerfile(dockerfile_content: str) -> Tuple[SecurityReviewResult, An
             - The structured security review result.
             - Token usage statistics.
     """
-    # Use the faster/cheaper model for review as it's a classification/analysis task
-    model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
-    
-    # Initialize the ChatOpenAI client with temperature 0 for deterministic analysis
-    llm = ChatOpenAI(
-        model=model_name,
-        temperature=0,
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
+    # Create LLM using the provider factory for the reviewer agent
+    llm = create_llm(agent_name="reviewer", temperature=0)
     
     # Configure the LLM to return a structured output matching the SecurityReviewResult schema
     structured_llm = llm.with_structured_output(SecurityReviewResult)

@@ -6,21 +6,78 @@ branding:
   color: 'blue'
 
 inputs:
+  # LLM Provider Configuration
+  llm_provider:
+    description: 'LLM provider to use (openai, azure, gemini, anthropic)'
+    required: false
+    default: 'openai'
   openai_api_key:
-    description: 'OpenAI API Key for the AI agent'
-    required: true
+    description: 'OpenAI API Key (required for openai provider)'
+    required: false
+  azure_openai_api_key:
+    description: 'Azure OpenAI API Key (required for azure provider)'
+    required: false
+  azure_openai_endpoint:
+    description: 'Azure OpenAI endpoint URL (required for azure provider)'
+    required: false
+  azure_openai_api_version:
+    description: 'Azure OpenAI API version'
+    required: false
+    default: '2024-02-15-preview'
+  google_api_key:
+    description: 'Google API Key (required for gemini provider)'
+    required: false
+  anthropic_api_key:
+    description: 'Anthropic API Key (required for anthropic provider)'
+    required: false
   project_path:
     description: 'Path to the project to dockerize'
     required: false
     default: '.'
-  model_generator:
-    description: 'Model for generation/reflection (default: gpt-4o)'
-    required: false
-    default: 'gpt-4o'
+  
+  # Per-Agent Model Configuration
   model_analyzer:
-    description: 'Model for analysis/planning (default: gpt-4o-mini)'
+    description: 'Model for analyzer agent (default: gpt-4o-mini for openai, gemini-1.5-flash for gemini)'
     required: false
-    default: 'gpt-4o-mini'
+    default: ''
+  model_planner:
+    description: 'Model for planner agent'
+    required: false
+    default: ''
+  model_generator:
+    description: 'Model for generator agent (default: gpt-4o for openai, gemini-1.5-pro for gemini)'
+    required: false
+    default: ''
+  model_generator_iterative:
+    description: 'Model for iterative generator agent'
+    required: false
+    default: ''
+  model_reviewer:
+    description: 'Model for security reviewer agent'
+    required: false
+    default: ''
+  model_reflector:
+    description: 'Model for failure reflection agent'
+    required: false
+    default: ''
+  model_health_detector:
+    description: 'Model for health endpoint detection agent'
+    required: false
+    default: ''
+  model_readiness_detector:
+    description: 'Model for readiness pattern detection agent'
+    required: false
+    default: ''
+  model_error_analyzer:
+    description: 'Model for error classification agent'
+    required: false
+    default: ''
+  model_iterative_improver:
+    description: 'Model for iterative improvement agent'
+    required: false
+    default: ''
+  
+  # General Settings
   max_retries:
     description: 'Max attempts to fix a failing Dockerfile'
     required: false
@@ -151,9 +208,29 @@ runs:
     - name: Run DockAI Framework
       shell: bash
       env:
+        # LLM Provider Configuration
+        DOCKAI_LLM_PROVIDER: ${{ inputs.llm_provider }}
         OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        AZURE_OPENAI_API_KEY: ${{ inputs.azure_openai_api_key }}
+        AZURE_OPENAI_ENDPOINT: ${{ inputs.azure_openai_endpoint }}
+        AZURE_OPENAI_API_VERSION: ${{ inputs.azure_openai_api_version }}
+        GOOGLE_API_KEY: ${{ inputs.google_api_key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
+        # Per-Agent Model Configuration
+        DOCKAI_MODEL_ANALYZER: ${{ inputs.model_analyzer }}
+        DOCKAI_MODEL_PLANNER: ${{ inputs.model_planner }}
+        DOCKAI_MODEL_GENERATOR: ${{ inputs.model_generator }}
+        DOCKAI_MODEL_GENERATOR_ITERATIVE: ${{ inputs.model_generator_iterative }}
+        DOCKAI_MODEL_REVIEWER: ${{ inputs.model_reviewer }}
+        DOCKAI_MODEL_REFLECTOR: ${{ inputs.model_reflector }}
+        DOCKAI_MODEL_HEALTH_DETECTOR: ${{ inputs.model_health_detector }}
+        DOCKAI_MODEL_READINESS_DETECTOR: ${{ inputs.model_readiness_detector }}
+        DOCKAI_MODEL_ERROR_ANALYZER: ${{ inputs.model_error_analyzer }}
+        DOCKAI_MODEL_ITERATIVE_IMPROVER: ${{ inputs.model_iterative_improver }}
+        # Legacy model env vars (for backward compatibility)
         MODEL_GENERATOR: ${{ inputs.model_generator }}
         MODEL_ANALYZER: ${{ inputs.model_analyzer }}
+        # General Settings
         MAX_RETRIES: ${{ inputs.max_retries }}
         DOCKAI_SKIP_SECURITY_SCAN: ${{ inputs.skip_security_scan }}
         DOCKAI_STRICT_SECURITY: ${{ inputs.strict_security }}
@@ -162,6 +239,7 @@ runs:
         DOCKAI_VALIDATION_MEMORY: ${{ inputs.validation_memory }}
         DOCKAI_VALIDATION_CPUS: ${{ inputs.validation_cpus }}
         DOCKAI_VALIDATION_PIDS: ${{ inputs.validation_pids }}
+        # Custom Instructions
         DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
         DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
         DOCKAI_PLANNER_INSTRUCTIONS: ${{ inputs.planner_instructions }}
@@ -172,6 +250,7 @@ runs:
         DOCKAI_READINESS_DETECTOR_INSTRUCTIONS: ${{ inputs.readiness_detector_instructions }}
         DOCKAI_ERROR_ANALYZER_INSTRUCTIONS: ${{ inputs.error_analyzer_instructions }}
         DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS: ${{ inputs.iterative_improver_instructions }}
+        # Custom Prompts
         DOCKAI_PROMPT_ANALYZER: ${{ inputs.prompt_analyzer }}
         DOCKAI_PROMPT_PLANNER: ${{ inputs.prompt_planner }}
         DOCKAI_PROMPT_GENERATOR: ${{ inputs.prompt_generator }}
