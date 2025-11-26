@@ -398,4 +398,5 @@ env:
 
 - **[Configuration](./configuration.md)**: All configuration options
 - **[GitHub Actions](./github-actions.md)**: CI/CD integration
-- **[Platform Integration](./platform-integration.md)**: Embedding DockAI
+- **[MCP Server](./mcp-server.md)**: AI Agent integration guide
+

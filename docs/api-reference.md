@@ -541,3 +541,12 @@ class ConfigurationError(DockAIError):
 - **[Architecture](./architecture.md)**: Understand the workflow
 - **[Configuration](./configuration.md)**: All configuration options
 - **[Customization](./customization.md)**: Tune for your stack
+
+---
+
+## 📚 References
+
+- **[Architecture](./architecture.md)**: High-level design overview
+- **[Configuration](./configuration.md)**: Environment variables and settings
+- **[Customization](./customization.md)**: Tuning the agents
+

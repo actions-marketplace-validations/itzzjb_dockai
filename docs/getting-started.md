@@ -230,3 +230,5 @@ dockai build .
 - **[Configuration](./configuration.md)**: Explore all configuration options
 - **[Customization](./customization.md)**: Tune DockAI for your stack
 - **[GitHub Actions](./github-actions.md)**: Set up CI/CD integration
+- **[MCP Server](./mcp-server.md)**: Integrate with AI agents
+

@@ -444,4 +444,5 @@ permissions:
 
 - **[Configuration](./configuration.md)**: All configuration options
 - **[Customization](./customization.md)**: Fine-tune for your stack
-- **[Platform Integration](./platform-integration.md)**: Embedding DockAI
+- **[MCP Server](./mcp-server.md)**: AI Agent integration guide
+

@@ -279,7 +279,7 @@ See [GitHub Actions Guide](./docs/github-actions.md) for all options.
 | [**MCP Server**](./docs/mcp-server.md) | AI Agent integration guide |
 | [**FAQ**](./docs/faq.md) | Frequently asked questions |
 
-> 💡 **MCP Support**: Expose DockAI as a [Model Context Protocol](https://modelcontextprotocol.io/) server for use in any MCP client.forms, CI/CD pipelines, and self-service portals to auto-generate Dockerfiles at scale.
+> 💡 **MCP Support**: Expose DockAI as a [Model Context Protocol](https://modelcontextprotocol.io/) server for use in any MCP client.
 
 ---
 

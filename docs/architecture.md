@@ -42,3 +42,12 @@ src/dockai/
 3.  **Execution**: The Graph executes nodes, updating the State.
 4.  **Loop**: If validation fails, the Reflector updates the State with "lessons learned", and the loop repeats.
 5.  **Output**: A validated `Dockerfile` is written to disk (or returned as text).
+
+---
+
+## Next Steps
+
+- **[API Reference](./api-reference.md)**: Detailed code documentation
+- **[Customization](./customization.md)**: How to tune the agents
+- **[MCP Server](./mcp-server.md)**: Using this architecture with AI agents
+

@@ -16,6 +16,7 @@
 | [**Customization**](./customization.md) | Tuning agents for your stack | Platform Teams |
 | [**API Reference**](./api-reference.md) | Module and function documentation | Developers |
 | [**GitHub Actions**](./github-actions.md) | CI/CD integration guide | DevOps |
+| [**MCP Server**](./mcp-server.md) | AI Agent integration guide | AI Users |
 | [**FAQ**](./faq.md) | Frequently asked questions | All Users |
 
 > 💡 **For Platform Engineers**: DockAI is perfect for embedding into Internal Developer Platforms, CI/CD systems, and self-service portals.
@@ -43,11 +44,18 @@
 2. Follow [Customization](./customization.md) for organizational standards
 3. Use [GitHub Actions](./github-actions.md) for CI/CD integration
 
+### For AI Agents
+
+1. Read [MCP Server](./mcp-server.md) for integration details
+2. Configure your MCP client (e.g., Claude Desktop)
+3. Use `dockai` tools directly in your chat
+
+
 ---
 
 ## Version
 
-This documentation is for **DockAI v2.1.0**.
+This documentation is for **DockAI v2.3.0**.
 
 ## Support
 

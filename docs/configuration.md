@@ -282,4 +282,5 @@ export DOCKAI_GENERATOR_INSTRUCTIONS="Use Debian base images"
 
 - **[Customization](./customization.md)**: Strategies for effective customization
 - **[GitHub Actions](./github-actions.md)**: CI/CD configuration
-- **[Platform Integration](./platform-integration.md)**: Embedding DockAI
+- **[MCP Server](./mcp-server.md)**: AI Agent integration guide
+

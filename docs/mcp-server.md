@@ -29,6 +29,9 @@ Add the following configuration to your MCP client's settings file (e.g., `claud
 
 > **Note**: Ensure that `dockai-cli` is installed in the python environment you are using, or provide the full path to the python executable.
 
+> **Important**: The MCP server still requires valid environment variables (e.g., `OPENAI_API_KEY`) to function. See [Configuration](./configuration.md) for details on how to set these up.
+
+
 ---
 
 ## 🛠️ Available Tools
@@ -98,3 +101,13 @@ Once configured, you can talk to your AI agent naturally:
 The MCP Server is implemented in `src/dockai/core/mcp_server.py`. It wraps the core LangGraph workflow and exposes it via the `FastMCP` library.
 
 For more details on the internal architecture, see [Architecture](./architecture.md).
+
+---
+
+## 📚 References
+
+- **[Getting Started](./getting-started.md)**: Installation and basic usage
+- **[Configuration](./configuration.md)**: Environment variables and settings
+- **[Architecture](./architecture.md)**: Deep dive into the internal design
+- **[API Reference](./api-reference.md)**: Module and function documentation
+

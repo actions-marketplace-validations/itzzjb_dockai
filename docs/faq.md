@@ -338,3 +338,12 @@ DockAI itself is a tool—compliance depends on how you configure and deploy it:
 - **[Getting Started](./getting-started.md)**: Installation and first run
 - **[Configuration](./configuration.md)**: All configuration options
 - **[Customization](./customization.md)**: Fine-tune for your stack
+
+---
+
+## 📚 References
+
+- **[Getting Started](./getting-started.md)**: Installation guide
+- **[Configuration](./configuration.md)**: Full configuration reference
+- **[GitHub Actions](./github-actions.md)**: CI/CD setup
+
