@@ -134,27 +134,6 @@ dockai build .
 *   `--verbose` / `-v`: Enable detailed debug logging.
 *   `--no-cache`: Force a fresh analysis.
 
-### Example Output
-
-```text
-DockAI 🐳
-Universal AI DevOps Architect
-
-[INFO] Scanning project directory...
-[INFO] Detected Stack: Custom Rust Service
-[INFO] Formulating build strategy (Multi-stage, Distroless)...
-[INFO] Generating Dockerfile (Attempt 1)...
-[INFO] Validating Dockerfile...
-[INFO] Building image (250MB limit)...
-[INFO] Running container (Sandboxed)...
-[INFO] Detected startup pattern: "Service ready on 0.0.0.0:8080"
-[INFO] Health check passed (Host Fallback)!
-[INFO] Security scan passed.
-
-✅ Success! Dockerfile validated successfully.
-📄 Final Dockerfile saved to ./Dockerfile
-```
-
 ---
 
 ## 🤖 GitHub Actions Integration
