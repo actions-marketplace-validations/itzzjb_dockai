@@ -60,19 +60,23 @@ graph TD
     Start --> Scan[📂 Scanner]
     Scan --> Analyze[🧠 Analyzer]
     Analyze --> Read[📖 Reader]
-    Read --> Detect[🏥 Health/Readiness]
-    Detect --> Plan[📝 Planner]
+    Read --> Health[🏥 Detect Health]
+    Health --> Ready[⏱️ Detect Readiness]
+    Ready --> Plan[📝 Planner]
     Plan --> Generate[⚙️ Generator]
     Generate --> Review[🔒 Security Review]
-    Review --> Validate[✅ Validator]
+    
+    Review -- Pass --> Validate[✅ Validator]
+    Review -- Fail --> Reflect[🤔 Reflector]
     
     Validate -- Success --> End((🏁 Finish))
-    Validate -- Failure --> Reflect[🤔 Reflector]
+    Validate -- Failure --> Reflect
     
-    Reflect -- Retry Possible --> Generate
-    Reflect -- Strategy Change --> Plan
-    Reflect -- Wrong Assumptions --> Analyze
-    Reflect -- Max Retries --> Fail((❌ Fail))
+    Reflect --> Retry{Retry Strategy}
+    Retry -- Fix Code --> Generate
+    Retry -- New Plan --> Plan
+    Retry -- Re-Analyze --> Analyze
+    Retry -- Max Retries --> Fail((❌ Fail))
 ```
 
 ---
