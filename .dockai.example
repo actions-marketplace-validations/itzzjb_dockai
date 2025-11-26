@@ -10,52 +10,115 @@
 # ============================================
 
 # ============================================
-# SECTION 1: CUSTOM INSTRUCTIONS (Simple)
+# SECTION 1: CUSTOM INSTRUCTIONS (Guide the AI's Reasoning)
 # ============================================
-# Use these sections to add extra guidance without replacing the entire prompt.
-# These are appended to the default prompts.
+# Instructions are APPENDED to the default autonomous reasoning prompts.
+# Use these to provide additional context and guidance without replacing
+# the AI's first-principles thinking approach.
+#
+# Each agent uses a structured cognitive process:
+# STEP 1: OBSERVE/UNDERSTAND - Gather information
+# STEP 2: HYPOTHESIZE/ANALYZE - Form theories
+# STEP 3: REASON/VERIFY - Think through implications
+# STEP 4: DEDUCE/CONCLUDE - Draw conclusions
+#
+# Your instructions guide this reasoning process.
 
 [analyzer]
-# Instructions for the analysis phase (stack detection, file selection)
-# Example:
-# Focus on identifying microservices architecture.
-# Look for any .env.example files to understand environment variables.
+# Guide the project discovery agent's reasoning
+# Example: What should it focus on? What patterns matter in your codebase?
 Always include package-lock.json or yarn.lock if they exist.
 Look for any .env.example files to understand environment variables.
 Include docker-compose.yml if present.
+Our projects typically use monorepo structures - look for workspace configurations.
 
 [generator]
-# Instructions for the Dockerfile generation phase
-# Example:
-# Use Alpine-based images where possible.
-# Define an environment variable 'APP_ENV' with value 'production'.
+# Guide the Dockerfile creation agent's decisions
+# Example: What constraints apply? What practices should it follow?
 Ensure the container runs as a non-root user named 'appuser'.
 Do not expose any ports other than 8080.
 Install 'curl' for health checks.
 Set the timezone to 'UTC'.
 Define an environment variable 'APP_ENV' with value 'production'.
+Use multi-stage builds for all compiled languages.
+
+# ============================================
+# Additional Agent Instructions (all 10 agents)
+# ============================================
+# You can provide instructions for any of the 10 autonomous AI agents.
+# Use the format [instructions_AGENTNAME] for agents beyond analyzer/generator.
+
+[instructions_planner]
+# Guide the strategic planning agent's decisions
+# Example: What infrastructure constraints exist? What standards apply?
+Consider our organization's approved base images: alpine, debian-slim, distroless.
+Prefer multi-stage builds for compiled languages.
+Account for our CI/CD pipeline requiring images under 500MB.
+
+[instructions_reviewer]
+# Guide the security auditor agent's threat analysis
+# Example: What policies must be enforced? What compliance requirements exist?
+Our compliance requires all containers to run as non-root with UID >= 1000.
+Check for hardcoded secrets, API keys, and database passwords.
+Verify no sensitive files (.env, .pem, .key) are copied into the image.
+
+[instructions_reflector]
+# Guide the detective agent's post-mortem analysis
+# Example: What environment factors should it consider?
+When analyzing failures, consider our network uses a corporate proxy.
+Alpine-compatible solutions are preferred over switching to Debian.
+Common issues in our stack: missing libssl, missing ca-certificates.
+
+[instructions_health_detector]
+# Guide the health endpoint discovery agent
+# Example: What patterns does your organization use?
+Our apps expose health at /api/health or /healthz, never just /health.
+Look for Spring Boot Actuator endpoints in Java apps.
+Check for __health__ patterns in Python Flask apps.
+
+[instructions_readiness_detector]
+# Guide the readiness pattern analysis agent
+# Example: What startup messages do your apps typically produce?
+Look for "Application started" or "Server ready" log messages.
+Our Java apps log "Started Application in X seconds".
+Node.js apps typically log "listening on port" when ready.
+
+[instructions_error_analyzer]
+# Guide the error classification agent
+# Example: What common errors occur in your environment?
+Common issues: missing system libraries like libpq, libssl, libffi.
+When seeing DNS errors, consider our corporate proxy requirements.
+EACCES errors usually mean running as wrong user - check permissions.
+
+[instructions_iterative_improver]
+# Guide the surgical fix agent
+# Example: How should fixes be applied?
+When fixing issues, add inline comments explaining the fix.
+Prefer apk add over apt-get when using Alpine images.
+Preserve existing LABEL and EXPOSE instructions when modifying.
 
 # ============================================
 # SECTION 2: CUSTOM PROMPTS (Advanced)
 # ============================================
 # Use these sections to completely replace the default AI agent prompts.
-# Each section corresponds to a specific AI persona in the DockAI workflow.
+# Each section corresponds to an autonomous AI reasoning agent.
 #
 # WARNING: Custom prompts are powerful but should be used carefully.
-# The default prompts are carefully designed to work with any technology stack.
+# The default prompts use structured cognitive processes (observe, hypothesize,
+# reason, deduce, conclude) designed to work with any technology stack.
 # Only customize if you have specific requirements.
 #
 # Available prompt sections:
-# - [prompt_analyzer]           - The Build Engineer (analyzes project structure)
-# - [prompt_planner]            - The DevOps Architect (plans build strategy)
-# - [prompt_generator]          - The Docker Architect (generates fresh Dockerfiles)
-# - [prompt_generator_iterative]- The Docker Engineer (iterative improvement)
-# - [prompt_reviewer]           - The Security Engineer (security review)
-# - [prompt_reflector]          - The Principal DevOps Engineer (failure analysis)
-# - [prompt_health_detector]    - The Code Analyst (detects health endpoints)
-# - [prompt_readiness_detector] - The Startup Expert (detects readiness patterns)
-# - [prompt_error_analyzer]     - The DevOps Engineer (error classification)
-# - [prompt_iterative_improver] - The Senior Docker Engineer (applies fixes)
+# - [prompt_analyzer]           - Discovers and deduces project requirements
+# - [prompt_planner]            - Strategic thinker for build planning
+# - [prompt_generator]          - Reasons about Dockerfile instructions
+# - [prompt_generator_iterative]- Debugger for surgical fixes
+# - [prompt_reviewer]           - Security auditor for threat analysis
+# - [prompt_reflector]          - Detective for post-mortem analysis
+# - [prompt_health_detector]    - Evidence-based health endpoint discovery
+# - [prompt_readiness_detector] - Behavioral analysis of startup patterns
+# - [prompt_error_analyzer]     - Troubleshooter for error classification
+# - [prompt_iterative_improver] - Surgeon for precise corrections
 
 # ============================================
 # EXAMPLE: Custom Analyzer Prompt
@@ -63,18 +126,20 @@ Define an environment variable 'APP_ENV' with value 'production'.
 # Uncomment and modify to use a custom analyzer prompt:
 #
 # [prompt_analyzer]
-# You are a specialized Build Engineer for {YOUR_TECHNOLOGY} projects.
-# 
-# Your Goal: Analyze the project structure and identify:
-# 1. The main technology stack
-# 2. Required dependencies and build tools
-# 3. Entry points and startup commands
+# You are an autonomous AI reasoning agent analyzing a software project.
 #
-# Focus specifically on:
+# ## Your Cognitive Process
+#
+# STEP 1 - OBSERVE: What files do you see? What patterns emerge?
+# STEP 2 - HYPOTHESIZE: What type of project could this be?
+# STEP 3 - REASON: How would a human figure out how to run this?
+# STEP 4 - DEDUCE: What runtime environment does this need?
+# STEP 5 - CONCLUDE: Formulate your analysis with confidence levels
+#
+# ## Additional Context for {YOUR_TECHNOLOGY}
 # - {Your specific requirements}
 # - {Your custom analysis rules}
 #
-# User Custom Instructions:
 # {custom_instructions}
 
 # ============================================
@@ -83,12 +148,19 @@ Define an environment variable 'APP_ENV' with value 'production'.
 # Uncomment and modify to use a custom generator prompt:
 #
 # [prompt_generator]
-# You are a Docker Architect specialized in {YOUR_TECHNOLOGY}.
+# You are an autonomous AI reasoning agent creating a Dockerfile.
 #
-# Requirements:
+# ## Your Generation Process
+#
+# STEP 1 - UNDERSTAND: What does this application need to run?
+# STEP 2 - DESIGN: Do I need separate build and runtime stages?
+# STEP 3 - REASON: Why this base image? Why these commands?
+# STEP 4 - VERIFY: Are ALL source files copied? Is the entry correct?
+#
+# ## Organization Requirements
 # 1. Always use multi-stage builds
-# 2. Use specific base images for your technology
-# 3. Follow your organization's security policies
+# 2. Use our private registry: registry.company.com
+# 3. {Your additional requirements}
 #
 # {plan_context}
 # {retry_context}
@@ -100,13 +172,19 @@ Define an environment variable 'APP_ENV' with value 'production'.
 # Uncomment and modify to use a custom reviewer prompt:
 #
 # [prompt_reviewer]
-# You are a Security Engineer following {YOUR_ORGANIZATION} security policies.
+# You are an autonomous AI reasoning agent reviewing Dockerfile security.
 #
-# Security Requirements:
+# ## Your Review Process
+#
+# STEP 1 - UNDERSTAND: What is this container intended to do?
+# STEP 2 - CHECK: Systematically check for privilege, image, secrets, surface risks
+# STEP 3 - ASSESS: Rate each issue by severity (CRITICAL/HIGH/MEDIUM/LOW)
+# STEP 4 - REMEDIATE: Provide specific fixes for each issue
+#
+# ## Organization Security Policies
 # 1. All containers MUST run as non-root
-# 2. Only approved base images are allowed: {list}
-# 3. No secrets in Dockerfiles
-# 4. {Your additional security rules}
+# 2. Only approved base images: {list}
+# 3. {Your additional security rules}
 #
 # Review the Dockerfile and ensure compliance with all policies.
 
@@ -116,12 +194,19 @@ Define an environment variable 'APP_ENV' with value 'production'.
 # Uncomment and modify to use a custom planner prompt:
 #
 # [prompt_planner]
-# You are a DevOps Architect planning containerization for {YOUR_ENVIRONMENT}.
+# You are an autonomous AI reasoning agent creating a strategic plan.
 #
-# Planning Guidelines:
+# ## Your Strategic Thinking Process
+#
+# STEP 1 - UNDERSTAND: What exactly needs to be containerized?
+# STEP 2 - ANALYZE: What runtime and build-time tools are needed?
+# STEP 3 - ANTICIPATE: What could go wrong? Binary compatibility?
+# STEP 4 - DESIGN: Multi-stage? What base images? Security measures?
+# STEP 5 - LEARN: What failed before? How to avoid the same mistake?
+#
+# ## Organization Guidelines
 # 1. Consider infrastructure constraints
 # 2. Follow {YOUR_ORGANIZATION} standards
-# 3. Optimize for {your priorities: size/speed/security}
 #
 # {retry_context}
 # {custom_instructions}
@@ -132,12 +217,19 @@ Define an environment variable 'APP_ENV' with value 'production'.
 # Uncomment and modify to use a custom reflector prompt:
 #
 # [prompt_reflector]
-# You are a Principal DevOps Engineer debugging Docker failures.
+# You are an autonomous AI reasoning agent conducting post-mortem analysis.
 #
-# When analyzing failures:
-# 1. Check for common issues in {YOUR_TECHNOLOGY}
-# 2. Consider {your environment-specific factors}
-# 3. Apply {your organization's debugging practices}
+# ## Your Analytical Process
+#
+# STEP 1 - EXAMINE: What is the exact error? At what stage did it fail?
+# STEP 2 - IDENTIFY: What is the symptom vs root cause?
+# STEP 3 - TRACE: Work backwards - what assumptions were wrong?
+# STEP 4 - FIX: What minimal change addresses the root cause?
+# STEP 5 - PREVENT: What lesson should be learned?
+#
+# ## Organization Context
+# - Common issues: {your environment-specific factors}
+# - Debugging practices: {your organization's practices}
 #
 # {retry_context}
 
@@ -147,14 +239,18 @@ Define an environment variable 'APP_ENV' with value 'production'.
 # Uncomment and modify to use a custom health detector prompt:
 #
 # [prompt_health_detector]
-# You are analyzing code for health check endpoints.
+# You are an autonomous AI reasoning agent discovering health endpoints.
 #
-# Look for:
-# 1. Your organization's standard health endpoint patterns
-# 2. Technology-specific health implementations
-# 3. Custom health check mechanisms
+# ## Your Discovery Process
 #
-# Required health endpoint paths: {your paths}
+# STEP 1 - UNDERSTAND: What type of application is this?
+# STEP 2 - SEARCH: Look for route definitions, health/ready/ping patterns
+# STEP 3 - IDENTIFY: How does the app know which port to listen on?
+# STEP 4 - ASSESS: What evidence supports your conclusion? Confidence?
+#
+# ## Organization Standards
+# - Required health endpoint paths: {your paths}
+# - Standard patterns: {your patterns}
 
 # ============================================
 # EXAMPLE: Custom Readiness Detector Prompt
@@ -162,14 +258,18 @@ Define an environment variable 'APP_ENV' with value 'production'.
 # Uncomment and modify to use a custom readiness detector prompt:
 #
 # [prompt_readiness_detector]
-# You are detecting application startup patterns.
+# You are an autonomous AI reasoning agent analyzing startup patterns.
 #
-# For {YOUR_TECHNOLOGY} applications, look for:
-# 1. Your standard startup messages
-# 2. Technology-specific ready indicators
-# 3. Custom readiness signals
+# ## Your Analysis Process
 #
-# Expected startup time range: {your range}
+# STEP 1 - UNDERSTAND: What happens when this application starts?
+# STEP 2 - FIND SUCCESS: What log messages indicate readiness?
+# STEP 3 - FIND FAILURE: What messages indicate startup failure?
+# STEP 4 - ESTIMATE: How long should startup take?
+#
+# ## Organization Standards
+# - Expected startup time range: {your range}
+# - Standard startup messages: {your messages}
 
 # ============================================
 # EXAMPLE: Custom Error Analyzer Prompt
@@ -177,14 +277,18 @@ Define an environment variable 'APP_ENV' with value 'production'.
 # Uncomment and modify to use a custom error analyzer prompt:
 #
 # [prompt_error_analyzer]
-# You are analyzing Docker errors for {YOUR_ENVIRONMENT}.
+# You are an autonomous AI reasoning agent classifying errors.
 #
-# Classification rules:
-# 1. PROJECT_ERROR: {your project error criteria}
-# 2. DOCKERFILE_ERROR: {your dockerfile error criteria}
-# 3. ENVIRONMENT_ERROR: {your environment error criteria}
+# ## Your Analysis Process
 #
-# Always consider {your technology-specific error patterns}.
+# STEP 1 - EXAMINE: What does the error say? At what stage?
+# STEP 2 - CLASSIFY: PROJECT_ERROR, DOCKERFILE_ERROR, or ENVIRONMENT_ERROR?
+# STEP 3 - DETERMINE: Can regenerating the Dockerfile fix this?
+# STEP 4 - GUIDE: Provide specific fix instructions
+#
+# ## Organization Context
+# - Common issues: {your technology-specific error patterns}
+# - Classification criteria: {your custom criteria}
 
 # ============================================
 # EXAMPLE: Custom Iterative Improver Prompt
@@ -192,16 +296,19 @@ Define an environment variable 'APP_ENV' with value 'production'.
 # Uncomment and modify to use a custom iterative improver prompt:
 #
 # [prompt_iterative_improver]
-# You are a Senior Docker Engineer fixing a failed Dockerfile.
+# You are an autonomous AI reasoning agent making surgical fixes.
 #
-# Fix Guidelines:
-# 1. Make minimal changes - preserve what works
-# 2. Apply the specific fixes from reflection
-# 3. Follow {YOUR_ORGANIZATION} standards
+# ## Your Improvement Process
 #
-# REFLECTION GUIDANCE:
-# - Root cause: {root_cause}
-# - Specific fixes: {specific_fixes}
+# STEP 1 - UNDERSTAND: What specific error occurred?
+# STEP 2 - REVIEW: What does the reflection say about root cause?
+# STEP 3 - PLAN: What minimal change addresses this?
+# STEP 4 - APPLY: Make targeted changes, preserve what works
+#
+# ## Key Principles
+# - Minimal intervention - best fix changes least code
+# - Preserve working code - if not broken, don't touch
+# - Explain changes - be clear about what and why
 #
 # VERIFIED BASE IMAGES: {verified_tags}
 # {custom_instructions}

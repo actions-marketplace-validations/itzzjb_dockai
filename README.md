@@ -17,6 +17,7 @@ Unlike simple template generators, DockAI acts as a **Universal DevOps Architect
 ### 🔄 Self-Correcting Workflow
 - **Automated Debugging**: If the build fails, DockAI doesn't just give up. It performs a "Post-Mortem" analysis, reads the error logs, understands the root cause (e.g., "missing system library `libxyz`"), and **fixes its own code**.
 - **Iterative Improvement**: It learns from each attempt, refining the Dockerfile until it passes all validation checks.
+- **Smart Rate Limiting**: Handles API rate limits gracefully with exponential backoff and automatic retries.
 
 ### 🛡️ Robust Validation & Security
 - **Sandboxed Verification**: Every generated Dockerfile is built and run in a secure, resource-limited sandbox.
@@ -30,12 +31,51 @@ Unlike simple template generators, DockAI acts as a **Universal DevOps Architect
 - **Beautiful UI**: Powered by `Rich`, featuring real-time status spinners, formatted logs, and clear error reports.
 - **Cost Awareness**: Tracks and reports token usage for every stage.
 - **Production Ready**: Generates optimized, multi-stage Dockerfiles following industry best practices.
+- **Fully Customizable**: 10 AI agents with customizable prompts and instructions.
+
+### 🤖 The 10 AI Agents
+
+| Agent | Module | Role | Cognitive Style |
+|-------|--------|------|-----------------|
+| **Scanner** | `scanner.py` | File tree discovery | Pattern matching with .gitignore |
+| **Analyzer** | `analyzer.py` | Project analysis | Detective - observes and deduces |
+| **Health Detector** | `agent.py` | Health endpoint discovery | Evidence-based reasoning |
+| **Readiness Detector** | `agent.py` | Startup pattern analysis | Behavioral analysis |
+| **Planner** | `agent.py` | Strategic planning | Chess grandmaster - thinks ahead |
+| **Generator** | `generator.py` | Dockerfile creation | Architect - first principles |
+| **Reviewer** | `reviewer.py` | Security audit | Adversary - finds weaknesses |
+| **Validator** | `validator.py` | Build/run testing | QA Engineer - comprehensive testing |
+| **Reflector** | `agent.py` | Failure analysis | Detective - traces root causes |
+| **Error Analyzer** | `errors.py` | Error classification | Troubleshooter - diagnoses issues |
 
 ---
 
 ## 🏗️ Architecture Deep Dive
 
 DockAI is built on **LangGraph**, enabling a cyclic, stateful workflow that mimics a human engineer's problem-solving process. It is not a linear script but a **State Machine** that can loop back, change strategies, and learn from mistakes.
+
+### Project Structure
+
+```
+src/dockai/
+├── main.py          # CLI entry point and workflow initialization
+├── graph.py         # LangGraph state machine definition
+├── state.py         # DockAIState TypedDict with full workflow state
+├── nodes.py         # Node functions for each workflow step
+├── scanner.py       # File tree scanning with .gitignore/.dockerignore support
+├── analyzer.py      # AI-powered project analysis (Stage 1)
+├── generator.py     # AI-powered Dockerfile generation (Stage 2)
+├── reviewer.py      # AI-powered security review (Stage 2.5)
+├── validator.py     # Docker build/run validation (Stage 3)
+├── agent.py         # Adaptive AI agents (Planning, Reflection, Detection)
+├── errors.py        # AI-powered error classification
+├── prompts.py       # Centralized prompt management for all 10 AI agents
+├── schemas.py       # Pydantic models for structured LLM output
+├── registry.py      # Docker Hub/GCR/Quay.io tag verification
+├── rate_limiter.py  # Exponential backoff for API rate limits
+├── callbacks.py     # LangChain token usage tracking
+└── ui.py            # Rich console UI components
+```
 
 ### The Agentic Workflow
 
@@ -47,87 +87,193 @@ The agent moves through a sophisticated graph of nodes, maintaining a shared `Do
 *   **Output**: A compressed file tree representation.
 
 #### 2. 🧠 Analyzer (`analyzer.py`)
-*   **Behavior**: The "Brain" that reasons from first principles.
-*   **Intelligence**: Instead of looking for hardcoded file names, it analyzes file extensions, shebangs (`#!/bin/...`), and build scripts to deduce the technology stack.
-*   **Universal Capability**: Can identify "unknown" stacks (e.g., a new language released tomorrow) by recognizing it needs a compiler or interpreter based on file signatures.
+*   **Behavior**: An autonomous AI reasoning agent specializing in project discovery.
+*   **Intelligence**: Thinks like a detective, observing evidence and forming hypotheses. Uses first-principles reasoning rather than pattern matching - deduces what it can from file contents, extensions, and structure.
+*   **Universal Capability**: Can identify unknown stacks by reasoning about what evidence suggests (e.g., "These files suggest compilation is needed, I should look for build artifacts").
 
 #### 3. 📖 Reader (`nodes.py`)
 *   **Behavior**: The "Researcher".
 *   **Intelligence**: Selectively reads only the files identified as "critical" by the Analyzer. Uses "Head & Tail" truncation for large files to fit within context windows while preserving imports and main functions.
+*   **Smart Filtering**: Skips lock files (package-lock.json, yarn.lock) to save tokens. Higher limits for dependency files.
 
-#### 4. 🏥 & ⏱️ Detectors (`nodes.py`)
-*   **Health Detector**: Scans code for HTTP routes like `/health`, `/status`, or `/ping`.
-*   **Readiness Detector**: Analyzes logging statements to predict what the app will print when it's ready (e.g., "Server listening on port 3000"). This allows the Validator to wait intelligently rather than sleeping for a fixed time.
+#### 4. 🏥 Health Detector (`agent.py`)
+*   **Behavior**: An evidence-based reasoning agent for health endpoint discovery.
+*   **Intelligence**: Scans actual code content for HTTP route definitions like `/health`, `/status`, or `/ping` by looking for routing patterns, decorators, or handlers.
+*   **Output**: Primary health endpoint with confidence level and evidence.
 
-#### 5. 📝 Planner (`agent.py`)
-*   **Behavior**: The "Architect".
-*   **Intelligence**: Before writing code, it formulates a `BuildPlan`.
-    *   **Base Image Selection**: Verifies tags against real registries to prevent hallucinations.
-    *   **Strategy**: Decides between Multi-stage builds (for compiled languages) or Slim images (for interpreted ones).
+#### 5. ⏱️ Readiness Detector (`agent.py`)
+*   **Behavior**: A behavioral analysis agent for startup pattern detection.
+*   **Intelligence**: Examines code patterns to predict what the application will log when ready. Analyzes logging statements and startup sequences.
+*   **Output**: Success/failure regex patterns and estimated startup times.
+
+#### 6. 📝 Planner (`agent.py`)
+*   **Behavior**: A strategic reasoning agent that thinks like a chess grandmaster.
+*   **Intelligence**: Before writing code, formulates a `BuildPlan` by thinking several moves ahead. Considers how each decision (base image, build strategy) affects downstream stages.
+    *   **Base Image Selection**: Verifies tags against real registries via `registry.py` to prevent hallucinations.
+    *   **Strategy**: Reasons about multi-stage vs slim images based on application needs.
     *   **Security**: Plans for non-root users and minimal attack surfaces.
+    *   **Learning**: Incorporates lessons from retry history to avoid past mistakes.
 
-#### 6. ⚙️ Generator (`generator.py`)
-*   **Behavior**: The "Builder".
-*   **Intelligence**: Writes the `Dockerfile` and `.dockerignore` based on the Architect's plan. If this is a retry, it incorporates "Lessons Learned" from previous failures to avoid repeating mistakes.
+#### 7. ⚙️ Generator (`generator.py`)
+*   **Behavior**: An autonomous reasoning agent for Dockerfile creation.
+*   **Intelligence**: Thinks through the reasoning process of building each Dockerfile layer. Works from first principles - "What does this application need to run?"
+*   **Modes**: 
+    *   **Fresh Generation**: Creates new Dockerfile from strategic plan.
+    *   **Iterative Improvement**: Makes surgical fixes based on reflection data.
+*   **Dynamic Model Selection**: Uses faster model (gpt-4o-mini) for first attempt, smarter model (gpt-4o) for retries.
 
-#### 7. 🔒 Security Reviewer (`reviewer.py`)
-*   **Behavior**: The "Security Engineer".
-*   **Intelligence**: Performs a static analysis *before* the build. If it finds critical issues (like running as root or exposed secrets), it rejects the Dockerfile and sends it back to the Generator with specific fix instructions.
+#### 8. 🔒 Security Reviewer (`reviewer.py`)
+*   **Behavior**: A security auditor reasoning agent.
+*   **Intelligence**: Thinks like an adversary - "How could this be exploited?" Performs threat modeling by analyzing:
+    *   **Privilege Risks**: Running as root, unnecessary capabilities
+    *   **Image Security**: Using 'latest' tag, oversized base images
+    *   **Secrets**: Hardcoded credentials, exposed API keys
+    *   **Attack Surface**: Unnecessary ports, dev tools in production
+*   **Auto-Fix**: Can automatically fix issues by providing a corrected Dockerfile.
 
-#### 8. ✅ Validator (`validator.py`)
+#### 9. ✅ Validator (`validator.py`)
 *   **Behavior**: The "QA Engineer".
 *   **Process**:
-    1.  **Builds** the image in a sandboxed environment.
-    2.  **Runs** a container with memory/CPU limits.
-    3.  **Waits** for the "Readiness Pattern" detected earlier.
-    4.  **Probes** the "Health Endpoint" (falling back to host-port checks if `curl` is missing inside the container).
+    1.  **Builds** the image in a sandboxed environment (memory-limited).
+    2.  **Runs** a container with resource limits (memory, CPU, PIDs).
+    3.  **Waits** for the "Readiness Pattern" detected earlier (smart wait, not fixed sleep).
+    4.  **Probes** the "Health Endpoint" (falls back to host-port checks if `curl` is missing).
     5.  **Scans** the final image with **Trivy** for CVEs.
+    6.  **Classifies** any errors using AI via `errors.py` for intelligent retry decisions.
 
-#### 9. 🤔 Reflector (`agent.py`)
-*   **Behavior**: The "Debugger".
+#### 10. 🤔 Reflector (`agent.py`)
+*   **Behavior**: A detective agent specializing in post-mortem analysis.
 *   **Intelligence**: This is the core of the agent's resilience. When validation fails, it:
-    *   Reads the build logs or runtime errors.
-    *   Classifies the error (e.g., "Missing System Dependency", "Wrong Entrypoint").
-    *   **Updates the Plan**: If the strategy was wrong (e.g., used Alpine but needed Glibc), it instructs the Planner to switch base images.
-    *   **Loops Back**: Triggers a new generation cycle with this new knowledge.
+    *   Reads the build logs or runtime errors like a detective examining evidence.
+    *   Traces backwards from the symptom to find the root cause.
+    *   Considers multiple hypotheses about what might be wrong.
+    *   **Updates the Plan**: If the strategy was wrong, instructs the Planner to change approach.
+    *   **Loops Back**: Triggers a new generation cycle with deeper understanding.
+*   **Output**: Root cause analysis, specific fixes, confidence level, and whether re-analysis is needed.
+
+#### 11. 🔄 Increment Retry (`nodes.py`)
+*   **Behavior**: Simple counter node.
+*   **Intelligence**: Tracks retry attempts and enforces the maximum retry limit.
+
+### Supporting Modules
+
+#### 🎯 Error Classifier (`errors.py`)
+*   **Behavior**: AI-powered error classification.
+*   **Categories**:
+    *   `PROJECT_ERROR`: User's code/config issue - cannot be fixed by regenerating.
+    *   `DOCKERFILE_ERROR`: Generated Dockerfile issue - can be fixed by retry.
+    *   `ENVIRONMENT_ERROR`: Local system issue - cannot be fixed by regenerating.
+*   **Output**: Structured error with suggested fixes, image recommendations, and retry guidance.
+
+#### 📋 Prompts Manager (`prompts.py`)
+*   **Behavior**: Centralized prompt management for all 10 AI agents.
+*   **Features**:
+    *   Load custom prompts from environment variables (`DOCKAI_PROMPT_*`).
+    *   Load custom instructions from environment variables (`DOCKAI_*_INSTRUCTIONS`).
+    *   Load from `.dockai` file with section-based format.
+    *   Priority: Environment Variables > .dockai File > Defaults.
+
+#### 🏷️ Registry Client (`registry.py`)
+*   **Behavior**: Container registry integration.
+*   **Supported Registries**: Docker Hub, GCR, Quay.io, AWS ECR.
+*   **Features**: Fetches valid tags to prevent AI from hallucinating non-existent images.
+
+#### ⏰ Rate Limiter (`rate_limiter.py`)
+*   **Behavior**: Handles API rate limits gracefully.
+*   **Features**: Exponential backoff with jitter, configurable retry limits, supports both OpenAI and registry APIs.
+
+#### 📊 Callbacks (`callbacks.py`)
+*   **Behavior**: LangChain integration for monitoring.
+*   **Features**: Tracks token usage per stage for cost awareness.
+
+#### 🎨 UI (`ui.py`)
+*   **Behavior**: Rich console interface.
+*   **Features**: Logging configuration, status spinners, formatted messages, summary reports.
+
+### Pydantic Schemas (`schemas.py`)
+
+All LLM outputs are validated against Pydantic models for type safety and structured data:
+
+| Schema | Purpose |
+|--------|---------|
+| `AnalysisResult` | Project analysis output (stack, type, commands, files) |
+| `DockerfileResult` | Fresh Dockerfile generation output |
+| `IterativeDockerfileResult` | Iterative improvement output with changes summary |
+| `SecurityReviewResult` | Security review with issues, severity, and fixes |
+| `SecurityIssue` | Individual security issue with severity and suggestion |
+| `PlanningResult` | Strategic plan (base image, build strategy, challenges) |
+| `ReflectionResult` | Post-mortem analysis with root cause and fixes |
+| `HealthEndpointDetectionResult` | Health endpoint discovery with confidence |
+| `ReadinessPatternResult` | Startup patterns with timing estimates |
+| `HealthEndpoint` | Health check endpoint path and port |
 
 ### The Graph
 
 ```mermaid
 graph TD
-    Start --> Scan[📂 Scanner]
+    Start([▶ Start]) --> Scan[📂 Scanner]
     Scan --> Analyze[🧠 Analyzer]
     Analyze --> Read[📖 Reader]
-    Read --> Health[🏥 Detect Health]
-    Health --> Ready[⏱️ Detect Readiness]
+    Read --> Health[🏥 Health Detector]
+    Health --> Ready[⏱️ Readiness Detector]
     Ready --> Plan[📝 Planner]
     Plan --> Generate[⚙️ Generator]
-    Generate --> Review[🔒 Security Review]
+    Generate --> Review[🔒 Security Reviewer]
     
     Review -- Pass --> Validate[✅ Validator]
     Review -- Fail --> Reflect[🤔 Reflector]
     
-    Validate -- Success --> End((🏁 Finish))
+    Validate -- Success --> End([🏁 Finish])
     Validate -- Failure --> Reflect
     
-    Reflect --> Retry{Retry Strategy}
-    Retry -- Fix Code --> Generate
-    Retry -- New Plan --> Plan
-    Retry -- Re-Analyze --> Analyze
-    Retry -- Max Retries --> Fail((❌ Fail))
+    Reflect --> Increment[🔄 Increment Retry]
+    
+    Increment -- Fix Code --> Generate
+    Increment -- New Strategy --> Plan
+    Increment -- Re-Analyze --> Analyze
+    Increment -- Max Retries --> Fail([❌ Fail])
 ```
+
+### State Management (`state.py`)
+
+The `DockAIState` TypedDict maintains the full workflow state:
+
+| Field | Description |
+|-------|-------------|
+| `path` | Project directory being analyzed |
+| `file_tree` | List of file paths from scanner |
+| `file_contents` | Concatenated critical file contents |
+| `analysis_result` | Project analysis (stack, type, commands) |
+| `current_plan` | Strategic plan for Dockerfile generation |
+| `dockerfile_content` | Current generated Dockerfile |
+| `previous_dockerfile` | Previous attempt (for iterative improvement) |
+| `validation_result` | Build/run validation result |
+| `retry_count` | Current retry attempt number |
+| `retry_history` | Full history of attempts and lessons learned |
+| `reflection` | AI analysis of most recent failure |
+| `detected_health_endpoint` | AI-detected health endpoint |
+| `readiness_patterns` | AI-detected startup success patterns |
+| `failure_patterns` | AI-detected startup failure patterns |
+| `needs_reanalysis` | Flag to trigger re-analysis loop |
+| `error` | Current error message |
+| `error_details` | Classified error with fix suggestions |
+| `usage_stats` | Token usage per stage for cost tracking |
 
 ---
 
 ## 🛠️ Technology Stack
 
-*   **Language**: Python 3.10+
-*   **Orchestration**: [LangGraph](https://langchain-ai.github.io/langgraph/) (Stateful Agents)
-*   **AI Models**: OpenAI (GPT-4o for complex reasoning, GPT-4o-mini for fast analysis)
-*   **Containerization**: Docker SDK for Python
-*   **UI/CLI**: [Rich](https://github.com/Textualize/rich) & [Typer](https://typer.tiangolo.com/)
-*   **Validation**: [Pydantic](https://docs.pydantic.dev/) for structured data.
-*   **Security**: [Trivy](https://github.com/aquasecurity/trivy)
+| Category | Technology | Description |
+|----------|------------|-------------|
+| **Language** | Python 3.10+ | Core runtime |
+| **Orchestration** | [LangGraph](https://langchain-ai.github.io/langgraph/) | Stateful agent workflow |
+| **AI Models** | OpenAI GPT-4o/GPT-4o-mini | Reasoning and code generation |
+| **LLM Framework** | [LangChain](https://python.langchain.com/) | LLM integration and structured output |
+| **Data Validation** | [Pydantic](https://docs.pydantic.dev/) | Structured LLM output schemas |
+| **Containerization** | Docker SDK for Python | Build, run, and validate containers |
+| **UI/CLI** | [Rich](https://github.com/Textualize/rich) & [Typer](https://typer.tiangolo.com/) | Beautiful terminal interface |
+| **Security** | [Trivy](https://github.com/aquasecurity/trivy) | CVE scanning |
+| **HTTP Client** | [httpx](https://www.python-httpx.org/) | Registry API integration |
 
 ---
 
@@ -175,9 +321,13 @@ Navigate to any application folder and run:
 dockai build .
 ```
 
-**Options:**
-*   `--verbose` / `-v`: Enable detailed debug logging.
-*   `--no-cache`: Force a fresh analysis.
+**CLI Options:**
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--verbose` | `-v` | Enable detailed debug logging |
+
+**Environment Variables (CLI):**
+All configuration can be set via environment variables or a `.env` file. See [Configuration](#%EF%B8%8F-configuration).
 
 ---
 
@@ -270,16 +420,16 @@ jobs:
 
 | Input | Description | Required |
 |-------|-------------|----------|
-| `prompt_analyzer` | Custom prompt for the Build Engineer. | No |
-| `prompt_planner` | Custom prompt for the DevOps Architect. | No |
-| `prompt_generator` | Custom prompt for the Docker Architect. | No |
-| `prompt_generator_iterative` | Custom prompt for iterative improvement. | No |
-| `prompt_reviewer` | Custom prompt for the Security Engineer. | No |
-| `prompt_reflector` | Custom prompt for failure analysis. | No |
-| `prompt_health_detector` | Custom prompt for health endpoint detection. | No |
-| `prompt_readiness_detector` | Custom prompt for readiness pattern detection. | No |
+| `prompt_analyzer` | Custom prompt for project discovery agent. | No |
+| `prompt_planner` | Custom prompt for strategic planning agent. | No |
+| `prompt_generator` | Custom prompt for Dockerfile reasoning agent. | No |
+| `prompt_generator_iterative` | Custom prompt for debugging agent. | No |
+| `prompt_reviewer` | Custom prompt for security auditor agent. | No |
+| `prompt_reflector` | Custom prompt for detective/post-mortem agent. | No |
+| `prompt_health_detector` | Custom prompt for health endpoint discovery. | No |
+| `prompt_readiness_detector` | Custom prompt for readiness pattern analysis. | No |
 | `prompt_error_analyzer` | Custom prompt for error classification. | No |
-| `prompt_iterative_improver` | Custom prompt for applying fixes. | No |
+| `prompt_iterative_improver` | Custom prompt for surgical fix agent. | No |
 
 ---
 
@@ -313,20 +463,20 @@ jobs:
 
 ### Custom Instructions
 
-DockAI supports custom instructions for all 10 AI agent personas. Instructions are **appended** to the default prompts, allowing you to provide additional guidance without replacing the entire behavior.
+DockAI's 10 AI agents use autonomous first-principles reasoning with structured cognitive processes. Custom instructions are **appended** to these default behaviors, allowing you to guide the AI's reasoning without replacing it.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DOCKAI_ANALYZER_INSTRUCTIONS` | Custom instructions for the analyzer phase. | - |
-| `DOCKAI_PLANNER_INSTRUCTIONS` | Custom instructions for the planner phase. | - |
-| `DOCKAI_GENERATOR_INSTRUCTIONS` | Custom instructions for the generator phase. | - |
-| `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Custom instructions for iterative generation. | - |
-| `DOCKAI_REVIEWER_INSTRUCTIONS` | Custom instructions for security review. | - |
-| `DOCKAI_REFLECTOR_INSTRUCTIONS` | Custom instructions for failure reflection. | - |
-| `DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS` | Custom instructions for health detection. | - |
-| `DOCKAI_READINESS_DETECTOR_INSTRUCTIONS` | Custom instructions for readiness detection. | - |
-| `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Custom instructions for error analysis. | - |
-| `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Custom instructions for iterative improvement. | - |
+| `DOCKAI_ANALYZER_INSTRUCTIONS` | Guide the project discovery agent's reasoning. | - |
+| `DOCKAI_PLANNER_INSTRUCTIONS` | Guide the strategic planning agent's decisions. | - |
+| `DOCKAI_GENERATOR_INSTRUCTIONS` | Guide the Dockerfile creation agent's approach. | - |
+| `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Guide the debugging agent's fix strategies. | - |
+| `DOCKAI_REVIEWER_INSTRUCTIONS` | Guide the security auditor's threat analysis. | - |
+| `DOCKAI_REFLECTOR_INSTRUCTIONS` | Guide the detective agent's investigation. | - |
+| `DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS` | Guide health endpoint discovery reasoning. | - |
+| `DOCKAI_READINESS_DETECTOR_INSTRUCTIONS` | Guide readiness pattern analysis. | - |
+| `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Guide error classification reasoning. | - |
+| `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Guide surgical fix application. | - |
 
 > **Note**: Custom instructions and prompts can also be provided via a `.dockai` file in your project root. See the [Custom Instructions](#-custom-instructions) and [Custom AI Prompts](#-custom-ai-prompts-advanced) sections.
 
@@ -334,15 +484,15 @@ DockAI supports custom instructions for all 10 AI agent personas. Instructions a
 
 ## 📝 Custom Instructions
 
-You can customize DockAI's behavior by providing instructions through:
+You can guide DockAI's autonomous reasoning by providing instructions through:
 
 1. **Environment Variables**: Set `DOCKAI_*_INSTRUCTIONS` for any agent.
 2. **A `.dockai` file** in your project root.
 
 ### Instructions vs Prompts
 
-- **Instructions** are **appended** to the default prompt. Use these to add extra guidance while keeping the default behavior.
-- **Prompts** completely **replace** the default prompt. Use these when you need full control over an agent's behavior.
+- **Instructions** are **appended** to the default prompt. Use these to guide the AI's reasoning while keeping its autonomous first-principles approach.
+- **Prompts** completely **replace** the default prompt. Use these when you need full control over an agent's cognitive process.
 
 ### `.dockai` File Format for Instructions
 
@@ -394,60 +544,95 @@ The legacy `[analyzer]` and `[generator]` sections are still supported for backw
 
 ## 🎨 Custom AI Prompts (Advanced)
 
-DockAI uses 10 specialized AI agent personas throughout its workflow. You can completely customize each agent's behavior by providing custom prompts.
+DockAI uses 10 specialized autonomous AI reasoning agents throughout its workflow. Each agent uses first-principles thinking with structured cognitive processes (STEP 1, STEP 2, etc.). You can completely customize each agent's reasoning approach by providing custom prompts.
 
 ### Available Prompts
 
 | Prompt Name | Environment Variable | `.dockai` Section | Description |
 |-------------|---------------------|-------------------|-------------|
-| **Analyzer** | `DOCKAI_PROMPT_ANALYZER` | `[prompt_analyzer]` | The Build Engineer that analyzes project structure |
-| **Planner** | `DOCKAI_PROMPT_PLANNER` | `[prompt_planner]` | The DevOps Architect that plans build strategy |
-| **Generator** | `DOCKAI_PROMPT_GENERATOR` | `[prompt_generator]` | The Docker Architect that generates Dockerfiles |
-| **Generator Iterative** | `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | `[prompt_generator_iterative]` | The Docker Engineer for iterative improvement |
-| **Reviewer** | `DOCKAI_PROMPT_REVIEWER` | `[prompt_reviewer]` | The Security Engineer for vulnerability review |
-| **Reflector** | `DOCKAI_PROMPT_REFLECTOR` | `[prompt_reflector]` | The Principal DevOps Engineer for failure analysis |
-| **Health Detector** | `DOCKAI_PROMPT_HEALTH_DETECTOR` | `[prompt_health_detector]` | The Code Analyst for health endpoint detection |
-| **Readiness Detector** | `DOCKAI_PROMPT_READINESS_DETECTOR` | `[prompt_readiness_detector]` | The Startup Expert for readiness patterns |
-| **Error Analyzer** | `DOCKAI_PROMPT_ERROR_ANALYZER` | `[prompt_error_analyzer]` | The DevOps Engineer for error classification |
-| **Iterative Improver** | `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | `[prompt_iterative_improver]` | The Senior Docker Engineer for applying fixes |
+| **Analyzer** | `DOCKAI_PROMPT_ANALYZER` | `[prompt_analyzer]` | Project discovery agent - observes and deduces |
+| **Planner** | `DOCKAI_PROMPT_PLANNER` | `[prompt_planner]` | Strategic planning agent - thinks like a chess grandmaster |
+| **Generator** | `DOCKAI_PROMPT_GENERATOR` | `[prompt_generator]` | Dockerfile reasoning agent - builds from first principles |
+| **Generator Iterative** | `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | `[prompt_generator_iterative]` | Debugging agent - surgical precision fixes |
+| **Reviewer** | `DOCKAI_PROMPT_REVIEWER` | `[prompt_reviewer]` | Security auditor agent - thinks like an adversary |
+| **Reflector** | `DOCKAI_PROMPT_REFLECTOR` | `[prompt_reflector]` | Detective agent - traces from symptoms to root causes |
+| **Health Detector** | `DOCKAI_PROMPT_HEALTH_DETECTOR` | `[prompt_health_detector]` | Evidence-based health endpoint discovery agent |
+| **Readiness Detector** | `DOCKAI_PROMPT_READINESS_DETECTOR` | `[prompt_readiness_detector]` | Behavioral startup pattern analysis agent |
+| **Error Analyzer** | `DOCKAI_PROMPT_ERROR_ANALYZER` | `[prompt_error_analyzer]` | Troubleshooter agent - classifies and diagnoses |
+| **Iterative Improver** | `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | `[prompt_iterative_improver]` | Surgeon agent - precise corrections |
 
 ### Setting Custom Prompts via Environment Variables
 
 ```bash
-# Example: Custom security reviewer with strict policies
-export DOCKAI_PROMPT_REVIEWER="You are a Security Engineer following strict enterprise policies.
+# Example: Custom security reviewer with organizational policies
+export DOCKAI_PROMPT_REVIEWER="You are an autonomous AI reasoning agent specializing in container security.
 
-Security Requirements:
-1. All containers MUST run as non-root user 'appuser' with UID 1000
-2. Only these base images are allowed: python:3.11-slim, node:18-alpine, golang:1.21-alpine
-3. No secrets or credentials in Dockerfiles
-4. All packages must be pinned to specific versions
+Think like an adversary. Your job is to find weaknesses before attackers do.
 
-Review the Dockerfile and ensure compliance."
+## Your Security Analysis Process
+
+STEP 1: THREAT SURFACE MAPPING
+- What attack vectors exist in this Dockerfile?
+- What sensitive data could be exposed?
+
+STEP 2: VULNERABILITY ASSESSMENT
+- Running as root? Why or why not?
+- What packages are installed? Are they pinned?
+- What secrets or credentials are exposed?
+
+STEP 3: COMPLIANCE CHECK
+- Non-root user required (UID 1000)
+- Only approved base images: python:3.11-slim, node:18-alpine
+- No hardcoded secrets
+
+Provide your assessment with severity and actionable fixes."
 ```
 
 ### Setting Custom Prompts via `.dockai` File
 
 ```ini
 [prompt_reviewer]
-You are a Security Engineer following our organization's container security policies.
+You are an autonomous AI reasoning agent specializing in security.
 
-Security Requirements:
-1. All containers MUST run as non-root
-2. Use approved base images only
-3. No hardcoded secrets
-4. All exposed ports must be documented
+Think like an adversary - how would you exploit this container?
 
-Review the Dockerfile and provide actionable fixes for any violations.
+## Your Analysis Process
+
+STEP 1: IDENTIFY ATTACK SURFACE
+- What's exposed? What runs at startup?
+- What privileges does the container have?
+
+STEP 2: TRACE TRUST BOUNDARIES
+- What data flows in and out?
+- What dependencies could be compromised?
+
+STEP 3: ASSESS ORGANIZATIONAL COMPLIANCE
+- Non-root user requirement
+- Approved base images only
+- No hardcoded secrets
+
+Provide severity ratings and actionable fixes.
 
 [prompt_generator]
-You are a Docker Architect specialized in our microservices platform.
+You are an autonomous AI reasoning agent for Dockerfile creation.
 
-Requirements:
-1. Always use multi-stage builds
-2. Use our private registry: registry.company.com
-3. Include standard labels for tracing
-4. Follow our naming conventions
+Think through the problem from first principles:
+- What does this application actually need to run?
+- What's the minimal environment that satisfies all requirements?
+
+## Your Reasoning Process
+
+STEP 1: UNDERSTAND THE APPLICATION
+- What are the core runtime requirements?
+- What build-time vs runtime dependencies exist?
+
+STEP 2: DESIGN THE CONTAINER
+- What base image provides the minimal foundation?
+- How should layers be organized for caching?
+
+STEP 3: WRITE THE DOCKERFILE
+- Each instruction should have a clear purpose
+- Security and efficiency in every decision
 
 {plan_context}
 {retry_context}
@@ -475,13 +660,46 @@ When loading prompts, DockAI uses this priority (highest to lowest):
 2. **`.dockai` file** (`[prompt_*]` sections)
 3. **Default prompts** (built-in)
 
-> ⚠️ **Warning**: Custom prompts are powerful but should be used carefully. The default prompts are designed to work with any technology stack. Only customize if you have specific organizational requirements.
+> ⚠️ **Warning**: Custom prompts are powerful but should be used carefully. The default prompts use first-principles reasoning designed to work with any technology stack. Only customize if you have specific organizational requirements or want to experiment with different cognitive approaches.
 
 ---
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/itzzjb/dockai.git
+cd dockai
+
+# Install in development mode
+pip install -e .
+
+# Run tests
+pytest tests/
+```
+
+### Project Structure for Contributors
+
+```
+src/dockai/
+├── main.py          # Entry point - start here for CLI changes
+├── graph.py         # LangGraph workflow - add new nodes here
+├── nodes.py         # Node implementations - modify workflow logic
+├── agent.py         # AI agents (planning, reflection, detection)
+├── prompts.py       # Add new prompts or modify existing ones
+├── schemas.py       # Pydantic models - add new structured outputs
+└── ...
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
