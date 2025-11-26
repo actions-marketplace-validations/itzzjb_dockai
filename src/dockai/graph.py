@@ -61,13 +61,13 @@ def should_retry(state: DockAIState) -> Literal["reflect", "end"]:
         
         # Don't retry for project errors (user must fix) or environment errors (system issue)
         if error_type in [ErrorType.PROJECT_ERROR.value, ErrorType.ENVIRONMENT_ERROR.value]:
-            logger.error(f"❌ Cannot retry: {error_details.get('message', 'Unknown error')}")
-            logger.info(f"💡 Solution: {error_details.get('suggestion', 'Check the error and try again')}")
+            logger.error(f"Cannot retry: {error_details.get('message', 'Unknown error')}")
+            logger.info(f"Solution: {error_details.get('suggestion', 'Check the error and try again')}")
             return "end"
         
         # If the error analysis specifically says not to retry
         if not should_retry_flag:
-            logger.error(f"❌ {error_details.get('message', 'Unknown error')}")
+            logger.error(f"{error_details.get('message', 'Unknown error')}")
             return "end"
     
     # Check if we have reached the maximum number of retries
@@ -80,7 +80,7 @@ def should_retry(state: DockAIState) -> Literal["reflect", "end"]:
         if retry_count < max_retries:
             return "reflect"  # Go to reflection before retry
         else:
-            logger.error("❌ Max retries reached - security check failed.")
+            logger.error("Max retries reached - security check failed.")
             return "end"
 
     # Handle validation failures
@@ -94,7 +94,7 @@ def should_retry(state: DockAIState) -> Literal["reflect", "end"]:
         if retry_count < max_retries:
             return "reflect"  # Go to reflection before retry
         
-        logger.error("❌ Max retries reached - validation failed.")
+        logger.error("Max retries reached - validation failed.")
         return "end"
         
     return "end"

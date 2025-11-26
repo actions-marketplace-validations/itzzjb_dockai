@@ -65,7 +65,7 @@ def print_success(message: str):
     Args:
         message (str): The success message to display.
     """
-    console.print(f"\n[bold green]✅ Success![/bold green] {message}")
+    console.print(f"\n[bold green]Success![/bold green] {message}")
 
 def print_warning(message: str):
     """
@@ -92,12 +92,12 @@ def display_summary(final_state: dict, output_path: str):
         output_path (str): The path where the Dockerfile was saved.
     """
     print_success(f"Dockerfile validated successfully.")
-    console.print(f"[bold green]📄 Final Dockerfile saved to {output_path}[/bold green]")
+    console.print(f"[bold green]Final Dockerfile saved to {output_path}[/bold green]")
     
     # Show retry history summary if there were retries (Adaptive Learning)
     retry_history = final_state.get("retry_history", [])
     if retry_history:
-        console.print(f"\n[cyan]🔄 Adaptive Learning: {len(retry_history)} iterations to reach solution[/cyan]")
+        console.print(f"\n[cyan]Adaptive Learning: {len(retry_history)} iterations to reach solution[/cyan]")
         for i, attempt in enumerate(retry_history, 1):
             console.print(f"  [dim]Attempt {i}: {attempt.get('lesson_learned', 'N/A')}[/dim]")
     
@@ -146,7 +146,7 @@ def display_failure(final_state: dict):
     Args:
         final_state (dict): The final state of the workflow.
     """
-    console.print(f"\n[bold red]❌ Failed to generate a valid Dockerfile[/bold red]\n")
+    console.print(f"\n[bold red]Failed to generate a valid Dockerfile[/bold red]\n")
     
     # Display classified error information if available
     error_details = final_state.get("error_details")
@@ -156,11 +156,11 @@ def display_failure(final_state: dict):
         
         # Create error type display with icons
         error_type_icons = {
-            "project_error": "🔧 Project Error",
-            "dockerfile_error": "🐳 Dockerfile Error", 
-            "environment_error": "💻 Environment Error",
-            "unknown_error": "❓ Unknown Error",
-            "security_review": "🔒 Security Error"
+            "project_error": "Project Error",
+            "dockerfile_error": "Dockerfile Error", 
+            "environment_error": "Environment Error",
+            "unknown_error": "Unknown Error",
+            "security_review": "Security Error"
         }
         
         error_type_display = error_type_icons.get(error_type, "Error")
@@ -172,10 +172,10 @@ def display_failure(final_state: dict):
         
         # Add retry info based on error type
         if error_type == "project_error":
-            error_content += "\n\n[yellow]⚠️ This is a project configuration issue that cannot be fixed by retrying.[/yellow]"
+            error_content += "\n\n[yellow]This is a project configuration issue that cannot be fixed by retrying.[/yellow]"
             error_content += "\n[yellow]Please fix the issue in your project and try again.[/yellow]"
         elif error_type == "environment_error":
-            error_content += "\n\n[yellow]⚠️ This is a local environment issue.[/yellow]"
+            error_content += "\n\n[yellow]This is a local environment issue.[/yellow]"
             error_content += "\n[yellow]Please fix your Docker/system configuration and try again.[/yellow]"
         
         console.print(Panel(
@@ -194,7 +194,7 @@ def display_failure(final_state: dict):
     max_retries = final_state.get("max_retries", 5)
     
     if retry_history:
-        console.print(f"\n[cyan]🔄 Attempted {retry_count} of {max_retries} retries:[/cyan]")
+        console.print(f"\n[cyan]Attempted {retry_count} of {max_retries} retries:[/cyan]")
         for i, attempt in enumerate(retry_history, 1):
             console.print(f"  [dim]Attempt {i}:[/dim]")
             console.print(f"    [dim]• Tried: {attempt.get('what_was_tried', 'N/A')[:60]}...[/dim]")
@@ -205,7 +205,7 @@ def display_failure(final_state: dict):
     # Show reflection insight if available
     reflection = final_state.get("reflection")
     if reflection:
-        console.print(f"\n[cyan]💡 Final Analysis:[/cyan]")
+        console.print(f"\n[cyan]Final Analysis:[/cyan]")
         console.print(f"  [dim]Root Cause: {reflection.get('root_cause_analysis', 'N/A')[:100]}...[/dim]")
     
     # Show token usage even on failure

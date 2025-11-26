@@ -47,7 +47,7 @@ def scan_node(state: DockAIState) -> DockAIState:
         DockAIState: Updated state with the 'file_tree' populated.
     """
     path = state["path"]
-    logger.info(f"📁 Scanning directory: {path}")
+    logger.info(f"Scanning directory: {path}")
     file_tree = get_file_tree(path)
     logger.info(f"Found {len(file_tree)} files to analyze")
     return {"file_tree": file_tree}
@@ -87,9 +87,9 @@ def analyze_node(state: DockAIState) -> DockAIState:
         if focus:
             instructions += f"\n\nRE-ANALYSIS FOCUS: {focus}\n"
             instructions += "The previous analysis may have been incorrect. Pay special attention to the focus area."
-        logger.info(f"🔄 Re-analyzing with focus: {focus}")
+        logger.info(f"Re-analyzing with focus: {focus}")
     else:
-        logger.info("🧠 Analyzing repository needs...")
+        logger.info("Analyzing repository needs...")
     
     # Execute analysis (returns AnalysisResult object and token usage)
     analysis_result_obj, usage = analyze_repo_needs(file_tree, instructions)
@@ -136,7 +136,7 @@ def read_files_node(state: DockAIState) -> DockAIState:
     path = state["path"]
     files_to_read = state["analysis_result"].get("files_to_read", [])
     
-    logger.info(f"📖 Reading {len(files_to_read)} critical files...")
+    logger.info(f"Reading {len(files_to_read)} critical files...")
     file_contents_str = ""
     files_read = 0
     files_failed = []
@@ -212,7 +212,7 @@ def detect_health_node(state: DockAIState) -> DockAIState:
         logger.info(f"Using analyzer-detected health endpoint: {existing_health.get('path')}:{existing_health.get('port')}")
         return {}
     
-    logger.info("🔍 Detecting health endpoints from code...")
+    logger.info("Detecting health endpoints from code...")
     
     try:
         detection_result, usage = detect_health_endpoints(file_contents, analysis_result)
@@ -261,7 +261,7 @@ def detect_readiness_node(state: DockAIState) -> DockAIState:
     file_contents = state.get("file_contents", "")
     analysis_result = state.get("analysis_result", {})
     
-    logger.info("🎯 Detecting startup readiness patterns...")
+    logger.info("Detecting startup readiness patterns...")
     
     try:
         patterns_result, usage = detect_readiness_patterns(file_contents, analysis_result)
@@ -313,7 +313,7 @@ def plan_node(state: DockAIState) -> DockAIState:
     config = state.get("config", {})
     instructions = config.get("generator_instructions", "")
     
-    logger.info("📋 Creating generation plan...")
+    logger.info("Creating generation plan...")
     
     plan_result, usage = create_plan(
         analysis_result=analysis_result,
@@ -395,10 +395,10 @@ def generate_node(state: DockAIState) -> DockAIState:
     # Dynamic Model Selection: Use smarter model for retries/complex tasks
     if retry_count == 0:
         model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
-        logger.info(f"🏗️ Generating Dockerfile (Draft Model: {model_name})...")
+        logger.info(f"Generating Dockerfile (Draft Model: {model_name})...")
     else:
         model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
-        logger.info(f"🔧 Improving Dockerfile (Expert Model: {model_name}, attempt {retry_count + 1})...")
+        logger.info(f"Improving Dockerfile (Expert Model: {model_name}, attempt {retry_count + 1})...")
     
     # Decide: Fresh generation or iterative improvement?
     if reflection and previous_dockerfile and retry_count > 0:
@@ -486,7 +486,7 @@ def review_node(state: DockAIState) -> DockAIState:
     """
     dockerfile_content = state["dockerfile_content"]
     
-    logger.info("🔒 Performing Security Review...")
+    logger.info("Performing Security Review...")
     review_result, usage = review_dockerfile(dockerfile_content)
     
     usage_dict = {
@@ -529,7 +529,7 @@ def review_node(state: DockAIState) -> DockAIState:
             "usage_stats": current_stats + [usage_dict]
         }
     
-    logger.info("✅ Security Review Passed.")
+    logger.info("Security Review Passed.")
     return {
         "usage_stats": current_stats + [usage_dict]
     }
@@ -575,7 +575,7 @@ def validate_node(state: DockAIState) -> DockAIState:
     with open(output_path, "w") as f:
         f.write(dockerfile_content)
         
-    logger.info("🐳 Validating Dockerfile...")
+    logger.info("Validating Dockerfile...")
     
     # Use AI-detected readiness patterns if available
     readiness_patterns = state.get("readiness_patterns", [])
@@ -626,7 +626,7 @@ def validate_node(state: DockAIState) -> DockAIState:
     
     if success:
         size_mb = image_size / (1024 * 1024) if image_size > 0 else 0
-        logger.info(f"✅ Validation Passed! Image size: {size_mb:.2f}MB")
+        logger.info(f"Validation Passed! Image size: {size_mb:.2f}MB")
 
     return {
         "validation_result": {"success": success, "message": message},
@@ -659,7 +659,7 @@ def reflect_node(state: DockAIState) -> DockAIState:
     analysis_result = state.get("analysis_result", {})
     retry_history = state.get("retry_history", [])
     
-    logger.info("🤔 Reflecting on failure...")
+    logger.info("Reflecting on failure...")
     
     # Get container logs from error details if available
     container_logs = error_details.get("original_error", "") if error_details else ""
@@ -725,5 +725,5 @@ def increment_retry(state: DockAIState) -> DockAIState:
         DockAIState: Updated state with incremented 'retry_count'.
     """
     current_count = state.get("retry_count", 0)
-    logger.info(f"🔄 Retry {current_count + 1}...")
+    logger.info(f"Retry {current_count + 1}...")
     return {"retry_count": current_count + 1}
