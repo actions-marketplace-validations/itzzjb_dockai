@@ -1,5 +1,5 @@
-# Use the official Python 3.11 slim image as the base image
-FROM python:3.11-slim
+# Use the official Python 3.11 image as the base image
+FROM python:3.11
 
 # Set the working directory
 WORKDIR /app
@@ -8,18 +8,18 @@ WORKDIR /app
 RUN useradd -m dockai
 USER dockai
 
-# Copy the requirements files and the application source code
+# Copy the necessary files for installation
 COPY requirements.txt .
 COPY pyproject.toml .
 COPY src/ ./src/
-COPY tests/ ./tests/
-COPY .dockai .
 COPY README.md .
 
-# Install the application dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install the application dependencies and the package itself
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir .
+
+# Ensure the PATH includes the directory where Python scripts are installed
+ENV PATH="/home/dockai/.local/bin:$PATH"
 
 # Set the entry point for the application
-ENTRYPOINT ["python", "-m", "src.dockai.main", "--help"]
-
-# The application does not expose any ports or health checks as it is a CLI tool.
+ENTRYPOINT ["dockai", "--help"]

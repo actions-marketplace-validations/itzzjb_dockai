@@ -9,6 +9,11 @@ of the main agent workflow.
 import os
 import sys
 import logging
+import warnings
+
+# Suppress Pydantic V1 compatibility warning with Python 3.14+
+warnings.filterwarnings("ignore", message=".*Pydantic V1.*Python 3.14.*")
+
 import typer
 from dotenv import load_dotenv
 
@@ -18,8 +23,8 @@ from . import ui
 # Load environment variables from .env file
 load_dotenv()
 
-# Initialize Typer application
-app = typer.Typer()
+# Initialize Typer application with Rich markup support
+app = typer.Typer(rich_markup_mode="rich")
 
 # Configure logging using the centralized setup from the UI module
 logger = ui.setup_logging()
@@ -98,10 +103,9 @@ def run(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose debug logging")
 ):
     """
-    DockAI: A LangGraph Agentic Pipeline for generating optimized Dockerfiles.
+    [bold blue]DockAI[/bold blue]
     
-    This command initiates the AI agent to analyze the specified project path,
-    plan a build strategy, and generate a production-ready Dockerfile.
+    [italic]Adaptive Agentic Workflow powered by LangGraph[/italic]
     """
     if verbose:
         logger.setLevel(logging.DEBUG)
