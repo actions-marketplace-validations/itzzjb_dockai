@@ -10,8 +10,8 @@ class TestGenerateDockerfile:
     
     @patch("dockai.agents.generator.TokenUsageCallback")
     @patch("dockai.agents.generator.ChatPromptTemplate")
-    @patch("dockai.agents.generator.ChatOpenAI")
-    def test_generate_fresh_dockerfile(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.generator.create_llm")
+    def test_generate_fresh_dockerfile(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test generating a fresh Dockerfile."""
         # Set up mock callback
         mock_callback = MagicMock()
@@ -22,9 +22,9 @@ class TestGenerateDockerfile:
         mock_prompt = MagicMock()
         mock_prompt_class.from_messages.return_value = mock_prompt
         
-        # Set up mock LLM and chain
+        # Set up mock LLM
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         # Create mock chain that returns our result when invoked
         mock_chain = MagicMock()
@@ -54,8 +54,8 @@ CMD ["python", "app.py"]""",
     
     @patch("dockai.agents.generator.TokenUsageCallback")
     @patch("dockai.agents.generator.ChatPromptTemplate")
-    @patch("dockai.agents.generator.ChatOpenAI")
-    def test_generate_node_dockerfile(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.generator.create_llm")
+    def test_generate_node_dockerfile(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test generating a Node.js Dockerfile."""
         mock_callback = MagicMock()
         mock_callback.get_usage.return_value = {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
@@ -65,7 +65,7 @@ CMD ["python", "app.py"]""",
         mock_prompt_class.from_messages.return_value = mock_prompt
         
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         mock_chain = MagicMock()
         mock_result = DockerfileResult(
@@ -92,8 +92,8 @@ CMD ["npm", "start"]""",
     
     @patch("dockai.agents.generator.TokenUsageCallback")
     @patch("dockai.agents.generator.ChatPromptTemplate")
-    @patch("dockai.agents.generator.ChatOpenAI")
-    def test_generate_script_dockerfile(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.generator.create_llm")
+    def test_generate_script_dockerfile(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test generating a Dockerfile for a script project."""
         mock_callback = MagicMock()
         mock_callback.get_usage.return_value = {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
@@ -103,7 +103,7 @@ CMD ["npm", "start"]""",
         mock_prompt_class.from_messages.return_value = mock_prompt
         
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         mock_chain = MagicMock()
         mock_result = DockerfileResult(
@@ -127,8 +127,8 @@ ENTRYPOINT ["python", "script.py"]""",
     
     @patch("dockai.agents.generator.TokenUsageCallback")
     @patch("dockai.agents.generator.ChatPromptTemplate")
-    @patch("dockai.agents.generator.ChatOpenAI")
-    def test_generate_with_custom_instructions(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.generator.create_llm")
+    def test_generate_with_custom_instructions(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test generating with custom instructions."""
         mock_callback = MagicMock()
         mock_callback.get_usage.return_value = {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
@@ -138,7 +138,7 @@ ENTRYPOINT ["python", "script.py"]""",
         mock_prompt_class.from_messages.return_value = mock_prompt
         
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         mock_chain = MagicMock()
         mock_result = DockerfileResult(
@@ -161,9 +161,12 @@ CMD ["python", "app.py"]""",
         assert "alpine" in dockerfile.lower()
     
     @patch("dockai.agents.generator._generate_iterative_dockerfile")
-    @patch("dockai.agents.generator.ChatOpenAI")
-    def test_generate_iterative_with_reflection(self, mock_chat_class, mock_iterative):
+    @patch("dockai.agents.generator.create_llm")
+    def test_generate_iterative_with_reflection(self, mock_create_llm, mock_iterative):
         """Test iterative generation with reflection."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_iterative.return_value = (
             "FROM python:3.11\nRUN apt-get update && apt-get install -y gcc",
             "service",
@@ -182,8 +185,8 @@ CMD ["python", "app.py"]""",
     
     @patch("dockai.agents.generator.TokenUsageCallback")
     @patch("dockai.agents.generator.ChatPromptTemplate")
-    @patch("dockai.agents.generator.ChatOpenAI")
-    def test_generate_returns_tuple(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.generator.create_llm")
+    def test_generate_returns_tuple(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test that generate returns correct tuple structure."""
         mock_callback = MagicMock()
         mock_callback.get_usage.return_value = {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
@@ -193,7 +196,7 @@ CMD ["python", "app.py"]""",
         mock_prompt_class.from_messages.return_value = mock_prompt
         
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         mock_chain = MagicMock()
         mock_result = DockerfileResult(
@@ -218,8 +221,8 @@ CMD ["python", "app.py"]""",
     
     @patch("dockai.agents.generator.TokenUsageCallback")
     @patch("dockai.agents.generator.ChatPromptTemplate")
-    @patch("dockai.agents.generator.ChatOpenAI")
-    def test_generate_with_retry_history(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.generator.create_llm")
+    def test_generate_with_retry_history(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test generation with retry history."""
         mock_callback = MagicMock()
         mock_callback.get_usage.return_value = {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
@@ -229,7 +232,7 @@ CMD ["python", "app.py"]""",
         mock_prompt_class.from_messages.return_value = mock_prompt
         
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         mock_chain = MagicMock()
         mock_result = DockerfileResult(
@@ -254,8 +257,8 @@ CMD ["python", "app.py"]""",
     
     @patch("dockai.agents.generator.TokenUsageCallback")
     @patch("dockai.agents.generator.ChatPromptTemplate")
-    @patch("dockai.agents.generator.ChatOpenAI")
-    def test_generate_with_plan(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.generator.create_llm")
+    def test_generate_with_plan(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test generation with a strategic plan."""
         mock_callback = MagicMock()
         mock_callback.get_usage.return_value = {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
@@ -265,7 +268,7 @@ CMD ["python", "app.py"]""",
         mock_prompt_class.from_messages.return_value = mock_prompt
         
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         mock_chain = MagicMock()
         mock_result = DockerfileResult(

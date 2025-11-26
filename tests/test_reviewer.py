@@ -10,8 +10,8 @@ class TestReviewDockerfile:
     
     @patch("dockai.agents.reviewer.TokenUsageCallback")
     @patch("dockai.agents.reviewer.ChatPromptTemplate")
-    @patch("dockai.agents.reviewer.ChatOpenAI")
-    def test_review_secure_dockerfile(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.reviewer.create_llm")
+    def test_review_secure_dockerfile(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test reviewing a secure Dockerfile."""
         # Set up mock callback
         mock_callback = MagicMock()
@@ -24,7 +24,7 @@ class TestReviewDockerfile:
         
         # Set up mock LLM
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         # Create mock chain
         mock_chain = MagicMock()
@@ -52,8 +52,8 @@ CMD ["python", "app.py"]
     
     @patch("dockai.agents.reviewer.TokenUsageCallback")
     @patch("dockai.agents.reviewer.ChatPromptTemplate")
-    @patch("dockai.agents.reviewer.ChatOpenAI")
-    def test_review_insecure_dockerfile(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.reviewer.create_llm")
+    def test_review_insecure_dockerfile(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test reviewing a Dockerfile with security issues."""
         mock_callback = MagicMock()
         mock_callback.get_usage.return_value = {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
@@ -63,7 +63,7 @@ CMD ["python", "app.py"]
         mock_prompt_class.from_messages.return_value = mock_prompt
         
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         issue = SecurityIssue(
             severity="high",
@@ -98,8 +98,8 @@ CMD ["python", "app.py"]
     
     @patch("dockai.agents.reviewer.TokenUsageCallback")
     @patch("dockai.agents.reviewer.ChatPromptTemplate")
-    @patch("dockai.agents.reviewer.ChatOpenAI")
-    def test_review_with_critical_issue(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.reviewer.create_llm")
+    def test_review_with_critical_issue(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test reviewing a Dockerfile with critical security issue."""
         mock_callback = MagicMock()
         mock_callback.get_usage.return_value = {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
@@ -109,7 +109,7 @@ CMD ["python", "app.py"]
         mock_prompt_class.from_messages.return_value = mock_prompt
         
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         issue = SecurityIssue(
             severity="critical",
@@ -140,8 +140,8 @@ ENV SECRET=mysecretkey
     
     @patch("dockai.agents.reviewer.TokenUsageCallback")
     @patch("dockai.agents.reviewer.ChatPromptTemplate")
-    @patch("dockai.agents.reviewer.ChatOpenAI")
-    def test_review_returns_usage_dict(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.reviewer.create_llm")
+    def test_review_returns_usage_dict(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test that review returns usage dictionary."""
         mock_callback = MagicMock()
         mock_callback.get_usage.return_value = {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
@@ -151,7 +151,7 @@ ENV SECRET=mysecretkey
         mock_prompt_class.from_messages.return_value = mock_prompt
         
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         mock_chain = MagicMock()
         mock_result = SecurityReviewResult(
@@ -171,8 +171,8 @@ ENV SECRET=mysecretkey
     
     @patch("dockai.agents.reviewer.TokenUsageCallback")
     @patch("dockai.agents.reviewer.ChatPromptTemplate")
-    @patch("dockai.agents.reviewer.ChatOpenAI")
-    def test_review_with_multiple_issues(self, mock_chat_class, mock_prompt_class, mock_callback_class):
+    @patch("dockai.agents.reviewer.create_llm")
+    def test_review_with_multiple_issues(self, mock_create_llm, mock_prompt_class, mock_callback_class):
         """Test reviewing a Dockerfile with multiple security issues."""
         mock_callback = MagicMock()
         mock_callback.get_usage.return_value = {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
@@ -182,7 +182,7 @@ ENV SECRET=mysecretkey
         mock_prompt_class.from_messages.return_value = mock_prompt
         
         mock_llm = MagicMock()
-        mock_chat_class.return_value = mock_llm
+        mock_create_llm.return_value = mock_llm
         
         issues = [
             SecurityIssue(

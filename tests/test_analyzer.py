@@ -9,9 +9,12 @@ class TestAnalyzeRepoNeeds:
     """Test analyze_repo_needs function."""
     
     @patch("dockai.agents.analyzer.safe_invoke_chain")
-    @patch("dockai.agents.analyzer.ChatOpenAI")
-    def test_analyze_python_project(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.analyzer.create_llm")
+    def test_analyze_python_project(self, mock_create_llm, mock_invoke):
         """Test analyzing a Python project."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         health_endpoint = HealthEndpoint(path="/health", port=8080)
         mock_result = AnalysisResult(
             thought_process="Found Python project with Flask",
@@ -36,9 +39,12 @@ class TestAnalyzeRepoNeeds:
         assert "requirements.txt" in result.files_to_read
     
     @patch("dockai.agents.analyzer.safe_invoke_chain")
-    @patch("dockai.agents.analyzer.ChatOpenAI")
-    def test_analyze_node_project(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.analyzer.create_llm")
+    def test_analyze_node_project(self, mock_create_llm, mock_invoke):
         """Test analyzing a Node.js project."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = AnalysisResult(
             thought_process="Found Node.js project with Express",
             stack="Node.js with Express",
@@ -59,9 +65,12 @@ class TestAnalyzeRepoNeeds:
         assert result.suggested_base_image == "node:20-alpine"
     
     @patch("dockai.agents.analyzer.safe_invoke_chain")
-    @patch("dockai.agents.analyzer.ChatOpenAI")
-    def test_analyze_go_project(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.analyzer.create_llm")
+    def test_analyze_go_project(self, mock_create_llm, mock_invoke):
         """Test analyzing a Go project."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = AnalysisResult(
             thought_process="Found Go project",
             stack="Go",
@@ -82,9 +91,12 @@ class TestAnalyzeRepoNeeds:
         assert "go.mod" in result.files_to_read
     
     @patch("dockai.agents.analyzer.safe_invoke_chain")
-    @patch("dockai.agents.analyzer.ChatOpenAI")
-    def test_analyze_script_project(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.analyzer.create_llm")
+    def test_analyze_script_project(self, mock_create_llm, mock_invoke):
         """Test analyzing a script-type project."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = AnalysisResult(
             thought_process="Found Python script",
             stack="Python",
@@ -104,9 +116,12 @@ class TestAnalyzeRepoNeeds:
         assert result.project_type == "script"
     
     @patch("dockai.agents.analyzer.safe_invoke_chain")
-    @patch("dockai.agents.analyzer.ChatOpenAI")
-    def test_analyze_with_custom_instructions(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.analyzer.create_llm")
+    def test_analyze_with_custom_instructions(self, mock_create_llm, mock_invoke):
         """Test analyzer with custom instructions."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = AnalysisResult(
             thought_process="Applied custom alpine preference",
             stack="Python",
@@ -129,9 +144,12 @@ class TestAnalyzeRepoNeeds:
         assert "alpine" in result.suggested_base_image
     
     @patch("dockai.agents.analyzer.safe_invoke_chain")
-    @patch("dockai.agents.analyzer.ChatOpenAI")
-    def test_analyze_returns_usage_stats(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.analyzer.create_llm")
+    def test_analyze_returns_usage_stats(self, mock_create_llm, mock_invoke):
         """Test that analyzer returns usage statistics."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = AnalysisResult(
             thought_process="Analysis complete",
             stack="Python",
@@ -153,9 +171,12 @@ class TestAnalyzeRepoNeeds:
         assert "completion_tokens" in usage
     
     @patch("dockai.agents.analyzer.safe_invoke_chain")
-    @patch("dockai.agents.analyzer.ChatOpenAI")
-    def test_analyze_no_health_endpoint(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.analyzer.create_llm")
+    def test_analyze_no_health_endpoint(self, mock_create_llm, mock_invoke):
         """Test analysis result with no health endpoint."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = AnalysisResult(
             thought_process="No explicit health endpoint found",
             stack="Python",

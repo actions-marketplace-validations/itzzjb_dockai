@@ -23,9 +23,12 @@ class TestCreatePlan:
     """Test create_plan function."""
     
     @patch("dockai.agents.agent_functions.safe_invoke_chain")
-    @patch("dockai.agents.agent_functions.ChatOpenAI")
-    def test_create_plan_returns_planning_result(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.agent_functions.create_llm")
+    def test_create_plan_returns_planning_result(self, mock_create_llm, mock_invoke):
         """Test creating a Dockerfile plan returns proper result."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = PlanningResult(
             thought_process="Planning multi-stage build",
             base_image_strategy="Use python:3.11-slim for runtime",
@@ -50,9 +53,12 @@ class TestCreatePlan:
         assert plan.use_multi_stage is True
     
     @patch("dockai.agents.agent_functions.safe_invoke_chain")
-    @patch("dockai.agents.agent_functions.ChatOpenAI")
-    def test_create_plan_with_retry_history(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.agent_functions.create_llm")
+    def test_create_plan_with_retry_history(self, mock_create_llm, mock_invoke):
         """Test create_plan uses retry history."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = PlanningResult(
             thought_process="Learning from previous failure",
             base_image_strategy="Switch to full image",
@@ -86,9 +92,12 @@ class TestReflectOnFailure:
     """Test reflect_on_failure function."""
     
     @patch("dockai.agents.agent_functions.safe_invoke_chain")
-    @patch("dockai.agents.agent_functions.ChatOpenAI")
-    def test_reflect_returns_reflection_result(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.agent_functions.create_llm")
+    def test_reflect_returns_reflection_result(self, mock_create_llm, mock_invoke):
         """Test reflection returns proper result structure."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = ReflectionResult(
             thought_process="Analyzing failure",
             root_cause_analysis="Missing build dependency gcc",
@@ -122,9 +131,12 @@ class TestDetectHealthEndpoints:
     """Test detect_health_endpoints function."""
     
     @patch("dockai.agents.agent_functions.safe_invoke_chain")
-    @patch("dockai.agents.agent_functions.ChatOpenAI")
-    def test_detect_health_found(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.agent_functions.create_llm")
+    def test_detect_health_found(self, mock_create_llm, mock_invoke):
         """Test detecting an existing health endpoint."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         health_endpoint = HealthEndpoint(path="/health", port=8080)
         mock_result = HealthEndpointDetectionResult(
             thought_process="Found /health endpoint in routes",
@@ -146,9 +158,12 @@ class TestDetectHealthEndpoints:
         assert result.primary_health_endpoint.path == "/health"
     
     @patch("dockai.agents.agent_functions.safe_invoke_chain")
-    @patch("dockai.agents.agent_functions.ChatOpenAI")
-    def test_detect_health_not_found(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.agent_functions.create_llm")
+    def test_detect_health_not_found(self, mock_create_llm, mock_invoke):
         """Test when no health endpoint exists."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = HealthEndpointDetectionResult(
             thought_process="No explicit health endpoint found",
             health_endpoints_found=[],
@@ -172,9 +187,12 @@ class TestDetectReadinessPatterns:
     """Test detect_readiness_patterns function."""
     
     @patch("dockai.agents.agent_functions.safe_invoke_chain")
-    @patch("dockai.agents.agent_functions.ChatOpenAI")
-    def test_detect_readiness_patterns(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.agent_functions.create_llm")
+    def test_detect_readiness_patterns(self, mock_create_llm, mock_invoke):
         """Test detecting readiness patterns."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = ReadinessPatternResult(
             thought_process="Found startup patterns for FastAPI app",
             startup_success_patterns=["Uvicorn running on", "Application startup complete"],
@@ -201,9 +219,12 @@ class TestGenerateIterativeDockerfile:
     """Test generate_iterative_dockerfile function."""
     
     @patch("dockai.agents.agent_functions.safe_invoke_chain")
-    @patch("dockai.agents.agent_functions.ChatOpenAI")
-    def test_generate_iterative_dockerfile(self, mock_chat, mock_invoke):
+    @patch("dockai.agents.agent_functions.create_llm")
+    def test_generate_iterative_dockerfile(self, mock_create_llm, mock_invoke):
         """Test iterative Dockerfile generation."""
+        mock_llm = MagicMock()
+        mock_create_llm.return_value = mock_llm
+        
         mock_result = IterativeDockerfileResult(
             thought_process="Fixed build error by adding gcc",
             previous_issues_addressed=["Missing gcc compiler"],

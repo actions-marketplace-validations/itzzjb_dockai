@@ -101,7 +101,7 @@ def test_scan_node(mock_get_file_tree):
 @patch("dockai.workflow.nodes.analyze_repo_needs")
 def test_analyze_node(mock_analyze):
     """Test analyze node"""
-    from dockai.schemas import AnalysisResult
+    from dockai.core.schemas import AnalysisResult
     
     mock_result = AnalysisResult(
         thought_process="Test",
