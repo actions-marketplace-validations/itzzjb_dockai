@@ -14,11 +14,11 @@ from typing import Tuple, Any, Dict, List
 from langchain_core.prompts import ChatPromptTemplate
 
 # Internal imports for data schemas, callbacks, and LLM providers
-from .schemas import AnalysisResult
-from .callbacks import TokenUsageCallback
-from .rate_limiter import with_rate_limit_handling
-from .prompts import get_prompt
-from .llm_providers import create_llm
+from ..core.schemas import AnalysisResult
+from ..utils.callbacks import TokenUsageCallback
+from ..utils.rate_limiter import with_rate_limit_handling
+from ..utils.prompts import get_prompt
+from ..core.llm_providers import create_llm
 
 
 @with_rate_limit_handling(max_retries=5, base_delay=2.0, max_delay=60.0)

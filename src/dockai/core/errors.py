@@ -128,8 +128,8 @@ def analyze_error_with_ai(error_message: str, logs: str = "", stack: str = "") -
     """
     # Import locally to avoid circular dependencies if any
     from langchain_core.prompts import ChatPromptTemplate
-    from .callbacks import TokenUsageCallback
-    from .prompts import get_prompt
+    from ..utils.callbacks import TokenUsageCallback
+    from ..utils.prompts import get_prompt
     from .llm_providers import create_llm
     
     try:

@@ -1,6 +1,6 @@
 """Tests for the state module."""
 import pytest
-from dockai.state import DockAIState
+from dockai.core.state import DockAIState
 
 
 class TestDockAIState:

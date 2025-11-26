@@ -17,9 +17,9 @@ warnings.filterwarnings("ignore", message=".*Pydantic V1.*Python 3.14.*")
 import typer
 from dotenv import load_dotenv
 
-from .graph import create_graph
+from ..workflow.graph import create_graph
 from . import ui
-from .prompts import load_prompts, set_prompt_config
+from ..utils.prompts import load_prompts, set_prompt_config
 
 # Load environment variables from .env file
 load_dotenv()
@@ -82,7 +82,7 @@ def run(
         raise typer.Exit(code=1)
     
     # Import and initialize LLM provider configuration
-    from .llm_providers import get_llm_config, load_llm_config_from_env, set_llm_config, log_provider_info, LLMProvider
+    from ..core.llm_providers import get_llm_config, load_llm_config_from_env, set_llm_config, log_provider_info, LLMProvider
     
     # Load LLM configuration from environment
     llm_config = load_llm_config_from_env()

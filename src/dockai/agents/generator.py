@@ -14,10 +14,10 @@ from typing import Tuple, Any, Dict, List, Optional
 from langchain_core.prompts import ChatPromptTemplate
 
 # Internal imports for data schemas, callbacks, and LLM providers
-from .schemas import DockerfileResult, IterativeDockerfileResult
-from .callbacks import TokenUsageCallback
-from .prompts import get_prompt
-from .llm_providers import create_llm
+from ..core.schemas import DockerfileResult, IterativeDockerfileResult
+from ..utils.callbacks import TokenUsageCallback
+from ..utils.prompts import get_prompt
+from ..core.llm_providers import create_llm
 
 
 def generate_dockerfile(

@@ -1,16 +1,16 @@
 """Tests for the generator module."""
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
-from dockai.generator import generate_dockerfile
-from dockai.schemas import DockerfileResult, IterativeDockerfileResult
+from dockai.agents.generator import generate_dockerfile
+from dockai.core.schemas import DockerfileResult, IterativeDockerfileResult
 
 
 class TestGenerateDockerfile:
     """Test generate_dockerfile function."""
     
-    @patch("dockai.generator.TokenUsageCallback")
-    @patch("dockai.generator.ChatPromptTemplate")
-    @patch("dockai.generator.ChatOpenAI")
+    @patch("dockai.agents.generator.TokenUsageCallback")
+    @patch("dockai.agents.generator.ChatPromptTemplate")
+    @patch("dockai.agents.generator.ChatOpenAI")
     def test_generate_fresh_dockerfile(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test generating a fresh Dockerfile."""
         # Set up mock callback
@@ -52,9 +52,9 @@ CMD ["python", "app.py"]""",
         assert "FROM python:3.11" in dockerfile
         assert project_type == "service"
     
-    @patch("dockai.generator.TokenUsageCallback")
-    @patch("dockai.generator.ChatPromptTemplate")
-    @patch("dockai.generator.ChatOpenAI")
+    @patch("dockai.agents.generator.TokenUsageCallback")
+    @patch("dockai.agents.generator.ChatPromptTemplate")
+    @patch("dockai.agents.generator.ChatOpenAI")
     def test_generate_node_dockerfile(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test generating a Node.js Dockerfile."""
         mock_callback = MagicMock()
@@ -90,9 +90,9 @@ CMD ["npm", "start"]""",
         assert "FROM node:20" in dockerfile
         assert "npm" in dockerfile
     
-    @patch("dockai.generator.TokenUsageCallback")
-    @patch("dockai.generator.ChatPromptTemplate")
-    @patch("dockai.generator.ChatOpenAI")
+    @patch("dockai.agents.generator.TokenUsageCallback")
+    @patch("dockai.agents.generator.ChatPromptTemplate")
+    @patch("dockai.agents.generator.ChatOpenAI")
     def test_generate_script_dockerfile(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test generating a Dockerfile for a script project."""
         mock_callback = MagicMock()
@@ -125,9 +125,9 @@ ENTRYPOINT ["python", "script.py"]""",
         assert project_type == "script"
         assert "ENTRYPOINT" in dockerfile
     
-    @patch("dockai.generator.TokenUsageCallback")
-    @patch("dockai.generator.ChatPromptTemplate")
-    @patch("dockai.generator.ChatOpenAI")
+    @patch("dockai.agents.generator.TokenUsageCallback")
+    @patch("dockai.agents.generator.ChatPromptTemplate")
+    @patch("dockai.agents.generator.ChatOpenAI")
     def test_generate_with_custom_instructions(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test generating with custom instructions."""
         mock_callback = MagicMock()
@@ -160,8 +160,8 @@ CMD ["python", "app.py"]""",
         
         assert "alpine" in dockerfile.lower()
     
-    @patch("dockai.generator._generate_iterative_dockerfile")
-    @patch("dockai.generator.ChatOpenAI")
+    @patch("dockai.agents.generator._generate_iterative_dockerfile")
+    @patch("dockai.agents.generator.ChatOpenAI")
     def test_generate_iterative_with_reflection(self, mock_chat_class, mock_iterative):
         """Test iterative generation with reflection."""
         mock_iterative.return_value = (
@@ -180,9 +180,9 @@ CMD ["python", "app.py"]""",
         
         assert "gcc" in dockerfile
     
-    @patch("dockai.generator.TokenUsageCallback")
-    @patch("dockai.generator.ChatPromptTemplate")
-    @patch("dockai.generator.ChatOpenAI")
+    @patch("dockai.agents.generator.TokenUsageCallback")
+    @patch("dockai.agents.generator.ChatPromptTemplate")
+    @patch("dockai.agents.generator.ChatOpenAI")
     def test_generate_returns_tuple(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test that generate returns correct tuple structure."""
         mock_callback = MagicMock()
@@ -216,9 +216,9 @@ CMD ["python", "app.py"]""",
         assert project_type in ["service", "script"]
         assert isinstance(thought_process, str)
     
-    @patch("dockai.generator.TokenUsageCallback")
-    @patch("dockai.generator.ChatPromptTemplate")
-    @patch("dockai.generator.ChatOpenAI")
+    @patch("dockai.agents.generator.TokenUsageCallback")
+    @patch("dockai.agents.generator.ChatPromptTemplate")
+    @patch("dockai.agents.generator.ChatOpenAI")
     def test_generate_with_retry_history(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test generation with retry history."""
         mock_callback = MagicMock()
@@ -252,9 +252,9 @@ CMD ["python", "app.py"]""",
         
         assert "build-essential" in dockerfile or "FROM python" in dockerfile
     
-    @patch("dockai.generator.TokenUsageCallback")
-    @patch("dockai.generator.ChatPromptTemplate")
-    @patch("dockai.generator.ChatOpenAI")
+    @patch("dockai.agents.generator.TokenUsageCallback")
+    @patch("dockai.agents.generator.ChatPromptTemplate")
+    @patch("dockai.agents.generator.ChatOpenAI")
     def test_generate_with_plan(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test generation with a strategic plan."""
         mock_callback = MagicMock()

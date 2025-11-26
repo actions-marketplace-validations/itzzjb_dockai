@@ -1,7 +1,7 @@
 import os
 import tempfile
 import shutil
-from dockai.scanner import get_file_tree
+from dockai.utils.scanner import get_file_tree
 
 def test_get_file_tree_ignores_git():
     # Create a temp dir

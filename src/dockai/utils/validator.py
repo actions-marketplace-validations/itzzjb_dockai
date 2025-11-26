@@ -20,7 +20,7 @@ import json
 import re
 from typing import List, Tuple, Optional
 
-from .errors import classify_error, ClassifiedError, ErrorType
+from ..core.errors import classify_error, ClassifiedError, ErrorType
 
 # Initialize logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")

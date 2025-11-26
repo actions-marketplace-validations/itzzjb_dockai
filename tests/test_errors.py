@@ -1,7 +1,7 @@
 """Tests for the errors module."""
 import pytest
 from unittest.mock import patch, MagicMock
-from dockai.errors import (
+from dockai.core.errors import (
     ClassifiedError,
     ErrorType,
     classify_error,

@@ -36,7 +36,7 @@ test = [
 ]
 
 [project.scripts]
-dockai = "dockai.main:app"
+dockai = "dockai.cli.main:app"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

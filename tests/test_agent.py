@@ -1,7 +1,7 @@
 """Tests for the agent module."""
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from dockai.agent import (
+from dockai.agents.agent_functions import (
     create_plan,
     reflect_on_failure,
     detect_health_endpoints,
@@ -9,7 +9,7 @@ from dockai.agent import (
     generate_iterative_dockerfile,
     safe_invoke_chain,
 )
-from dockai.schemas import (
+from dockai.core.schemas import (
     PlanningResult,
     ReflectionResult,
     HealthEndpointDetectionResult,
@@ -22,8 +22,8 @@ from dockai.schemas import (
 class TestCreatePlan:
     """Test create_plan function."""
     
-    @patch("dockai.agent.safe_invoke_chain")
-    @patch("dockai.agent.ChatOpenAI")
+    @patch("dockai.agents.agent_functions.safe_invoke_chain")
+    @patch("dockai.agents.agent_functions.ChatOpenAI")
     def test_create_plan_returns_planning_result(self, mock_chat, mock_invoke):
         """Test creating a Dockerfile plan returns proper result."""
         mock_result = PlanningResult(
@@ -49,8 +49,8 @@ class TestCreatePlan:
         assert isinstance(plan, PlanningResult)
         assert plan.use_multi_stage is True
     
-    @patch("dockai.agent.safe_invoke_chain")
-    @patch("dockai.agent.ChatOpenAI")
+    @patch("dockai.agents.agent_functions.safe_invoke_chain")
+    @patch("dockai.agents.agent_functions.ChatOpenAI")
     def test_create_plan_with_retry_history(self, mock_chat, mock_invoke):
         """Test create_plan uses retry history."""
         mock_result = PlanningResult(
@@ -85,8 +85,8 @@ class TestCreatePlan:
 class TestReflectOnFailure:
     """Test reflect_on_failure function."""
     
-    @patch("dockai.agent.safe_invoke_chain")
-    @patch("dockai.agent.ChatOpenAI")
+    @patch("dockai.agents.agent_functions.safe_invoke_chain")
+    @patch("dockai.agents.agent_functions.ChatOpenAI")
     def test_reflect_returns_reflection_result(self, mock_chat, mock_invoke):
         """Test reflection returns proper result structure."""
         mock_result = ReflectionResult(
@@ -121,8 +121,8 @@ class TestReflectOnFailure:
 class TestDetectHealthEndpoints:
     """Test detect_health_endpoints function."""
     
-    @patch("dockai.agent.safe_invoke_chain")
-    @patch("dockai.agent.ChatOpenAI")
+    @patch("dockai.agents.agent_functions.safe_invoke_chain")
+    @patch("dockai.agents.agent_functions.ChatOpenAI")
     def test_detect_health_found(self, mock_chat, mock_invoke):
         """Test detecting an existing health endpoint."""
         health_endpoint = HealthEndpoint(path="/health", port=8080)
@@ -145,8 +145,8 @@ class TestDetectHealthEndpoints:
         assert result.confidence == "high"
         assert result.primary_health_endpoint.path == "/health"
     
-    @patch("dockai.agent.safe_invoke_chain")
-    @patch("dockai.agent.ChatOpenAI")
+    @patch("dockai.agents.agent_functions.safe_invoke_chain")
+    @patch("dockai.agents.agent_functions.ChatOpenAI")
     def test_detect_health_not_found(self, mock_chat, mock_invoke):
         """Test when no health endpoint exists."""
         mock_result = HealthEndpointDetectionResult(
@@ -171,8 +171,8 @@ class TestDetectHealthEndpoints:
 class TestDetectReadinessPatterns:
     """Test detect_readiness_patterns function."""
     
-    @patch("dockai.agent.safe_invoke_chain")
-    @patch("dockai.agent.ChatOpenAI")
+    @patch("dockai.agents.agent_functions.safe_invoke_chain")
+    @patch("dockai.agents.agent_functions.ChatOpenAI")
     def test_detect_readiness_patterns(self, mock_chat, mock_invoke):
         """Test detecting readiness patterns."""
         mock_result = ReadinessPatternResult(
@@ -200,8 +200,8 @@ class TestDetectReadinessPatterns:
 class TestGenerateIterativeDockerfile:
     """Test generate_iterative_dockerfile function."""
     
-    @patch("dockai.agent.safe_invoke_chain")
-    @patch("dockai.agent.ChatOpenAI")
+    @patch("dockai.agents.agent_functions.safe_invoke_chain")
+    @patch("dockai.agents.agent_functions.ChatOpenAI")
     def test_generate_iterative_dockerfile(self, mock_chat, mock_invoke):
         """Test iterative Dockerfile generation."""
         mock_result = IterativeDockerfileResult(

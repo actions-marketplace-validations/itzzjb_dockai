@@ -1,7 +1,7 @@
 """Tests for the callbacks module."""
 import pytest
 from unittest.mock import MagicMock
-from dockai.callbacks import TokenUsageCallback
+from dockai.utils.callbacks import TokenUsageCallback
 
 
 class TestTokenUsageCallback:

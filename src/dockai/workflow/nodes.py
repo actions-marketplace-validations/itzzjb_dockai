@@ -12,15 +12,15 @@ import logging
 from typing import Dict, Any, Literal, Optional
 
 # Internal imports for state management and core logic
-from .state import DockAIState
-from .scanner import get_file_tree
-from .analyzer import analyze_repo_needs
-from .generator import generate_dockerfile
-from .reviewer import review_dockerfile
-from .validator import validate_docker_build_and_run, check_container_readiness
-from .errors import classify_error, ClassifiedError, ErrorType, format_error_for_display
-from .registry import get_docker_tags
-from .agent import (
+from ..core.state import DockAIState
+from ..utils.scanner import get_file_tree
+from ..agents.analyzer import analyze_repo_needs
+from ..agents.generator import generate_dockerfile
+from ..agents.reviewer import review_dockerfile
+from ..utils.validator import validate_docker_build_and_run, check_container_readiness
+from ..core.errors import classify_error, ClassifiedError, ErrorType, format_error_for_display
+from ..utils.registry import get_docker_tags
+from ..agents.agent_functions import (
     create_plan,
     reflect_on_failure,
     detect_health_endpoints,

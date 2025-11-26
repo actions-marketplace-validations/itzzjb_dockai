@@ -3,7 +3,7 @@ import os
 import tempfile
 import pytest
 from unittest.mock import patch, MagicMock
-from dockai.prompts import (
+from dockai.utils.prompts import (
     PromptConfig,
     get_prompt_config,
     set_prompt_config,

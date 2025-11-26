@@ -1,16 +1,16 @@
 """Tests for the reviewer module."""
 import pytest
 from unittest.mock import patch, MagicMock
-from dockai.reviewer import review_dockerfile
-from dockai.schemas import SecurityReviewResult, SecurityIssue
+from dockai.agents.reviewer import review_dockerfile
+from dockai.core.schemas import SecurityReviewResult, SecurityIssue
 
 
 class TestReviewDockerfile:
     """Test review_dockerfile function."""
     
-    @patch("dockai.reviewer.TokenUsageCallback")
-    @patch("dockai.reviewer.ChatPromptTemplate")
-    @patch("dockai.reviewer.ChatOpenAI")
+    @patch("dockai.agents.reviewer.TokenUsageCallback")
+    @patch("dockai.agents.reviewer.ChatPromptTemplate")
+    @patch("dockai.agents.reviewer.ChatOpenAI")
     def test_review_secure_dockerfile(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test reviewing a secure Dockerfile."""
         # Set up mock callback
@@ -50,9 +50,9 @@ CMD ["python", "app.py"]
         assert result.is_secure is True
         assert len(result.issues) == 0
     
-    @patch("dockai.reviewer.TokenUsageCallback")
-    @patch("dockai.reviewer.ChatPromptTemplate")
-    @patch("dockai.reviewer.ChatOpenAI")
+    @patch("dockai.agents.reviewer.TokenUsageCallback")
+    @patch("dockai.agents.reviewer.ChatPromptTemplate")
+    @patch("dockai.agents.reviewer.ChatOpenAI")
     def test_review_insecure_dockerfile(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test reviewing a Dockerfile with security issues."""
         mock_callback = MagicMock()
@@ -96,9 +96,9 @@ CMD ["python", "app.py"]
         assert len(result.issues) == 1
         assert result.issues[0].severity == "high"
     
-    @patch("dockai.reviewer.TokenUsageCallback")
-    @patch("dockai.reviewer.ChatPromptTemplate")
-    @patch("dockai.reviewer.ChatOpenAI")
+    @patch("dockai.agents.reviewer.TokenUsageCallback")
+    @patch("dockai.agents.reviewer.ChatPromptTemplate")
+    @patch("dockai.agents.reviewer.ChatOpenAI")
     def test_review_with_critical_issue(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test reviewing a Dockerfile with critical security issue."""
         mock_callback = MagicMock()
@@ -138,9 +138,9 @@ ENV SECRET=mysecretkey
         assert result.is_secure is False
         assert result.issues[0].severity == "critical"
     
-    @patch("dockai.reviewer.TokenUsageCallback")
-    @patch("dockai.reviewer.ChatPromptTemplate")
-    @patch("dockai.reviewer.ChatOpenAI")
+    @patch("dockai.agents.reviewer.TokenUsageCallback")
+    @patch("dockai.agents.reviewer.ChatPromptTemplate")
+    @patch("dockai.agents.reviewer.ChatOpenAI")
     def test_review_returns_usage_dict(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test that review returns usage dictionary."""
         mock_callback = MagicMock()
@@ -169,9 +169,9 @@ ENV SECRET=mysecretkey
         assert "prompt_tokens" in usage
         assert "completion_tokens" in usage
     
-    @patch("dockai.reviewer.TokenUsageCallback")
-    @patch("dockai.reviewer.ChatPromptTemplate")
-    @patch("dockai.reviewer.ChatOpenAI")
+    @patch("dockai.agents.reviewer.TokenUsageCallback")
+    @patch("dockai.agents.reviewer.ChatPromptTemplate")
+    @patch("dockai.agents.reviewer.ChatOpenAI")
     def test_review_with_multiple_issues(self, mock_chat_class, mock_prompt_class, mock_callback_class):
         """Test reviewing a Dockerfile with multiple security issues."""
         mock_callback = MagicMock()

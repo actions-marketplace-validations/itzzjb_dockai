@@ -1,7 +1,7 @@
 from unittest.mock import patch, MagicMock
-from dockai.registry import get_docker_tags, _get_image_prefix
+from dockai.utils.registry import get_docker_tags, _get_image_prefix
 
-@patch("dockai.registry.httpx.get")
+@patch("dockai.utils.registry.httpx.get")
 def test_get_docker_tags_docker_hub(mock_get):
     """Test fetching tags from Docker Hub"""
     mock_response = MagicMock()
@@ -24,7 +24,7 @@ def test_get_docker_tags_docker_hub(mock_get):
     # Should prioritize alpine tags
     assert tags[0].endswith("alpine") or "alpine" in tags[0]
 
-@patch("dockai.registry.httpx.get")
+@patch("dockai.utils.registry.httpx.get")
 def test_get_docker_tags_gcr(mock_get):
     """Test fetching tags from GCR"""
     mock_response = MagicMock()
@@ -40,7 +40,7 @@ def test_get_docker_tags_gcr(mock_get):
     assert any("gcr.io" in tag for tag in tags)
     assert any("alpine" in tag for tag in tags)
 
-@patch("dockai.registry.httpx.get")
+@patch("dockai.utils.registry.httpx.get")
 def test_get_docker_tags_quay(mock_get):
     """Test fetching tags from Quay.io"""
     mock_response = MagicMock()
@@ -66,7 +66,7 @@ def test_get_docker_tags_ecr():
     # Should return empty list for ECR (requires AWS credentials)
     assert tags == []
 
-@patch("dockai.registry.httpx.get")
+@patch("dockai.utils.registry.httpx.get")
 def test_get_docker_tags_network_error(mock_get):
     """Test handling of network errors"""
     mock_get.side_effect = Exception("Network error")
@@ -76,7 +76,7 @@ def test_get_docker_tags_network_error(mock_get):
     # Should return empty list on error
     assert tags == []
 
-@patch("dockai.registry.httpx.get")
+@patch("dockai.utils.registry.httpx.get")
 def test_get_docker_tags_version_detection(mock_get):
     """Test that it detects and uses latest version"""
     mock_response = MagicMock()
@@ -129,7 +129,7 @@ def test_get_image_prefix_acr():
     prefix = _get_image_prefix("myregistry.azurecr.io/image")
     assert prefix == "myregistry.azurecr.io/image:"
 
-@patch("dockai.registry.httpx.get")
+@patch("dockai.utils.registry.httpx.get")
 def test_get_docker_tags_alpine_priority(mock_get):
     """Test that alpine tags are prioritized"""
     mock_response = MagicMock()

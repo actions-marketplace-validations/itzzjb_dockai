@@ -15,10 +15,10 @@ from typing import Tuple, Any
 from langchain_core.prompts import ChatPromptTemplate
 
 # Internal imports for data schemas, callbacks, and LLM providers
-from .schemas import SecurityReviewResult
-from .callbacks import TokenUsageCallback
-from .prompts import get_prompt
-from .llm_providers import create_llm
+from ..core.schemas import SecurityReviewResult
+from ..utils.callbacks import TokenUsageCallback
+from ..utils.prompts import get_prompt
+from ..core.llm_providers import create_llm
 
 
 def review_dockerfile(dockerfile_content: str) -> Tuple[SecurityReviewResult, Any]:

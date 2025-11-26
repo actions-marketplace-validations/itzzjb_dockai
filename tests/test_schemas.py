@@ -1,6 +1,6 @@
 """Tests for the schemas module."""
 import pytest
-from dockai.schemas import (
+from dockai.core.schemas import (
     AnalysisResult,
     HealthEndpoint,
     DockerfileResult,

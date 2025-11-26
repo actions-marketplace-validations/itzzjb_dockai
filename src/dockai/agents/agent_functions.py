@@ -25,17 +25,17 @@ from typing import Tuple, Any, List, Dict, Optional
 from langchain_core.prompts import ChatPromptTemplate
 
 # Internal imports for data schemas, callbacks, and LLM providers
-from .schemas import (
+from ..core.schemas import (
     PlanningResult,
     ReflectionResult,
     HealthEndpointDetectionResult,
     ReadinessPatternResult,
     IterativeDockerfileResult
 )
-from .callbacks import TokenUsageCallback
-from .rate_limiter import with_rate_limit_handling, create_rate_limited_llm
-from .prompts import get_prompt
-from .llm_providers import create_llm
+from ..utils.callbacks import TokenUsageCallback
+from ..utils.rate_limiter import with_rate_limit_handling, create_rate_limited_llm
+from ..utils.prompts import get_prompt
+from ..core.llm_providers import create_llm
 
 # Initialize the logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")

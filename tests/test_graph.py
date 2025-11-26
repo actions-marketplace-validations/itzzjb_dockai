@@ -1,6 +1,6 @@
 from unittest.mock import patch, MagicMock
-from dockai.graph import should_retry, check_security
-from dockai.nodes import increment_retry, scan_node, analyze_node, read_files_node, generate_node
+from dockai.workflow.graph import should_retry, check_security
+from dockai.workflow.nodes import increment_retry, scan_node, analyze_node, read_files_node, generate_node
 
 def test_increment_retry():
     """Test retry counter increment"""
@@ -86,7 +86,7 @@ def test_check_security_fails_max_retries():
     result = check_security(state)
     assert result == "end"
 
-@patch("dockai.nodes.get_file_tree")
+@patch("dockai.workflow.nodes.get_file_tree")
 def test_scan_node(mock_get_file_tree):
     """Test scan node"""
     mock_get_file_tree.return_value = ["app.py", "requirements.txt"]
@@ -97,7 +97,7 @@ def test_scan_node(mock_get_file_tree):
     assert result["file_tree"] == ["app.py", "requirements.txt"]
     mock_get_file_tree.assert_called_once_with("/test/path")
 
-@patch("dockai.nodes.analyze_repo_needs")
+@patch("dockai.workflow.nodes.analyze_repo_needs")
 def test_analyze_node(mock_analyze):
     """Test analyze node"""
     from dockai.schemas import AnalysisResult
@@ -172,8 +172,8 @@ def test_read_files_node_truncation():
         
         assert "TRUNCATED" in result["file_contents"]
 
-@patch("dockai.nodes.generate_dockerfile")
-@patch("dockai.nodes.get_docker_tags")
+@patch("dockai.workflow.nodes.generate_dockerfile")
+@patch("dockai.workflow.nodes.get_docker_tags")
 def test_generate_node_first_attempt(mock_get_tags, mock_generate):
     """Test generate node on first attempt (uses cheaper model)"""
     
@@ -207,9 +207,9 @@ def test_generate_node_first_attempt(mock_get_tags, mock_generate):
     # Should use MODEL_ANALYZER on first attempt
     assert result["usage_stats"][0]["model"] == "gpt-4o-mini"
 
-@patch("dockai.nodes.generate_dockerfile")
-@patch("dockai.nodes.get_docker_tags")
-@patch("dockai.nodes.os.getenv")
+@patch("dockai.workflow.nodes.generate_dockerfile")
+@patch("dockai.workflow.nodes.get_docker_tags")
+@patch("dockai.workflow.nodes.os.getenv")
 def test_generate_node_retry(mock_getenv, mock_get_tags, mock_generate):
     """Test generate node on retry (uses more powerful model)"""
     

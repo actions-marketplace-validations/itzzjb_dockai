@@ -16,8 +16,8 @@ import logging
 from typing import Literal
 from langgraph.graph import StateGraph, END
 
-from .state import DockAIState
-from .errors import ErrorType
+from ..core.state import DockAIState
+from ..core.errors import ErrorType
 from .nodes import (
     scan_node,
     analyze_node,

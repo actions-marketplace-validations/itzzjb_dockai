@@ -2,7 +2,7 @@
 import pytest
 import time
 from unittest.mock import patch, MagicMock
-from dockai.rate_limiter import (
+from dockai.utils.rate_limiter import (
     RateLimitHandler,
     with_rate_limit_handling,
 )
