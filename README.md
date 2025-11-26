@@ -39,8 +39,6 @@ DockAI is built on **LangGraph**, enabling a cyclic, stateful workflow that mimi
 
 ### The Agentic Workflow
 
-![DockAI Architecture](dockai_architecture_diagram.png)
-
 The agent moves through a sophisticated graph of nodes:
 
 1.  **Scanner (`scanner.py`)**: Efficiently maps the project structure, respecting `.gitignore`.
