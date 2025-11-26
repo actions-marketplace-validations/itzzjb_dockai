@@ -12,7 +12,7 @@ The framework is organized into the following submodules:
 - cli: Command-line interface and UI components
 """
 
-__version__ = "0.3.0"
+__version__ = "2.1.0"
 
 # Lazy imports to avoid circular dependencies
 # Users can import directly from submodules for specific functionality

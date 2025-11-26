@@ -1,6 +1,8 @@
 # API Reference
 
-This document provides detailed documentation for DockAI's modules and functions.
+Detailed documentation for DockAI's modules and functions.
+
+---
 
 ## Package Structure
 
@@ -15,55 +17,62 @@ dockai/
 
 ---
 
-## Agents Module (`dockai.agents`)
+## Agents Module
 
-### analyzer.py
+### `dockai.agents.analyzer`
 
 #### `analyze_repo_needs(file_list, custom_instructions="")`
 
 Performs AI-powered analysis of the repository to determine project requirements.
 
 **Parameters:**
-- `file_list` (list): List of file paths in the repository
-- `custom_instructions` (str, optional): Additional instructions for the analyzer
 
-**Returns:**
-- `Tuple[AnalysisResult, Dict[str, int]]`: Analysis result and token usage
+| Name | Type | Description |
+|------|------|-------------|
+| `file_list` | `list` | List of file paths in the repository |
+| `custom_instructions` | `str` | Additional instructions for the analyzer |
+
+**Returns:** `Tuple[AnalysisResult, Dict[str, int]]`
 
 **Example:**
+
 ```python
 from dockai.agents.analyzer import analyze_repo_needs
 
 file_list = ["app.py", "requirements.txt", "README.md"]
 result, usage = analyze_repo_needs(file_list, "Focus on Flask patterns")
 
-print(result.stack)           # "Python with Flask"
-print(result.project_type)    # "service"
+print(result.stack)              # "Python with Flask"
+print(result.project_type)       # "service"
 print(result.suggested_base_image)  # "python:3.11-slim"
+print(result.files_to_read)      # ["app.py", "requirements.txt"]
 ```
 
 ---
 
-### generator.py
+### `dockai.agents.generator`
 
-#### `generate_dockerfile(stack_info, file_contents, custom_instructions="", ...)`
+#### `generate_dockerfile(stack_info, file_contents, ...)`
 
 Generates a Dockerfile based on analysis results and strategic plan.
 
 **Parameters:**
-- `stack_info` (str): Detected technology stack description
-- `file_contents` (str): Content of critical files
-- `custom_instructions` (str, optional): User instructions
-- `feedback_error` (str, optional): Error from previous attempt
-- `previous_dockerfile` (str, optional): Previous Dockerfile for iteration
-- `retry_history` (List[Dict], optional): History of attempts
-- `current_plan` (Dict, optional): Strategic plan
-- `reflection` (Dict, optional): Reflection on failure
 
-**Returns:**
-- `Tuple[str, str, str, Any]`: (dockerfile_content, project_type, thought_process, usage)
+| Name | Type | Description |
+|------|------|-------------|
+| `stack_info` | `str` | Detected technology stack |
+| `file_contents` | `str` | Content of critical files |
+| `custom_instructions` | `str` | User instructions |
+| `feedback_error` | `str` | Error from previous attempt |
+| `previous_dockerfile` | `str` | Previous Dockerfile for iteration |
+| `retry_history` | `List[Dict]` | History of attempts |
+| `current_plan` | `Dict` | Strategic plan |
+| `reflection` | `Dict` | Reflection on failure |
+
+**Returns:** `Tuple[str, str, str, Any]` - (dockerfile, project_type, thought_process, usage)
 
 **Example:**
+
 ```python
 from dockai.agents.generator import generate_dockerfile
 
@@ -72,23 +81,29 @@ dockerfile, project_type, thoughts, usage = generate_dockerfile(
     file_contents="fastapi==0.100.0\nuvicorn==0.23.0",
     custom_instructions="Use multi-stage build"
 )
+
+print(dockerfile)      # Generated Dockerfile content
+print(project_type)    # "service"
 ```
 
 ---
 
-### reviewer.py
+### `dockai.agents.reviewer`
 
 #### `review_dockerfile(dockerfile_content)`
 
 Performs security review of a generated Dockerfile.
 
 **Parameters:**
-- `dockerfile_content` (str): The Dockerfile content to review
 
-**Returns:**
-- `Tuple[SecurityReviewResult, Any]`: Review result and token usage
+| Name | Type | Description |
+|------|------|-------------|
+| `dockerfile_content` | `str` | The Dockerfile to review |
+
+**Returns:** `Tuple[SecurityReviewResult, Any]`
 
 **Example:**
+
 ```python
 from dockai.agents.reviewer import review_dockerfile
 
@@ -100,43 +115,46 @@ RUN pip install -r requirements.txt
 CMD ["python", "app.py"]
 """)
 
-print(result.is_secure)       # False (running as root)
-print(result.issues)          # List of SecurityIssue objects
+print(result.is_secure)         # False (running as root)
+print(len(result.issues))       # Number of issues found
 print(result.fixed_dockerfile)  # Corrected version
 ```
 
 ---
 
-### agent_functions.py
+### `dockai.agents.agent_functions`
 
-#### `create_plan(analysis_result, file_contents, retry_history=None, custom_instructions="")`
+#### `create_plan(analysis_result, file_contents, retry_history, custom_instructions)`
 
 Creates a strategic plan for Dockerfile generation.
 
 **Parameters:**
-- `analysis_result` (Dict): Results from project analysis
-- `file_contents` (str): Critical file contents
-- `retry_history` (List[Dict], optional): Previous attempt history
-- `custom_instructions` (str, optional): Custom guidance
 
-**Returns:**
-- `Tuple[PlanningResult, Dict[str, int]]`: Plan and token usage
+| Name | Type | Description |
+|------|------|-------------|
+| `analysis_result` | `Dict` | Results from project analysis |
+| `file_contents` | `str` | Critical file contents |
+| `retry_history` | `List[Dict]` | Previous attempt history |
+| `custom_instructions` | `str` | Custom guidance |
+
+**Returns:** `Tuple[PlanningResult, Dict[str, int]]`
 
 ---
 
-#### `reflect_on_failure(error_message, dockerfile_content, logs, retry_history, ...)`
+#### `reflect_on_failure(error_message, dockerfile_content, logs, ...)`
 
 Analyzes a failed attempt to learn and adapt.
 
 **Parameters:**
-- `error_message` (str): The error that occurred
-- `dockerfile_content` (str): The Dockerfile that failed
-- `logs` (str): Build/run logs
-- `retry_history` (List[Dict]): Previous attempts
-- Additional parameters for context
 
-**Returns:**
-- `Tuple[ReflectionResult, Dict[str, int]]`: Reflection and token usage
+| Name | Type | Description |
+|------|------|-------------|
+| `error_message` | `str` | The error that occurred |
+| `dockerfile_content` | `str` | The Dockerfile that failed |
+| `logs` | `str` | Build/run logs |
+| `retry_history` | `List[Dict]` | Previous attempts |
+
+**Returns:** `Tuple[ReflectionResult, Dict[str, int]]`
 
 ---
 
@@ -145,46 +163,51 @@ Analyzes a failed attempt to learn and adapt.
 Detects health check endpoints from source code.
 
 **Parameters:**
-- `file_contents` (str): Source code content
-- `stack` (str): Detected technology stack
 
-**Returns:**
-- `Tuple[HealthEndpointDetectionResult, Dict[str, int]]`: Detection result and usage
+| Name | Type | Description |
+|------|------|-------------|
+| `file_contents` | `str` | Source code content |
+| `stack` | `str` | Detected technology stack |
+
+**Returns:** `Tuple[HealthEndpointDetectionResult, Dict[str, int]]`
 
 ---
 
-#### `detect_readiness_patterns(file_contents, stack, analysis_result=None)`
+#### `detect_readiness_patterns(file_contents, stack, analysis_result)`
 
 Detects application startup patterns for readiness checks.
 
 **Parameters:**
-- `file_contents` (str): Source code content
-- `stack` (str): Detected technology stack
-- `analysis_result` (Dict, optional): Analysis context
 
-**Returns:**
-- `Tuple[ReadinessPatternResult, Dict[str, int]]`: Patterns and usage
+| Name | Type | Description |
+|------|------|-------------|
+| `file_contents` | `str` | Source code content |
+| `stack` | `str` | Detected technology stack |
+| `analysis_result` | `Dict` | Optional analysis context |
+
+**Returns:** `Tuple[ReadinessPatternResult, Dict[str, int]]`
 
 ---
 
-## Core Module (`dockai.core`)
+## Core Module
 
-### schemas.py
+### `dockai.core.schemas`
 
 #### `AnalysisResult`
 
 Pydantic model for repository analysis output.
 
-**Fields:**
-- `thought_process` (str): AI reasoning
-- `stack` (str): Detected technology stack
-- `project_type` (Literal["service", "script"]): Project classification
-- `files_to_read` (List[str]): Critical files to examine
-- `build_command` (Optional[str]): Build command
-- `start_command` (Optional[str]): Start command
-- `suggested_base_image` (str): Recommended Docker base image
-- `health_endpoint` (Optional[HealthEndpoint]): Detected health endpoint
-- `recommended_wait_time` (int): Estimated startup time (3-60 seconds)
+| Field | Type | Description |
+|-------|------|-------------|
+| `thought_process` | `str` | AI reasoning |
+| `stack` | `str` | Detected technology stack |
+| `project_type` | `Literal["service", "script"]` | Classification |
+| `files_to_read` | `List[str]` | Critical files to examine |
+| `build_command` | `Optional[str]` | Build command |
+| `start_command` | `Optional[str]` | Start command |
+| `suggested_base_image` | `str` | Recommended base image |
+| `health_endpoint` | `Optional[HealthEndpoint]` | Detected health endpoint |
+| `recommended_wait_time` | `int` | Estimated startup time (3-60s) |
 
 ---
 
@@ -192,17 +215,13 @@ Pydantic model for repository analysis output.
 
 Pydantic model for strategic planning output.
 
-**Fields:**
-- `thought_process` (str): Planning reasoning
-- `base_image_strategy` (str): Base image selection rationale
-- `build_strategy` (str): Build approach description
-- `optimization_priorities` (List[str]): Ordered priorities
-- `potential_challenges` (List[str]): Anticipated issues
-- `mitigation_strategies` (List[str]): Solutions for challenges
-- `use_multi_stage` (bool): Multi-stage build decision
-- `use_minimal_runtime` (bool): Minimal image decision
-- `use_static_linking` (bool): Static linking decision
-- `estimated_image_size` (str): Size estimate
+| Field | Type | Description |
+|-------|------|-------------|
+| `thought_process` | `str` | Planning reasoning |
+| `base_image_strategy` | `str` | Base image rationale |
+| `build_strategy` | `str` | Build approach |
+| `optimization_priorities` | `List[str]` | Ordered priorities |
+| `potential_challenges` | `List[str]` | Anticipated issues |
 
 ---
 
@@ -210,12 +229,13 @@ Pydantic model for strategic planning output.
 
 Pydantic model for security review output.
 
-**Fields:**
-- `is_secure` (bool): Pass/fail security check
-- `issues` (List[SecurityIssue]): Detected issues
-- `thought_process` (str): Review reasoning
-- `dockerfile_fixes` (List[str]): Specific fixes
-- `fixed_dockerfile` (Optional[str]): Corrected Dockerfile
+| Field | Type | Description |
+|-------|------|-------------|
+| `thought_process` | `str` | Review reasoning |
+| `is_secure` | `bool` | Whether Dockerfile is secure |
+| `issues` | `List[SecurityIssue]` | List of issues found |
+| `fixed_dockerfile` | `Optional[str]` | Corrected Dockerfile |
+| `severity_summary` | `Dict[str, int]` | Count by severity |
 
 ---
 
@@ -223,208 +243,187 @@ Pydantic model for security review output.
 
 Pydantic model for failure reflection output.
 
-**Fields:**
-- `thought_process` (str): Analysis reasoning
-- `root_cause_analysis` (str): Root cause description
-- `what_was_tried` (str): Previous approach summary
-- `why_it_failed` (str): Failure explanation
-- `lesson_learned` (str): Key takeaway
-- `should_change_base_image` (bool): Image change needed
-- `suggested_base_image` (Optional[str]): New image suggestion
-- `should_change_build_strategy` (bool): Strategy change needed
-- `specific_fixes` (List[str]): Actionable fixes
-- `needs_reanalysis` (bool): Re-analyze flag
-- `confidence_in_fix` (Literal["high", "medium", "low"]): Fix confidence
+| Field | Type | Description |
+|-------|------|-------------|
+| `thought_process` | `str` | Analysis reasoning |
+| `error_classification` | `str` | Error type |
+| `root_cause` | `str` | Identified root cause |
+| `recommended_strategy` | `str` | Next step |
+| `specific_fixes` | `List[str]` | Fixes to apply |
+| `lessons_learned` | `List[str]` | Knowledge gained |
 
 ---
 
-### llm_providers.py
+#### `HealthEndpointDetectionResult`
 
-#### `create_llm(agent_name, temperature=0.0)`
+Pydantic model for health endpoint detection.
 
-Creates an LLM instance for the specified agent.
+| Field | Type | Description |
+|-------|------|-------------|
+| `detected` | `bool` | Whether endpoint found |
+| `endpoint` | `Optional[HealthEndpoint]` | Endpoint details |
+| `confidence` | `float` | Detection confidence |
+| `evidence` | `List[str]` | Supporting evidence |
+
+---
+
+#### `ReadinessPatternResult`
+
+Pydantic model for readiness pattern detection.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success_patterns` | `List[str]` | Patterns indicating success |
+| `failure_patterns` | `List[str]` | Patterns indicating failure |
+| `estimated_startup_time` | `int` | Expected startup seconds |
+
+---
+
+### `dockai.core.llm_providers`
+
+#### `LLMProvider`
+
+Enum for supported LLM providers.
+
+```python
+class LLMProvider(Enum):
+    OPENAI = "openai"
+    AZURE = "azure"
+    GEMINI = "gemini"
+    ANTHROPIC = "anthropic"
+```
+
+#### `get_llm(agent_name, temperature)`
+
+Gets the appropriate LLM for an agent.
 
 **Parameters:**
-- `agent_name` (str): Agent identifier
-- `temperature` (float): LLM temperature (0.0-1.0)
 
-**Returns:**
-- LangChain LLM instance
+| Name | Type | Description |
+|------|------|-------------|
+| `agent_name` | `str` | Name of the agent |
+| `temperature` | `float` | Sampling temperature |
 
----
-
-#### `LLMConfig`
-
-Configuration dataclass for LLM settings.
-
-**Fields:**
-- `provider` (LLMProvider): Provider enum
-- `models` (dict): Per-agent model mapping
-- `temperature` (float): Default temperature
-- `azure_endpoint` (Optional[str]): Azure endpoint
-- `azure_api_version` (str): Azure API version
-- `google_project` (Optional[str]): Google Cloud project
+**Returns:** `BaseChatModel`
 
 ---
 
-### errors.py
+### `dockai.core.state`
 
-#### `classify_error(error_output, logs="", stack="")`
+#### `GraphState`
 
-Classifies an error for intelligent handling.
+TypedDict for workflow state management.
 
-**Parameters:**
-- `error_output` (str): Error message/output
-- `logs` (str, optional): Full logs
-- `stack` (str, optional): Technology stack
-
-**Returns:**
-- `ClassifiedError`: Classified error with suggestions
-
----
-
-#### `ErrorType`
-
-Enum of error classifications.
-
-**Values:**
-- `PROJECT_ERROR`: User's code/config issue (no retry)
-- `DOCKERFILE_ERROR`: Generated Dockerfile issue (can retry)
-- `ENVIRONMENT_ERROR`: Local system issue (no retry)
-- `UNKNOWN_ERROR`: Unclassified (attempt retry)
-
----
-
-### state.py
-
-#### `DockAIState`
-
-TypedDict defining the workflow state.
-
-**Fields:** See [Architecture](./architecture.md#state-management) for full field list.
+```python
+class GraphState(TypedDict):
+    repo_path: str
+    file_tree: List[str]
+    analysis_result: Optional[AnalysisResult]
+    file_contents: str
+    health_result: Optional[HealthEndpointDetectionResult]
+    readiness_result: Optional[ReadinessPatternResult]
+    current_plan: Optional[PlanningResult]
+    dockerfile_content: str
+    thought_process: str
+    review_result: Optional[SecurityReviewResult]
+    validation_result: Optional[ValidationResult]
+    retry_count: int
+    retry_history: List[RetryAttempt]
+    reflection: Optional[ReflectionResult]
+    final_dockerfile: str
+    token_usage: Dict[str, int]
+```
 
 ---
 
-## Utils Module (`dockai.utils`)
+## Utils Module
 
-### scanner.py
+### `dockai.utils.scanner`
 
 #### `get_file_tree(root_path)`
 
-Scans directory and returns filtered file list.
+Scans a directory and returns a filtered file list.
 
 **Parameters:**
-- `root_path` (str): Directory to scan
 
-**Returns:**
-- `List[str]`: Relative file paths
+| Name | Type | Description |
+|------|------|-------------|
+| `root_path` | `str` | Path to scan |
+
+**Returns:** `List[str]`
+
+**Features:**
+- Respects `.gitignore` and `.dockerignore`
+- Filters noise directories (`node_modules`, `venv`, `.git`)
+- Returns relative paths
 
 ---
 
-### validator.py
+### `dockai.utils.validator`
 
-#### `validate_docker_build_and_run(directory, project_type="service", ...)`
+#### `validate_dockerfile(dockerfile_content, context_path, ...)`
 
-Builds and validates a Dockerfile.
+Builds and tests a Dockerfile in a sandbox.
 
 **Parameters:**
-- `directory` (str): Directory with Dockerfile
-- `project_type` (str): "service" or "script"
-- `stack` (str): Technology stack
-- `health_endpoint` (Optional[Tuple]): (path, port) tuple
-- `recommended_wait_time` (int): Startup wait time
-- `readiness_patterns` (List[str]): Success log patterns
-- `failure_patterns` (List[str]): Failure log patterns
 
-**Returns:**
-- `Tuple[bool, str, int, Optional[ClassifiedError]]`: (success, message, image_size, error)
+| Name | Type | Description |
+|------|------|-------------|
+| `dockerfile_content` | `str` | Dockerfile to validate |
+| `context_path` | `str` | Build context path |
+| `health_endpoint` | `Optional[HealthEndpoint]` | Health check config |
+| `readiness_patterns` | `Optional[ReadinessPatternResult]` | Startup patterns |
+
+**Returns:** `ValidationResult`
 
 ---
 
-### prompts.py
+### `dockai.utils.prompts`
 
-#### `get_prompt(agent_name, default_prompt)`
+#### `PromptConfig`
 
-Gets the prompt for an agent, checking custom configuration.
+Dataclass for custom prompt configuration.
 
-**Parameters:**
-- `agent_name` (str): Agent identifier
-- `default_prompt` (str): Fallback prompt
-
-**Returns:**
-- `str`: Final prompt (custom or default with instructions)
-
----
-
-#### `load_prompts(path)`
-
-Loads prompts from environment and `.dockai` file.
-
-**Parameters:**
-- `path` (str): Project directory path
-
-**Returns:**
-- `PromptConfig`: Loaded configuration
-
----
-
-### callbacks.py
-
-#### `TokenUsageCallback`
-
-LangChain callback for tracking token usage.
-
-**Methods:**
-- `on_llm_end(response)`: Called after LLM completion
-- `get_usage()`: Returns usage dictionary
-
-**Example:**
 ```python
-from dockai.utils.callbacks import TokenUsageCallback
-
-callback = TokenUsageCallback()
-# ... use with LangChain chain ...
-usage = callback.get_usage()
-print(f"Total tokens: {usage['total_tokens']}")
+@dataclass
+class PromptConfig:
+    analyzer: Optional[str] = None
+    analyzer_instructions: Optional[str] = None
+    planner: Optional[str] = None
+    planner_instructions: Optional[str] = None
+    generator: Optional[str] = None
+    generator_instructions: Optional[str] = None
+    # ... more agents
 ```
 
----
+#### `load_prompt_config(repo_path)`
 
-### rate_limiter.py
-
-#### `@with_rate_limit_handling(max_retries=5, base_delay=1.0, max_delay=60.0)`
-
-Decorator for rate limit handling with exponential backoff.
+Loads prompt configuration from environment and `.dockai` file.
 
 **Parameters:**
-- `max_retries` (int): Maximum retry attempts
-- `base_delay` (float): Initial delay in seconds
-- `max_delay` (float): Maximum delay in seconds
 
-**Example:**
-```python
-from dockai.utils.rate_limiter import with_rate_limit_handling
+| Name | Type | Description |
+|------|------|-------------|
+| `repo_path` | `str` | Repository path |
 
-@with_rate_limit_handling(max_retries=3)
-def call_api():
-    # API call that might hit rate limits
-    pass
-```
+**Returns:** `PromptConfig`
 
 ---
 
-### registry.py
+### `dockai.utils.registry`
 
-#### `get_docker_tags(image_name, limit=5)`
+#### `verify_image_tag(image, tag)`
 
-Fetches valid tags from container registry.
+Verifies that a Docker image tag exists in a registry.
 
 **Parameters:**
-- `image_name` (str): Image name (e.g., "node", "gcr.io/project/image")
-- `limit` (int): Maximum fallback tags
 
-**Returns:**
-- `List[str]`: Valid image tags
+| Name | Type | Description |
+|------|------|-------------|
+| `image` | `str` | Image name |
+| `tag` | `str` | Image tag |
+
+**Returns:** `bool`
 
 **Supported Registries:**
 - Docker Hub
@@ -434,121 +433,111 @@ Fetches valid tags from container registry.
 
 ---
 
-## Workflow Module (`dockai.workflow`)
+### `dockai.utils.callbacks`
 
-### graph.py
+#### `TokenUsageCallback`
 
-#### `create_graph()`
+LangChain callback handler for tracking token usage.
 
-Creates and compiles the LangGraph workflow.
+```python
+from dockai.utils.callbacks import TokenUsageCallback
 
-**Returns:**
-- `CompiledGraph`: Executable workflow
-
----
-
-### nodes.py
-
-Node functions for each workflow step. See [Architecture](./architecture.md) for details on each node.
-
-**Available Nodes:**
-- `scan_node` - File discovery
-- `analyze_node` - Project analysis
-- `read_files_node` - File content extraction
-- `detect_health_node` - Health endpoint detection
-- `detect_readiness_node` - Readiness pattern detection
-- `plan_node` - Strategic planning
-- `generate_node` - Dockerfile generation
-- `review_node` - Security review
-- `validate_node` - Build validation
-- `reflect_node` - Failure reflection
-- `increment_retry` - Retry counter
+callback = TokenUsageCallback()
+# Use with LLM calls
+usage = callback.get_usage()
+print(usage)  # {"input_tokens": 1000, "output_tokens": 500}
+```
 
 ---
 
-## CLI Module (`dockai.cli`)
+### `dockai.utils.rate_limiter`
 
-### main.py
+#### `RateLimiter`
 
-#### `run(path, verbose=False)`
+Handles API rate limits with exponential backoff.
 
-Main CLI entry point.
+```python
+from dockai.utils.rate_limiter import RateLimiter
+
+limiter = RateLimiter(max_retries=3, base_delay=1.0)
+result = limiter.execute(api_call_function)
+```
+
+---
+
+## Workflow Module
+
+### `dockai.workflow.graph`
+
+#### `create_workflow()`
+
+Creates the LangGraph workflow for Dockerfile generation.
+
+**Returns:** `CompiledStateGraph`
+
+**Example:**
+
+```python
+from dockai.workflow.graph import create_workflow
+
+workflow = create_workflow()
+result = workflow.invoke({
+    "repo_path": "/path/to/project",
+    "retry_count": 0,
+    "retry_history": [],
+    "token_usage": {}
+})
+
+print(result["final_dockerfile"])
+```
+
+---
+
+## CLI Module
+
+### `dockai.cli.main`
+
+The main CLI entry point using Typer.
+
+#### `build(project_path, verbose, no_cache)`
+
+Build command for generating Dockerfiles.
 
 **Parameters:**
-- `path` (str): Project directory to analyze
-- `verbose` (bool): Enable debug logging
+
+| Name | Type | Description |
+|------|------|-------------|
+| `project_path` | `str` | Path to project |
+| `verbose` | `bool` | Enable debug logging |
+| `no_cache` | `bool` | Disable Docker cache |
 
 ---
 
-### ui.py
+## Error Classes
 
-#### `print_welcome()`
-Prints the welcome banner.
+### `dockai.core.errors`
 
-#### `print_error(title, message, details=None)`
-Prints formatted error message.
+```python
+class DockAIError(Exception):
+    """Base exception for DockAI errors."""
 
-#### `print_success(message)`
-Prints formatted success message.
+class AnalysisError(DockAIError):
+    """Error during project analysis."""
 
-#### `print_warning(message)`
-Prints formatted warning message.
+class GenerationError(DockAIError):
+    """Error during Dockerfile generation."""
 
-#### `display_summary(final_state, output_path)`
-Displays execution summary with usage statistics.
+class ValidationError(DockAIError):
+    """Error during Dockerfile validation."""
 
-#### `display_failure(final_state)`
-Displays failure details with troubleshooting info.
+class ConfigurationError(DockAIError):
+    """Error in configuration."""
+```
 
 ---
 
-## Usage Examples
+## Next Steps
 
-### Complete Workflow
-
-```python
-from dockai.workflow.graph import create_graph
-
-# Create the workflow graph
-graph = create_graph()
-
-# Initialize state
-initial_state = {
-    "path": "/path/to/project",
-    "max_retries": 3,
-    "config": {},
-    # ... other required fields
-}
-
-# Run the workflow
-final_state = graph.invoke(initial_state)
-
-# Check results
-if final_state["validation_result"]["success"]:
-    print("Dockerfile generated successfully!")
-    print(final_state["dockerfile_content"])
-else:
-    print("Failed:", final_state["error"])
-```
-
-### Individual Agent Usage
-
-```python
-from dockai.agents.analyzer import analyze_repo_needs
-from dockai.agents.generator import generate_dockerfile
-from dockai.utils.scanner import get_file_tree
-
-# Scan project
-files = get_file_tree("/path/to/project")
-
-# Analyze
-analysis, _ = analyze_repo_needs(files)
-
-# Generate
-dockerfile, project_type, _, _ = generate_dockerfile(
-    stack_info=analysis.stack,
-    file_contents="...",
-)
-
-print(dockerfile)
-```
+- **[Architecture](./architecture.md)**: Understand the workflow
+- **[Configuration](./configuration.md)**: All configuration options
+- **[Customization](./customization.md)**: Tune for your stack

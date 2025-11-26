@@ -1,43 +1,47 @@
 # Configuration Reference
 
-This document covers all configuration options available in DockAI.
+Complete reference for all DockAI configuration options.
+
+---
 
 ## Configuration Methods
 
-DockAI supports configuration through:
+DockAI supports three configuration methods (in priority order):
 
-1. **Environment Variables** — Global or CI/CD settings
-2. **`.env` File** — Local development settings
-3. **`.dockai` File** — Per-repository customization
+| Priority | Method | Use Case |
+|----------|--------|----------|
+| 1 (Highest) | Environment Variables | Runtime overrides, CI/CD |
+| 2 | `.dockai` File | Repository-specific settings |
+| 3 (Lowest) | Built-in Defaults | Intelligent fallbacks |
 
-Priority order (highest to lowest):
-1. Environment variables
-2. `.dockai` file
-3. Built-in defaults
+---
 
-## Core Settings
+## API Configuration
 
-### API Configuration
+### Provider API Keys
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `OPENAI_API_KEY` | OpenAI API key | - | Yes (if using OpenAI) |
-| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | - | Yes (if using Azure) |
-| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL | - | Yes (if using Azure) |
-| `GOOGLE_API_KEY` | Google Gemini API key | - | Yes (if using Gemini) |
-| `ANTHROPIC_API_KEY` | Anthropic API key | - | Yes (if using Anthropic) |
+| Variable | Provider | Required |
+|----------|----------|----------|
+| `OPENAI_API_KEY` | OpenAI | If using OpenAI |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI | If using Azure |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI | If using Azure |
+| `AZURE_OPENAI_API_VERSION` | Azure OpenAI | Default: `2024-02-15-preview` |
+| `GOOGLE_API_KEY` | Google Gemini | If using Gemini |
+| `ANTHROPIC_API_KEY` | Anthropic | If using Anthropic |
 
-### LLM Provider Settings
+### LLM Provider Selection
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DOCKAI_LLM_PROVIDER` | LLM provider (`openai`, `azure`, `gemini`, `anthropic`) | `openai` |
-| `AZURE_OPENAI_API_VERSION` | Azure API version | `2024-02-15-preview` |
-| `GOOGLE_CLOUD_PROJECT` | Google Cloud project ID | - |
+| `DOCKAI_LLM_PROVIDER` | Provider selection | `openai` |
 
-### Per-Agent Model Configuration
+**Valid values**: `openai`, `azure`, `gemini`, `anthropic`
 
-Each agent can use a different model for cost optimization:
+---
+
+## Per-Agent Model Configuration
+
+Assign different models to different agents for cost optimization:
 
 | Variable | Agent | Default (OpenAI) |
 |----------|-------|------------------|
@@ -52,13 +56,26 @@ Each agent can use a different model for cost optimization:
 | `DOCKAI_MODEL_ERROR_ANALYZER` | Error analyzer | `gpt-4o-mini` |
 | `DOCKAI_MODEL_ITERATIVE_IMPROVER` | Iterative improver | `gpt-4o` |
 
-### Workflow Settings
+### Default Models by Provider
+
+| Provider | Fast Model | Powerful Model |
+|----------|------------|----------------|
+| OpenAI | `gpt-4o-mini` | `gpt-4o` |
+| Azure | `gpt-4o-mini` | `gpt-4o` |
+| Gemini | `gemini-1.5-flash` | `gemini-1.5-pro` |
+| Anthropic | `claude-3-5-haiku-latest` | `claude-sonnet-4-20250514` |
+
+---
+
+## Workflow Settings
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MAX_RETRIES` | Maximum retry attempts | `3` |
 
-## Validation Settings
+---
+
+## Security & Validation Settings
 
 ### Security Scanning
 
@@ -69,7 +86,7 @@ Each agent can use a different model for cost optimization:
 | `DOCKAI_MAX_IMAGE_SIZE_MB` | Maximum image size (0 = disabled) | `500` |
 | `DOCKAI_SKIP_HEALTH_CHECK` | Skip health endpoint checks | `false` |
 
-### Resource Limits (Sandbox)
+### Validation Resource Limits
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -77,165 +94,185 @@ Each agent can use a different model for cost optimization:
 | `DOCKAI_VALIDATION_CPUS` | CPU limit for validation | `1.0` |
 | `DOCKAI_VALIDATION_PIDS` | Process limit for validation | `100` |
 
+---
+
 ## Custom Instructions
 
 Instructions are **appended** to default prompts to guide AI reasoning:
 
-| Variable | Description |
-|----------|-------------|
-| `DOCKAI_ANALYZER_INSTRUCTIONS` | Guide project analysis |
-| `DOCKAI_PLANNER_INSTRUCTIONS` | Guide strategic planning |
-| `DOCKAI_GENERATOR_INSTRUCTIONS` | Guide Dockerfile creation |
-| `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Guide iterative fixes |
-| `DOCKAI_REVIEWER_INSTRUCTIONS` | Guide security review |
-| `DOCKAI_REFLECTOR_INSTRUCTIONS` | Guide failure analysis |
-| `DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS` | Guide health detection |
-| `DOCKAI_READINESS_DETECTOR_INSTRUCTIONS` | Guide readiness detection |
-| `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Guide error classification |
-| `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Guide fix application |
+| Variable | Agent | Description |
+|----------|-------|-------------|
+| `DOCKAI_ANALYZER_INSTRUCTIONS` | Analyzer | Guide project analysis |
+| `DOCKAI_PLANNER_INSTRUCTIONS` | Planner | Guide strategic planning |
+| `DOCKAI_GENERATOR_INSTRUCTIONS` | Generator | Guide Dockerfile creation |
+| `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Generator (Iterative) | Guide iterative fixes |
+| `DOCKAI_REVIEWER_INSTRUCTIONS` | Reviewer | Guide security review |
+| `DOCKAI_REFLECTOR_INSTRUCTIONS` | Reflector | Guide failure analysis |
+| `DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS` | Health Detector | Guide health detection |
+| `DOCKAI_READINESS_DETECTOR_INSTRUCTIONS` | Readiness Detector | Guide readiness detection |
+| `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Error Analyzer | Guide error classification |
+| `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Iterative Improver | Guide fix application |
+
+---
 
 ## Custom Prompts (Advanced)
 
 Prompts **completely replace** the default prompt for full control:
 
-| Variable | Description |
-|----------|-------------|
+| Variable | Agent |
+|----------|-------|
 | `DOCKAI_PROMPT_ANALYZER` | Replace analyzer prompt |
 | `DOCKAI_PROMPT_PLANNER` | Replace planner prompt |
 | `DOCKAI_PROMPT_GENERATOR` | Replace generator prompt |
-| `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | Replace iterative generator prompt |
+| `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | Replace iterative generator |
 | `DOCKAI_PROMPT_REVIEWER` | Replace reviewer prompt |
 | `DOCKAI_PROMPT_REFLECTOR` | Replace reflector prompt |
-| `DOCKAI_PROMPT_HEALTH_DETECTOR` | Replace health detector prompt |
-| `DOCKAI_PROMPT_READINESS_DETECTOR` | Replace readiness detector prompt |
-| `DOCKAI_PROMPT_ERROR_ANALYZER` | Replace error analyzer prompt |
-| `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | Replace iterative improver prompt |
+| `DOCKAI_PROMPT_HEALTH_DETECTOR` | Replace health detector |
+| `DOCKAI_PROMPT_READINESS_DETECTOR` | Replace readiness detector |
+| `DOCKAI_PROMPT_ERROR_ANALYZER` | Replace error analyzer |
+| `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | Replace iterative improver |
+
+> ⚠️ **Warning**: Custom prompts completely override defaults. Use instructions instead unless you need full control.
+
+---
 
 ## `.dockai` File Format
 
-Create a `.dockai` file in your project root for per-repository configuration:
+Create a `.dockai` file in your project root for repository-specific configuration.
+
+### Basic Structure
 
 ```ini
 # Instructions (appended to defaults)
 [instructions_analyzer]
-This is a Django application with Celery workers.
-Dependencies are managed with Poetry.
+Your instructions here...
 
 [instructions_generator]
-Use gunicorn as the WSGI server.
-Run database migrations at container start.
-
-[instructions_planner]
-Use our approved base images from company-registry.io
-
-[instructions_reviewer]
-All containers must run as non-root (UID >= 10000).
-Check for hardcoded API keys.
-
-[instructions_reflector]
-Common issue: missing libpq for psycopg2.
-
-[instructions_health_detector]
-Our health endpoint is at /api/v1/health/
-
-[instructions_readiness_detector]
-Look for "Application startup complete" in logs.
+Your instructions here...
 
 # Full prompt replacements (advanced)
 [prompt_analyzer]
-You are a specialized analyzer for Python web applications...
-
-[prompt_reviewer]
-You are a security expert focusing on container hardening...
+Complete prompt replacement...
 ```
 
-### Legacy Format Support
-
-The legacy `[analyzer]` and `[generator]` sections are still supported:
+### Complete Example
 
 ```ini
-[analyzer]
-Focus on microservices architecture.
+# Project context for the analyzer
+[instructions_analyzer]
+This is a Django application with Celery workers.
+Dependencies are managed with Poetry.
+Uses PostgreSQL for the database.
 
-[generator]
-Use Alpine-based images where possible.
+# Dockerfile generation guidance
+[instructions_generator]
+Use gunicorn as the WSGI server.
+Run database migrations at container start.
+Use /app as WORKDIR.
+Create non-root user with UID 10000.
+
+# Strategic planning constraints
+[instructions_planner]
+Use approved base images from company-registry.io only.
+Prefer multi-stage builds for all compiled languages.
+
+# Security requirements
+[instructions_reviewer]
+All containers MUST run as non-root (UID >= 10000).
+Check for hardcoded API keys or secrets.
+Fail on any CRITICAL or HIGH vulnerabilities.
+
+# Known issues and fixes
+[instructions_reflector]
+Common issue: "pg_config not found"
+Solution: Install postgresql-dev (Alpine) or libpq-dev (Debian)
+
+Common issue: "GLIBC not found" on Alpine
+Solution: Use Debian-based image or install gcompat
+
+# Health endpoint location
+[instructions_health_detector]
+Our health endpoint is at /api/v1/health/
+Port is always 8080 for HTTP services.
+
+# Startup pattern
+[instructions_readiness_detector]
+Look for "Application startup complete" in logs.
+Typical startup time is 5-10 seconds.
 ```
 
-## Example Configurations
+---
+
+## Environment File (`.env`)
 
 ### Minimal Configuration
 
 ```bash
-# .env
-OPENAI_API_KEY=sk-your-key-here
+OPENAI_API_KEY=sk-your-api-key-here
 ```
 
-### Development Configuration
+### Full Configuration Example
 
 ```bash
-# .env
-OPENAI_API_KEY=sk-your-key-here
-MAX_RETRIES=5
-DOCKAI_SKIP_SECURITY_SCAN=true
-```
-
-### Production Configuration
-
-```bash
-# .env or CI/CD secrets
-OPENAI_API_KEY=sk-your-key-here
+# LLM Provider
 DOCKAI_LLM_PROVIDER=openai
-DOCKAI_MODEL_GENERATOR=gpt-4o
+OPENAI_API_KEY=sk-your-api-key-here
+
+# Per-agent model optimization
 DOCKAI_MODEL_ANALYZER=gpt-4o-mini
-MAX_RETRIES=3
+DOCKAI_MODEL_PLANNER=gpt-4o-mini
+DOCKAI_MODEL_GENERATOR=gpt-4o
+DOCKAI_MODEL_REVIEWER=gpt-4o-mini
+DOCKAI_MODEL_REFLECTOR=gpt-4o
+
+# Workflow settings
+MAX_RETRIES=5
+
+# Security settings
+DOCKAI_SKIP_SECURITY_SCAN=false
 DOCKAI_STRICT_SECURITY=true
 DOCKAI_MAX_IMAGE_SIZE_MB=300
+
+# Validation resource limits
+DOCKAI_VALIDATION_MEMORY=1g
+DOCKAI_VALIDATION_CPUS=2.0
+DOCKAI_VALIDATION_PIDS=200
+
+# Custom instructions
+DOCKAI_GENERATOR_INSTRUCTIONS="Always use multi-stage builds"
 ```
 
-### Azure OpenAI Configuration
-
-```bash
-# .env
-DOCKAI_LLM_PROVIDER=azure
-AZURE_OPENAI_API_KEY=your-azure-key
-AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-AZURE_OPENAI_API_VERSION=2024-02-15-preview
-DOCKAI_MODEL_ANALYZER=gpt-4o-mini
-DOCKAI_MODEL_GENERATOR=gpt-4o
-```
-
-### Google Gemini Configuration
-
-```bash
-# .env
-DOCKAI_LLM_PROVIDER=gemini
-GOOGLE_API_KEY=your-google-key
-DOCKAI_MODEL_ANALYZER=gemini-1.5-flash
-DOCKAI_MODEL_GENERATOR=gemini-1.5-pro
-```
-
-### Anthropic Configuration
-
-```bash
-# .env
-DOCKAI_LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=your-anthropic-key
-DOCKAI_MODEL_ANALYZER=claude-3-5-haiku-latest
-DOCKAI_MODEL_GENERATOR=claude-sonnet-4-20250514
-```
+---
 
 ## Configuration Precedence
 
-When the same setting is defined in multiple places:
+When the same setting is configured in multiple places:
 
-1. **Environment Variable** — Highest priority
-2. **`.dockai` file** — Repository-specific
-3. **Default value** — Built-in fallback
+```
+Environment Variable (highest priority)
+        ↓
+   .dockai file
+        ↓
+  Built-in Default (lowest priority)
+```
 
-Example: If `DOCKAI_ANALYZER_INSTRUCTIONS` is set as an environment variable AND in `.dockai`, the environment variable takes precedence.
+### Example
+
+```bash
+# .dockai file
+[instructions_generator]
+Use Alpine base images
+
+# Environment variable
+export DOCKAI_GENERATOR_INSTRUCTIONS="Use Debian base images"
+
+# Result: "Use Debian base images" is used (env var wins)
+```
+
+---
 
 ## Next Steps
 
-- **[Customization](./customization.md)** — Fine-tuning strategies
-- **[GitHub Actions](./github-actions.md)** — CI/CD configuration
-- **[API Reference](./api-reference.md)** — Programmatic usage
+- **[Customization](./customization.md)**: Strategies for effective customization
+- **[GitHub Actions](./github-actions.md)**: CI/CD configuration
+- **[Platform Integration](./platform-integration.md)**: Embedding DockAI

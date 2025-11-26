@@ -1,6 +1,8 @@
 # GitHub Actions Integration
 
-This guide covers how to use DockAI in your CI/CD pipelines with GitHub Actions.
+Complete guide for using DockAI in CI/CD pipelines with GitHub Actions.
+
+---
 
 ## Quick Start
 
@@ -25,68 +27,77 @@ jobs:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-## Action Inputs
+---
 
-### Required Inputs
+## Action Reference
 
-| Input | Description |
-|-------|-------------|
-| `openai_api_key` | Your OpenAI API key (store as a secret) |
+### Basic Inputs
 
-### Optional Inputs
+| Input | Description | Required | Default |
+|-------|-------------|----------|---------|
+| `project_path` | Path to project root | No | `.` |
+| `llm_provider` | LLM provider | No | `openai` |
 
-#### Project Settings
+### API Key Inputs
+
+| Input | Provider | Required |
+|-------|----------|----------|
+| `openai_api_key` | OpenAI | If using OpenAI |
+| `azure_openai_api_key` | Azure | If using Azure |
+| `azure_openai_endpoint` | Azure | If using Azure |
+| `azure_openai_api_version` | Azure | No |
+| `google_api_key` | Gemini | If using Gemini |
+| `anthropic_api_key` | Anthropic | If using Anthropic |
+
+### Model Configuration
 
 | Input | Description | Default |
 |-------|-------------|---------|
-| `project_path` | Path to project root | `.` |
+| `model_analyzer` | Model for analyzer | Provider default |
+| `model_planner` | Model for planner | Provider default |
+| `model_generator` | Model for generator | Provider default |
+| `model_generator_iterative` | Model for iterative generator | Provider default |
+| `model_reviewer` | Model for reviewer | Provider default |
+| `model_reflector` | Model for reflector | Provider default |
+| `model_health_detector` | Model for health detector | Provider default |
+| `model_readiness_detector` | Model for readiness detector | Provider default |
+| `model_error_analyzer` | Model for error analyzer | Provider default |
+| `model_iterative_improver` | Model for iterative improver | Provider default |
 
-#### Model Configuration
-
-| Input | Description | Default |
-|-------|-------------|---------|
-| `model_generator` | Model for generation/reflection | `gpt-4o` |
-| `model_analyzer` | Model for analysis/planning | `gpt-4o-mini` |
-
-#### Workflow Settings
+### Workflow Settings
 
 | Input | Description | Default |
 |-------|-------------|---------|
 | `max_retries` | Maximum retry attempts | `3` |
 
-#### Validation Settings
+### Validation Settings
 
 | Input | Description | Default |
 |-------|-------------|---------|
 | `skip_security_scan` | Skip Trivy scanning | `false` |
 | `strict_security` | Fail on any vulnerability | `false` |
-| `max_image_size_mb` | Maximum image size (0 = disabled) | `500` |
+| `max_image_size_mb` | Max image size (0 = disabled) | `500` |
 | `skip_health_check` | Skip health endpoint checks | `false` |
-
-#### Resource Limits
-
-| Input | Description | Default |
-|-------|-------------|---------|
 | `validation_memory` | Memory limit for validation | `512m` |
 | `validation_cpus` | CPU limit for validation | `1.0` |
 | `validation_pids` | Process limit for validation | `100` |
 
-#### Custom Instructions
+### Custom Instructions
 
 | Input | Description |
 |-------|-------------|
 | `analyzer_instructions` | Guide project analysis |
 | `planner_instructions` | Guide strategic planning |
 | `generator_instructions` | Guide Dockerfile creation |
+| `generator_iterative_instructions` | Guide iterative generation |
 | `reviewer_instructions` | Guide security review |
 | `reflector_instructions` | Guide failure analysis |
 | `health_detector_instructions` | Guide health detection |
 | `readiness_detector_instructions` | Guide readiness detection |
 | `error_analyzer_instructions` | Guide error classification |
 | `iterative_improver_instructions` | Guide fix application |
-| `generator_iterative_instructions` | Guide iterative generation |
 
-#### Custom Prompts (Advanced)
+### Custom Prompts (Advanced)
 
 | Input | Description |
 |-------|-------------|
@@ -101,60 +112,109 @@ jobs:
 | `prompt_error_analyzer` | Replace error analyzer |
 | `prompt_iterative_improver` | Replace iterative improver |
 
+---
+
 ## Usage Examples
 
-### Basic Usage
+### Basic OpenAI
 
 ```yaml
-- name: Run DockAI
-  uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v2
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-### With Model Configuration
+### Google Gemini
 
 ```yaml
-- name: Run DockAI
-  uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v2
   with:
-    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-    model_generator: 'gpt-4o'
-    model_analyzer: 'gpt-4o-mini'
-    max_retries: '5'
+    llm_provider: gemini
+    google_api_key: ${{ secrets.GOOGLE_API_KEY }}
 ```
 
-### With Security Settings
+### Anthropic Claude
 
 ```yaml
-- name: Run DockAI
-  uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v2
+  with:
+    llm_provider: anthropic
+    anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+### Azure OpenAI
+
+```yaml
+- uses: itzzjb/dockai@v2
+  with:
+    llm_provider: azure
+    azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY }}
+    azure_openai_endpoint: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+```
+
+### Cost-Optimized Configuration
+
+Use faster models for simple tasks:
+
+```yaml
+- uses: itzzjb/dockai@v2
+  with:
+    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+    model_analyzer: gpt-4o-mini
+    model_planner: gpt-4o-mini
+    model_generator: gpt-4o
+    model_reviewer: gpt-4o-mini
+    model_reflector: gpt-4o
+```
+
+### Strict Security
+
+Fail on any security vulnerability:
+
+```yaml
+- uses: itzzjb/dockai@v2
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     strict_security: 'true'
     max_image_size_mb: '300'
 ```
 
-### With Custom Instructions
+### Custom Instructions
 
 ```yaml
-- name: Run DockAI
-  uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v2
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-    analyzer_instructions: 'This is a Django app with Celery'
     generator_instructions: |
-      Use gunicorn as WSGI server.
-      Include database migrations.
+      Use multi-stage builds for all projects.
+      Final image must use non-root user with UID 10000.
+      Always include HEALTHCHECK instruction.
     reviewer_instructions: |
-      All containers must run as non-root.
-      Fail if any secrets are detected.
+      Fail if running as root.
+      Check for hardcoded secrets.
 ```
 
-### Full Configuration Example
+### High Retry Count
+
+For complex projects that may need multiple attempts:
 
 ```yaml
-name: Auto-Dockerize with DockAI
+- uses: itzzjb/dockai@v2
+  with:
+    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+    max_retries: '5'
+    validation_memory: '1g'
+    validation_cpus: '2.0'
+```
+
+---
+
+## Complete Workflow Examples
+
+### Basic CI/CD
+
+```yaml
+name: Docker Build
 
 on:
   push:
@@ -165,132 +225,26 @@ on:
 jobs:
   dockai:
     runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@v4
       
-      - name: Run DockAI
+      - name: Generate Dockerfile
         uses: itzzjb/dockai@v2
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-          
-          # Model configuration
-          model_generator: 'gpt-4o'
-          model_analyzer: 'gpt-4o-mini'
-          
-          # Workflow settings
-          max_retries: '5'
-          
-          # Validation settings
-          skip_security_scan: 'false'
-          strict_security: 'true'
-          max_image_size_mb: '300'
-          
-          # Resource limits
-          validation_memory: '1g'
-          validation_cpus: '2.0'
-          
-          # Custom instructions
-          analyzer_instructions: 'Focus on microservices architecture'
-          generator_instructions: 'Use Alpine-based images'
-          planner_instructions: |
-            Approved base images:
-            - python:3.11-slim
-            - node:20-alpine
-          reviewer_instructions: |
-            Security requirements:
-            - Non-root user mandatory
-            - No hardcoded secrets
       
-      - name: Upload Dockerfile
-        uses: actions/upload-artifact@v4
+      - name: Build and Push
+        uses: docker/build-push-action@v5
         with:
-          name: dockerfile
-          path: Dockerfile
+          context: .
+          push: ${{ github.event_name == 'push' }}
+          tags: myregistry/myapp:${{ github.sha }}
 ```
 
-## Workflow Patterns
-
-### On Push to Main
+### With Container Registry
 
 ```yaml
-on:
-  push:
-    branches: [main]
-```
-
-### On Pull Request
-
-```yaml
-on:
-  pull_request:
-    branches: [main]
-```
-
-### Manual Trigger
-
-```yaml
-on:
-  workflow_dispatch:
-    inputs:
-      path:
-        description: 'Project path'
-        required: false
-        default: '.'
-```
-
-### Scheduled Run
-
-```yaml
-on:
-  schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sunday
-```
-
-## Multi-Project Monorepo
-
-For monorepos with multiple services:
-
-```yaml
-name: Dockerize All Services
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  discover:
-    runs-on: ubuntu-latest
-    outputs:
-      services: ${{ steps.find.outputs.services }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: find
-        run: |
-          services=$(ls -d services/*/ | jq -R -s -c 'split("\n")[:-1]')
-          echo "services=$services" >> $GITHUB_OUTPUT
-  
-  dockerize:
-    needs: discover
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: ${{ fromJson(needs.discover.outputs.services) }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run DockAI
-        uses: itzzjb/dockai@v2
-        with:
-          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-          project_path: ${{ matrix.service }}
-```
-
-## Build and Push Pattern
-
-Combine DockAI with Docker build and push:
-
-```yaml
-name: Build and Push
+name: Build and Deploy
 
 on:
   push:
@@ -302,119 +256,190 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Generate Dockerfile
-        uses: itzzjb/dockai@v2
-        with:
-          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-      
-      - name: Login to Container Registry
+      - name: Login to Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Generate Dockerfile
+        uses: itzzjb/dockai@v2
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          strict_security: 'true'
+      
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.sha }}
 ```
 
-## Secrets Management
+### Monorepo with Multiple Services
 
-### Setting Up Secrets
+```yaml
+name: Build Services
 
-1. Go to your repository settings
-2. Navigate to Secrets and Variables → Actions
-3. Click "New repository secret"
-4. Add `OPENAI_API_KEY` with your API key
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, worker, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Generate Dockerfile for ${{ matrix.service }}
+        uses: itzzjb/dockai@v2
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          project_path: services/${{ matrix.service }}
+```
+
+### Scheduled Dockerfile Updates
+
+```yaml
+name: Weekly Dockerfile Update
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Every Sunday
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Regenerate Dockerfile
+        uses: itzzjb/dockai@v2
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          strict_security: 'true'
+      
+      - name: Create PR if changed
+        uses: peter-evans/create-pull-request@v5
+        with:
+          title: 'chore: Update Dockerfile'
+          commit-message: 'chore: Regenerate Dockerfile with DockAI'
+          branch: dockerfile-update
+```
+
+---
+
+## Organization-Level Configuration
+
+### Reusable Workflow
+
+Create `.github/workflows/dockai-template.yml` in your org's `.github` repo:
+
+```yaml
+name: DockAI Template
+
+on:
+  workflow_call:
+    inputs:
+      project_path:
+        required: false
+        type: string
+        default: '.'
+    secrets:
+      OPENAI_API_KEY:
+        required: true
+
+jobs:
+  dockai:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: itzzjb/dockai@v2
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          project_path: ${{ inputs.project_path }}
+          # Organization defaults
+          strict_security: 'true'
+          generator_instructions: |
+            Use only approved base images from company-registry.io
+            All containers must run as non-root
+```
+
+Use in your repos:
+
+```yaml
+name: Build
+
+on: [push]
+
+jobs:
+  dockai:
+    uses: your-org/.github/.github/workflows/dockai-template.yml@main
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
 
 ### Organization Secrets
 
-For organization-wide settings, use organization secrets:
+Set these at the organization level:
 
-1. Go to organization settings
-2. Navigate to Secrets and Variables → Actions
-3. Add secrets accessible to multiple repositories
+| Secret | Description |
+|--------|-------------|
+| `OPENAI_API_KEY` | OpenAI API key |
+| `DOCKAI_GENERATOR_INSTRUCTIONS` | Default generator instructions |
+| `DOCKAI_REVIEWER_INSTRUCTIONS` | Default reviewer instructions |
+
+---
 
 ## Troubleshooting
 
-### Action Fails Immediately
+### "API key not found"
 
-Check that:
-- `OPENAI_API_KEY` secret is set
-- Secret name matches exactly (case-sensitive)
+Ensure your secret is set correctly:
 
-### Rate Limit Errors
+1. Go to Repository Settings → Secrets → Actions
+2. Add `OPENAI_API_KEY` (or your provider's key)
+3. Reference as `${{ secrets.OPENAI_API_KEY }}`
 
-If you see rate limit errors:
-- DockAI automatically retries with backoff
-- Consider reducing `max_retries` to limit API calls
-- Upgrade your OpenAI API tier for higher limits
+### "Build failed after max retries"
 
-### Docker Build Fails
+Increase retries and resources:
 
-Check the action logs for:
-- Specific error messages
-- Whether it's a project issue or Dockerfile issue
-- Resource limit problems
-
-### Security Scan Fails
-
-If strict security is enabled and the scan fails:
-- Review the vulnerability report
-- Either fix the vulnerabilities or adjust `strict_security`
-
-## Best Practices
-
-### 1. Use Secrets for API Keys
-
-Never hardcode API keys in workflow files:
 ```yaml
-# ✅ Good
-openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-
-# ❌ Bad
-openai_api_key: 'sk-actual-key-here'
+max_retries: '5'
+validation_memory: '1g'
+validation_cpus: '2.0'
 ```
 
-### 2. Pin Action Version
+### "Docker build timeout"
 
-Use specific versions for reproducibility:
+The GitHub-hosted runner has limited resources. Consider:
+
+1. Using self-hosted runners for large images
+2. Enabling `skip_security_scan` to skip Trivy
+3. Adding custom instructions for optimization
+
+### "Permission denied"
+
+Ensure the workflow has write permissions:
+
 ```yaml
-# ✅ Good - pinned version
-uses: itzzjb/dockai@v2
-
-# ⚠️ Less stable - latest
-uses: itzzjb/dockai@main
+permissions:
+  contents: write
 ```
 
-### 3. Cache Dependencies
-
-Speed up workflows by caching:
-```yaml
-- uses: actions/cache@v4
-  with:
-    path: ~/.cache/pip
-    key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-```
-
-### 4. Use Conditional Runs
-
-Only run DockAI when relevant files change:
-```yaml
-on:
-  push:
-    paths:
-      - 'src/**'
-      - 'requirements.txt'
-      - 'package.json'
-```
+---
 
 ## Next Steps
 
-- **[Configuration](./configuration.md)** — All configuration options
-- **[Customization](./customization.md)** — Fine-tuning strategies
-- **[Platform Integration](./platform-integration.md)** — Embedding in platforms
+- **[Configuration](./configuration.md)**: All configuration options
+- **[Customization](./customization.md)**: Fine-tune for your stack
+- **[Platform Integration](./platform-integration.md)**: Embedding DockAI

@@ -1,22 +1,29 @@
-# Getting Started with DockAI
+# Getting Started
 
 This guide will help you install, configure, and run DockAI for the first time.
 
+---
+
 ## Prerequisites
 
-Before installing DockAI, ensure you have:
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| **Python** | 3.10+ | Required |
+| **Docker** | 20.10+ | Must be running |
+| **API Key** | - | One of the supported LLM providers |
 
-- **Python 3.10+** — DockAI requires Python 3.10 or higher
-- **Docker** — Must be installed and running
-- **API Key** — Access to one of the supported LLM providers:
-  - OpenAI (GPT-4o recommended)
-  - Azure OpenAI
-  - Google Gemini
-  - Anthropic Claude
+### Supported LLM Providers
 
-### Optional: Trivy for Security Scanning
+| Provider | Models | Environment Variable |
+|----------|--------|---------------------|
+| **OpenAI** | GPT-4o, GPT-4o-mini | `OPENAI_API_KEY` |
+| **Azure OpenAI** | GPT-4o, GPT-4o-mini | `AZURE_OPENAI_API_KEY` |
+| **Google Gemini** | Gemini 1.5 Pro, Flash | `GOOGLE_API_KEY` |
+| **Anthropic** | Claude Sonnet 4, Haiku 3.5 | `ANTHROPIC_API_KEY` |
 
-For vulnerability scanning, install Trivy:
+### Optional: Trivy Security Scanner
+
+DockAI integrates with [Trivy](https://trivy.dev/) for vulnerability scanning.
 
 ```bash
 # macOS
@@ -25,25 +32,37 @@ brew install trivy
 # Linux (Debian/Ubuntu)
 sudo apt-get install trivy
 
-# Or DockAI will use the Docker image automatically
+# Docker (automatic fallback)
 docker pull aquasec/trivy
 ```
 
+If Trivy isn't installed, DockAI will use the Docker image automatically.
+
+---
+
 ## Installation
 
-### Option 1: Install from PyPI (Recommended)
+### Option 1: PyPI (Recommended)
 
 ```bash
 pip install dockai-cli
 ```
 
-### Option 2: Install from Source
+### Option 2: From Source
 
 ```bash
 git clone https://github.com/itzzjb/dockai.git
 cd dockai
 pip install -e .
 ```
+
+### Verify Installation
+
+```bash
+dockai --help
+```
+
+---
 
 ## Configuration
 
@@ -52,14 +71,12 @@ pip install -e .
 Create a `.env` file in your working directory:
 
 ```bash
-# Required: Your LLM provider API key
+# Required: API key for your chosen provider
 OPENAI_API_KEY=sk-your-api-key-here
 
-# Optional: Choose provider (default: openai)
-# DOCKAI_LLM_PROVIDER=openai
-
-# Optional: Maximum retry attempts (default: 3)
-# MAX_RETRIES=3
+# Optional: Use a different provider
+# DOCKAI_LLM_PROVIDER=gemini
+# GOOGLE_API_KEY=your-google-api-key
 ```
 
 ### Step 2: Verify Docker is Running
@@ -68,9 +85,13 @@ OPENAI_API_KEY=sk-your-api-key-here
 docker info
 ```
 
-If Docker is not running, start it before using DockAI.
+If Docker isn't running, start Docker Desktop or the Docker daemon.
+
+---
 
 ## Your First Run
+
+### Basic Usage
 
 Navigate to any project directory and run:
 
@@ -111,27 +132,65 @@ Final Dockerfile saved to /path/to/project/Dockerfile
 ╰─────────────────────────────────────────────────────────╯
 ```
 
-## CLI Options
+---
+
+## CLI Reference
+
+### Command: `dockai build`
+
+```bash
+dockai build <project_path> [OPTIONS]
+```
 
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--verbose` | `-v` | Enable detailed debug logging |
+| `--no-cache` | - | Disable Docker build cache |
 | `--help` | `-h` | Show help message |
 
-### Verbose Mode
-
-For debugging or understanding the AI's reasoning:
+### Examples
 
 ```bash
+# Build with verbose output
 dockai build . --verbose
+
+# Build without Docker cache
+dockai build . --no-cache
+
+# Build a specific directory
+dockai build /path/to/project
 ```
 
-## Next Steps
+---
 
-- **[Configuration](./configuration.md)** — Learn about all configuration options
-- **[Customization](./customization.md)** — Fine-tune DockAI for your stack
-- **[Architecture](./architecture.md)** — Understand how DockAI works
-- **[GitHub Actions](./github-actions.md)** — Set up CI/CD integration
+## What Happens During a Build?
+
+```mermaid
+flowchart LR
+    A[📂 Scan] --> B[🧠 Analyze]
+    B --> C[📖 Read Files]
+    C --> D[🏥 Detect Health]
+    D --> E[📝 Plan]
+    E --> F[⚙️ Generate]
+    F --> G[🔒 Review]
+    G --> H[✅ Validate]
+    H --> I{Pass?}
+    I -->|Yes| J[🏁 Done]
+    I -->|No| K[🤔 Reflect]
+    K --> E
+```
+
+1. **Scan**: Discovers project files, respects `.gitignore`
+2. **Analyze**: AI deduces technology stack and requirements
+3. **Read Files**: Extracts critical file contents
+4. **Detect Health**: Finds health check endpoints
+5. **Plan**: Creates strategic build plan
+6. **Generate**: Creates the Dockerfile
+7. **Review**: Security audit and hardening
+8. **Validate**: Builds and tests in sandbox
+9. **Reflect**: If failed, learns and retries
+
+---
 
 ## Troubleshooting
 
@@ -143,21 +202,31 @@ Ensure your `.env` file exists and contains your API key:
 echo "OPENAI_API_KEY=sk-your-key" > .env
 ```
 
-### "Docker build failed"
+### "Docker not running"
 
-1. Verify Docker is running: `docker info`
-2. Check the error message for specific issues
-3. Try running with `--verbose` for more details
+Start Docker Desktop or the Docker daemon:
 
-### Rate Limit Errors
+```bash
+# macOS/Windows
+# Open Docker Desktop
 
-DockAI handles rate limits automatically with exponential backoff. If you see persistent rate limit errors:
+# Linux
+sudo systemctl start docker
+```
 
-1. Wait a few minutes and try again
-2. Consider upgrading your API tier
-3. Reduce `MAX_RETRIES` to limit API calls
+### "Build failed after max retries"
 
-### Need More Help?
+This usually means the project has unusual requirements. Add custom instructions:
 
-- Check the [FAQ](./faq.md) for common questions
-- Open an issue on [GitHub](https://github.com/itzzjb/dockai/issues)
+```bash
+export DOCKAI_GENERATOR_INSTRUCTIONS="This project requires libmagic for file type detection"
+dockai build .
+```
+
+---
+
+## Next Steps
+
+- **[Configuration](./configuration.md)**: Explore all configuration options
+- **[Customization](./customization.md)**: Tune DockAI for your stack
+- **[GitHub Actions](./github-actions.md)**: Set up CI/CD integration

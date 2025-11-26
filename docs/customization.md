@@ -1,6 +1,8 @@
 # Customization Guide
 
-DockAI's power comes from its ability to be customized for your specific technology stack, organizational standards, and security requirements. This guide covers strategies for effective customization.
+DockAI's power comes from its ability to be customized for your specific technology stack, organizational standards, and security requirements.
+
+---
 
 ## Customization Philosophy
 
@@ -22,14 +24,18 @@ DockAI uses a **progressive refinement** approach:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+---
+
 ## Instructions vs. Prompts
 
 ### Instructions (Recommended)
 
-Instructions are **appended** to the default prompt. Use them to:
-- Guide the AI's reasoning while keeping its base intelligence
-- Add organization-specific context
-- Handle common edge cases
+Instructions are **appended** to the default prompt:
+
+- ✅ Preserve DockAI's base intelligence
+- ✅ Add organization-specific context
+- ✅ Handle common edge cases
+- ✅ Easy to maintain
 
 ```ini
 [instructions_generator]
@@ -41,10 +47,12 @@ Our standard practices:
 
 ### Prompts (Advanced)
 
-Prompts **completely replace** the default prompt. Use them when:
-- You need full control over agent behavior
-- The default approach doesn't fit your needs
-- You're building a specialized variant of DockAI
+Prompts **completely replace** the default:
+
+- ⚠️ Full control over agent behavior
+- ⚠️ Must handle all edge cases yourself
+- ⚠️ May break with DockAI updates
+- ⚠️ Higher maintenance burden
 
 ```ini
 [prompt_reviewer]
@@ -56,6 +64,8 @@ Focus on:
 3. Audit logging requirements
 ...
 ```
+
+---
 
 ## Customization by Agent
 
@@ -81,6 +91,8 @@ Project types we have:
 - "cron" - Scheduled tasks
 ```
 
+---
+
 ### Planner Agent
 
 **Purpose**: Strategic build planning
@@ -102,6 +114,8 @@ BUILD REQUIREMENTS:
 - Final images must be under 500MB
 - Use distroless where possible for security
 ```
+
+---
 
 ### Generator Agent
 
@@ -129,6 +143,8 @@ CONVENTIONS:
 - Include our standard healthcheck wrapper
 ```
 
+---
+
 ### Reviewer Agent
 
 **Purpose**: Security audit
@@ -151,6 +167,8 @@ COMPLIANCE (SOC 2 / HIPAA):
 - All packages must be from approved sources
 - Audit all RUN commands for data handling
 ```
+
+---
 
 ### Reflector Agent
 
@@ -178,6 +196,8 @@ KNOWN ISSUES IN OUR STACK:
    Solution: Ensure WORKDIR ownership matches USER
 ```
 
+---
+
 ### Health Detector Agent
 
 **Purpose**: Health endpoint discovery
@@ -200,184 +220,182 @@ Framework patterns:
 - Express: /health or /ping
 ```
 
+---
+
 ### Readiness Detector Agent
 
 **Purpose**: Startup pattern analysis
 
 **Good customizations**:
-- Standard log formats
-- Startup indicators
-- Timeout expectations
+- Startup log patterns
+- Typical startup times
+- Framework-specific signals
 
 ```ini
 [instructions_readiness_detector]
-Our applications log startup as:
-- Django: "Starting development server at" or "Booting worker"
-- FastAPI: "Application startup complete"
+Our startup patterns:
+- Django: "Starting development server" or "Booting worker"
+- FastAPI: "Uvicorn running on"
 - Node.js: "Server listening on port"
 
-Expected startup times:
+Typical startup times:
 - Simple services: 3-5 seconds
-- Services with DB migrations: 15-30 seconds
-- Services loading ML models: 60-120 seconds
+- Services with DB: 10-15 seconds
+- Services with heavy init: 30+ seconds
 ```
 
-## Enterprise Patterns
+---
 
-### Pattern 1: Organization-Wide Defaults
+## Real-World Examples
 
-Set via CI/CD environment variables:
+### Python Web Service (Django)
 
-```yaml
-# Organization GitHub Actions template
-env:
-  DOCKAI_PLANNER_INSTRUCTIONS: |
-    APPROVED BASE IMAGES:
-    - ghcr.io/company/python:3.11-slim
-    - ghcr.io/company/node:20-alpine
-    
-  DOCKAI_REVIEWER_INSTRUCTIONS: |
-    SECURITY (mandatory):
-    - Non-root user (UID 10000)
-    - No hardcoded secrets
-```
-
-### Pattern 2: Stack-Specific Templates
-
-Create reusable `.dockai` templates:
-
-**Django Template** (`.dockai.django`):
 ```ini
 [instructions_analyzer]
-This is a Django application.
-Settings in DJANGO_SETTINGS_MODULE.
-Dependencies in requirements.txt or pyproject.toml.
+This is a Django application with:
+- Celery for background tasks
+- PostgreSQL database
+- Redis for caching and Celery broker
+- Poetry for dependency management
 
 [instructions_generator]
-Django practices:
 - Use gunicorn with uvicorn workers
-- Run collectstatic during build
-- Migrations at container start (entrypoint)
+- Run database migrations in entrypoint
+- Use multi-stage build with poetry export
+- Include celery worker command as alternative
+
+[instructions_reviewer]
+- Ensure DATABASE_URL is not hardcoded
+- Check for DJANGO_SECRET_KEY handling
+- Verify static files are collected
 ```
 
-**Express Template** (`.dockai.express`):
-```ini
-[instructions_analyzer]
-Node.js Express application.
-Entry point in package.json "main" or "start" script.
+---
 
-[instructions_generator]
-Express practices:
-- Use node:20-alpine
-- npm ci --only=production
-- NODE_ENV=production
-- Run as node user
-```
-
-### Pattern 3: Monorepo Configuration
-
-Place `.dockai` in each service directory:
-
-```
-monorepo/
-├── services/
-│   ├── api/
-│   │   ├── .dockai          # API-specific
-│   │   └── src/
-│   ├── worker/
-│   │   ├── .dockai          # Worker-specific
-│   │   └── src/
-│   └── frontend/
-│       ├── .dockai          # Frontend-specific
-│       └── src/
-```
-
-### Pattern 4: Learning from Failures
-
-Document failures in your customization:
-
-```ini
-[instructions_error_analyzer]
-HISTORICAL ISSUES:
-
-Issue: "ModuleNotFoundError: No module named 'pkg_resources'"
-Cause: Missing setuptools in slim images
-Fix: Add "pip install setuptools" or use full image
-
-Issue: "Error loading shared library libssl.so.1.1"
-Cause: OpenSSL version mismatch
-Fix: Use Debian-based image or install openssl-compat
-
-Issue: Container exits immediately
-Cause: Foreground process not configured
-Fix: Ensure CMD runs in foreground (no daemonization)
-```
-
-## Progressive Refinement Workflow
-
-### Week 1: Observe
-
-Run DockAI with defaults and note:
-- What works well
-- What fails consistently
-- What needs manual adjustment
-
-### Week 2: Add Basic Instructions
-
-```ini
-[instructions_planner]
-Prefer python:3.11-slim over python:3.11
-
-[instructions_generator]
-Include our standard metadata labels
-```
-
-### Week 3: Expand Coverage
+### Node.js Microservice
 
 ```ini
 [instructions_analyzer]
-We use Poetry for dependency management.
-Look for pyproject.toml before requirements.txt.
+Express.js microservice with:
+- TypeScript compilation
+- Prisma ORM for PostgreSQL
+- pnpm package manager
+
+[instructions_generator]
+- Use node:20-alpine for final image
+- Multi-stage: build TypeScript, copy dist
+- Run prisma generate in build stage
+- Do NOT include devDependencies in final
 
 [instructions_reflector]
-Alpine issues: switch to Debian for native extensions
+Common issues:
+- "prisma not found": Run npx prisma generate
+- "esbuild binary not found": Need platform-specific binary
 ```
 
-### Week 4+: Repository-Specific
+---
 
-Create `.dockai` files for repositories with unique requirements.
+### Go Service
 
-## Measuring Success
+```ini
+[instructions_analyzer]
+Go service with:
+- Go modules
+- CGO disabled (pure Go)
+- gRPC and HTTP endpoints
 
-Track these metrics:
+[instructions_generator]
+- Build with CGO_ENABLED=0 for static binary
+- Use scratch or distroless as final base
+- Include CA certificates for HTTPS calls
+- Copy only the binary, nothing else
 
-| Metric | Before | Target |
-|--------|--------|--------|
-| First-attempt success | ~60% | 85%+ |
-| Average retries | 2-3 | < 1 |
-| Security failures | ~40% | < 10% |
-| Manual edits | Common | Rare |
+[instructions_planner]
+- Always use multi-stage build
+- Final image should be under 50MB
+- No shell needed in production
+```
 
-## Best Practices
+---
 
-### Do
+## Customization Progression
 
-- ✅ Start simple and iterate
-- ✅ Document the "why" in your instructions
-- ✅ Version control your `.dockai` files
-- ✅ Share learnings across teams
-- ✅ Test customizations on sample projects
+### Day 1: Basic Setup
 
-### Don't
+```ini
+[instructions_generator]
+Use our approved base images from company-registry.io
+```
 
-- ❌ Over-customize too early
-- ❌ Replace prompts unless absolutely necessary
-- ❌ Duplicate information already in defaults
-- ❌ Add instructions that contradict defaults
-- ❌ Forget to update customizations when your stack changes
+### Week 1: Add Common Fixes
+
+```ini
+[instructions_reflector]
+If you see "pg_config not found", install libpq-dev
+If you see "node-gyp" errors, install build-essential
+```
+
+### Month 1: Repository-Specific
+
+Create `.dockai` files in each repository with project-specific guidance.
+
+### Ongoing: Continuous Refinement
+
+- Add new patterns as you discover them
+- Document lessons learned from failures
+- Share customizations across teams
+
+---
+
+## Sharing Customizations
+
+### Version Control
+
+Always commit `.dockai` files to version control:
+
+```bash
+git add .dockai
+git commit -m "Add DockAI configuration for Django service"
+```
+
+### Organization Templates
+
+Create template `.dockai` files for common project types:
+
+```
+templates/
+├── python-django.dockai
+├── python-fastapi.dockai
+├── node-express.dockai
+├── node-nextjs.dockai
+└── go-service.dockai
+```
+
+### CI/CD Secrets
+
+Store organization-wide settings as GitHub secrets:
+
+```yaml
+env:
+  DOCKAI_PLANNER_INSTRUCTIONS: ${{ secrets.DOCKAI_PLANNER_INSTRUCTIONS }}
+  DOCKAI_REVIEWER_INSTRUCTIONS: ${{ secrets.DOCKAI_REVIEWER_INSTRUCTIONS }}
+```
+
+---
+
+## Measuring Effectiveness
+
+| Metric | Before Customization | After Customization |
+|--------|---------------------|---------------------|
+| First-attempt success rate | ~60% | ~85%+ |
+| Average retries | 1.5 | 0.3 |
+| Token usage | High | Reduced 30-50% |
+| Manual fixes needed | Often | Rarely |
+
+---
 
 ## Next Steps
 
-- **[Configuration](./configuration.md)** — All configuration options
-- **[Platform Integration](./platform-integration.md)** — Embedding DockAI
-- **[GitHub Actions](./github-actions.md)** — CI/CD setup
+- **[Configuration](./configuration.md)**: All configuration options
+- **[GitHub Actions](./github-actions.md)**: CI/CD integration
+- **[Platform Integration](./platform-integration.md)**: Embedding DockAI

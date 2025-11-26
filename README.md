@@ -1,20 +1,83 @@
-# DockAI 🐳🤖
+<p align="center">
+  <img src="https://img.shields.io/badge/🐳-DockAI-blue?style=for-the-badge&logoColor=white" alt="DockAI Logo" />
+</p>
 
-> **AI-Powered Dockerfile Generation Framework**
+<h1 align="center">DockAI</h1>
 
-[![PyPI version](https://badge.fury.io/py/dockai-cli.svg)](https://badge.fury.io/py/dockai-cli)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+<p align="center">
+  <strong>AI-Powered Dockerfile Generation Framework</strong>
+</p>
 
-DockAI is an intelligent, agentic CLI framework that analyzes your codebase and generates production-ready Dockerfiles using AI. It uses first-principles reasoning to containerize any application—from standard stacks to legacy systems and future technologies.
+<p align="center">
+  <em>Generate production-ready Dockerfiles from first principles using AI agents</em>
+</p>
 
-## ✨ Key Features
+<p align="center">
+  <a href="https://pypi.org/project/dockai-cli/"><img src="https://img.shields.io/pypi/v/dockai-cli?style=flat-square&color=blue" alt="PyPI Version" /></a>
+  <a href="https://pypi.org/project/dockai-cli/"><img src="https://img.shields.io/pypi/pyversions/dockai-cli?style=flat-square" alt="Python Version" /></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/itzzjb/dockai/actions"><img src="https://img.shields.io/github/actions/workflow/status/itzzjb/dockai/ci.yml?style=flat-square" alt="Build Status" /></a>
+</p>
 
-- **🧠 First-Principles Reasoning** — Analyzes file structures and code to deduce requirements, no templates needed
-- **🔄 Self-Correcting Workflow** — Automatically debugs and fixes failed builds through reflection
-- **🛡️ Security-First** — Built-in security review with Trivy integration for vulnerability scanning
-- **🎯 10 Customizable AI Agents** — Fine-tune each agent for your organization's standards
-- **⚡ Multi-Provider Support** — Works with OpenAI, Azure OpenAI, Google Gemini, and Anthropic
+<p align="center">
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-features">Features</a> •
+  <a href="#-documentation">Docs</a> •
+  <a href="#-github-actions">CI/CD</a> •
+  <a href="#-contributing">Contributing</a>
+</p>
+
+---
+
+## 🎯 What is DockAI?
+
+DockAI is an **agentic AI framework** that analyzes your codebase and generates optimized, production-ready Dockerfiles. Unlike template-based tools, DockAI uses **first-principles reasoning** to understand your application and create Dockerfiles from scratch—handling everything from standard stacks to legacy systems.
+
+```bash
+pip install dockai-cli
+dockai build /path/to/project
+```
+
+That's it. DockAI handles the rest.
+
+---
+
+## ✨ Features
+
+<table>
+  <tr>
+    <td width="50%">
+      <h3>🧠 First-Principles AI</h3>
+      <p>No templates. Analyzes file structures, dependencies, and code patterns to deduce the optimal containerization strategy.</p>
+    </td>
+    <td width="50%">
+      <h3>🔄 Self-Correcting Workflow</h3>
+      <p>Builds and tests Dockerfiles in a sandbox. If something fails, AI reflects, learns, and retries with a new approach.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>🛡️ Security-First</h3>
+      <p>Built-in Trivy integration scans for vulnerabilities. Enforces non-root users, minimal base images, and hardened configs.</p>
+    </td>
+    <td width="50%">
+      <h3>🤖 10 Specialized Agents</h3>
+      <p>Each agent handles a specific task: analysis, planning, generation, review, and more. All fully customizable.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>⚡ Multi-Provider LLMs</h3>
+      <p>Supports OpenAI, Azure OpenAI, Google Gemini, and Anthropic Claude. Mix models per agent for cost optimization.</p>
+    </td>
+    <td width="50%">
+      <h3>🔧 Fully Customizable</h3>
+      <p>Override prompts, instructions, and model selection per agent. Use <code>.dockai</code> files for repo-specific configs.</p>
+    </td>
+  </tr>
+</table>
+
+---
 
 ## 🚀 Quick Start
 
@@ -26,78 +89,95 @@ pip install dockai-cli
 
 ### Configuration
 
-Create a `.env` file with your API key:
+Create a `.env` file:
 
 ```bash
-OPENAI_API_KEY=sk-your-api-key-here
+# Required: Choose your LLM provider and add the API key
+OPENAI_API_KEY=sk-your-api-key
+
+# Optional: Use a different provider (openai, azure, gemini, anthropic)
+# DOCKAI_LLM_PROVIDER=openai
 ```
 
 ### Usage
 
 ```bash
-dockai build /path/to/your/project
+# Generate Dockerfile for your project
+dockai build /path/to/project
+
+# With verbose output
+dockai build /path/to/project --verbose
 ```
 
-That's it! DockAI will analyze your project and generate an optimized Dockerfile.
-
-## 📖 Documentation
-
-For comprehensive documentation, see the [docs](./docs/) directory:
-
-- **[Getting Started](./docs/getting-started.md)** — Installation, configuration, and first run
-- **[Architecture](./docs/architecture.md)** — How DockAI works under the hood
-- **[Configuration](./docs/configuration.md)** — All configuration options
-- **[Customization](./docs/customization.md)** — Fine-tuning agents for your stack
-- **[API Reference](./docs/api-reference.md)** — Module and function documentation
-- **[GitHub Actions](./docs/github-actions.md)** — CI/CD integration guide
-- **[Platform Integration](./docs/platform-integration.md)** — Embedding DockAI in your platform
+---
 
 ## 🏗️ How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      DockAI Workflow                            │
-├─────────────────────────────────────────────────────────────────┤
-│  1. SCAN      → Discover project files                          │
-│  2. ANALYZE   → AI deduces technology stack                     │
-│  3. PLAN      → Strategic build planning                        │
-│  4. GENERATE  → Create Dockerfile                               │
-│  5. REVIEW    → Security audit                                  │
-│  6. VALIDATE  → Build & test in sandbox                         │
-│  7. REFLECT   → If failed: analyze, learn, retry                │
-│  8. OUTPUT    → Production-ready Dockerfile                     │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           DockAI Agentic Workflow                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────┐    ┌──────────┐    ┌─────────┐    ┌──────────┐               │
+│   │  SCAN   │───▶│ ANALYZE  │───▶│  PLAN   │───▶│ GENERATE │               │
+│   └─────────┘    └──────────┘    └─────────┘    └──────────┘               │
+│        │              │               │               │                     │
+│   Discover       Deduce stack    Strategic       Create                     │
+│   files          & patterns      planning        Dockerfile                 │
+│                                                       │                     │
+│                                                       ▼                     │
+│   ┌─────────┐    ┌──────────┐    ┌─────────┐    ┌──────────┐               │
+│   │ OUTPUT  │◀───│ VALIDATE │◀───│ REVIEW  │◀───│ SECURITY │               │
+│   └─────────┘    └──────────┘    └─────────┘    └──────────┘               │
+│        │              │               │               │                     │
+│   Production     Build & run     Check for       Trivy scan                 │
+│   Dockerfile     in sandbox      issues          & harden                   │
+│                       │                                                     │
+│                       ▼                                                     │
+│              ┌────────────────┐                                             │
+│              │    REFLECT     │  ◀─── If build fails: analyze, learn,       │
+│              │    & RETRY     │       adapt strategy, try again             │
+│              └────────────────┘                                             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
 
 ## 🤖 The 10 AI Agents
 
-| Agent | Role |
-|-------|------|
-| **Analyzer** | Project discovery and stack detection |
-| **Planner** | Strategic build planning |
-| **Generator** | Dockerfile creation |
-| **Reviewer** | Security audit |
-| **Validator** | Build and runtime testing |
-| **Reflector** | Failure analysis and learning |
-| **Health Detector** | Health endpoint discovery |
-| **Readiness Detector** | Startup pattern analysis |
-| **Error Analyzer** | Error classification |
-| **Iterative Improver** | Targeted fix application |
+| Agent | Role | Model Type |
+|-------|------|------------|
+| **Analyzer** | Project discovery & stack detection | Fast |
+| **Planner** | Strategic build planning | Fast |
+| **Generator** | Dockerfile creation | Powerful |
+| **Generator (Iterative)** | Debugging failed Dockerfiles | Powerful |
+| **Reviewer** | Security audit & hardening | Fast |
+| **Reflector** | Failure analysis & learning | Powerful |
+| **Health Detector** | Health endpoint discovery | Fast |
+| **Readiness Detector** | Startup pattern analysis | Fast |
+| **Error Analyzer** | Error classification | Fast |
+| **Iterative Improver** | Targeted fix application | Powerful |
 
-## ⚙️ Configuration Options
+---
+
+## ⚙️ Configuration
 
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OPENAI_API_KEY` | OpenAI API key | Required |
-| `DOCKAI_LLM_PROVIDER` | LLM provider (`openai`, `azure`, `gemini`, `anthropic`) | `openai` |
+| `OPENAI_API_KEY` | OpenAI API key | Required* |
+| `GOOGLE_API_KEY` | Google Gemini API key | Required* |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key | Required* |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | Required* |
+| `DOCKAI_LLM_PROVIDER` | Provider (`openai`, `azure`, `gemini`, `anthropic`) | `openai` |
 | `MAX_RETRIES` | Maximum retry attempts | `3` |
 | `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy scanning | `false` |
 
-See [Configuration Documentation](./docs/configuration.md) for all options.
+*Only one API key required for your chosen provider.
 
-### Repository Configuration
+### Repository-Level Configuration
 
 Create a `.dockai` file in your project root:
 
@@ -107,11 +187,13 @@ This is a Django application with Celery workers.
 
 [instructions_generator]
 Use gunicorn as the WSGI server.
-Include database migration step.
+Run database migrations at container start.
 
 [instructions_reviewer]
-All containers must run as non-root.
+All containers must run as non-root (UID >= 10000).
 ```
+
+---
 
 ## 🔗 GitHub Actions
 
@@ -132,33 +214,62 @@ jobs:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-See [GitHub Actions Guide](./docs/github-actions.md) for advanced usage.
+### Multi-Provider Example
 
-## 🛠️ Technology Stack
-
-- **Python 3.10+** — Core runtime
-- **LangGraph** — Stateful agent workflow orchestration
-- **LangChain** — LLM integration
-- **Pydantic** — Structured output validation
-- **Rich & Typer** — Beautiful CLI interface
-- **Trivy** — Security vulnerability scanning
-
-## 🤝 Contributing
-
-Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
-
-```bash
-# Development setup
-git clone https://github.com/itzzjb/dockai.git
-cd dockai
-pip install -e ".[test]"
-pytest tests/
+```yaml
+- uses: itzzjb/dockai@v2
+  with:
+    llm_provider: gemini
+    google_api_key: ${{ secrets.GOOGLE_API_KEY }}
+    max_retries: 5
+    strict_security: true
 ```
 
-## 📄 License
-
-MIT License — see [LICENSE](./LICENSE) for details.
+See [GitHub Actions Guide](./docs/github-actions.md) for all options.
 
 ---
 
-**Built with ❤️ by [Januda Bethmin](https://github.com/itzzjb)**
+## 📖 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [**Getting Started**](./docs/getting-started.md) | Installation, configuration, first run |
+| [**Architecture**](./docs/architecture.md) | Deep dive into the agentic workflow |
+| [**Configuration**](./docs/configuration.md) | All environment variables and options |
+| [**Customization**](./docs/customization.md) | Tuning agents for your organization |
+| [**API Reference**](./docs/api-reference.md) | Module and function documentation |
+| [**GitHub Actions**](./docs/github-actions.md) | CI/CD integration guide |
+| [**FAQ**](./docs/faq.md) | Frequently asked questions |
+
+> 💡 **Platform Engineers**: DockAI is ideal for embedding into Internal Developer Platforms, CI/CD pipelines, and self-service portals to auto-generate Dockerfiles at scale.
+
+---
+
+## 🛠️ Tech Stack
+
+| Technology | Purpose |
+|------------|---------|
+| **Python 3.10+** | Core runtime |
+| **LangGraph** | Stateful agent workflow orchestration |
+| **LangChain** | LLM provider integration |
+| **Pydantic** | Structured output validation |
+| **Rich + Typer** | Beautiful CLI interface |
+| **Trivy** | Security vulnerability scanning |
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Feel free to open issues and pull requests.
+
+---
+
+## 📄 License
+
+MIT License - see [LICENSE](./LICENSE) for details.
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ by <a href="https://github.com/itzzjb">itzzjb</a></sub>
+</p>
