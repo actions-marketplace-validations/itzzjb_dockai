@@ -1,332 +1,294 @@
-# ============================================
-# DockAI Custom Configuration File
-# ============================================
-# Copy this file to .dockai in your project root to customize DockAI's behavior.
+# =============================================================================
+# DockAI Configuration File (.dockai)
+# =============================================================================
+# Copy this file to your project root as '.dockai' to customize DockAI.
 #
-# This file supports two types of customization:
-# 1. Custom Instructions: High-level guidance for the analyzer and generator phases
-# 2. Custom Prompts: Complete replacement of AI agent personas/prompts
+# Two customization types:
+#   [instructions_<agent>] - Appends extra guidance to the agent's default prompt
+#   [prompt_<agent>]       - Completely replaces the agent's default prompt
 #
-# ============================================
+# Lines starting with # are ignored (comments).
+# Content under a section continues until the next section or end of file.
+# =============================================================================
 
-# ============================================
-# SECTION 1: CUSTOM INSTRUCTIONS (Guide the AI's Reasoning)
-# ============================================
-# Instructions are APPENDED to the default autonomous reasoning prompts.
-# Use these to provide additional context and guidance without replacing
-# the AI's first-principles thinking approach.
-#
-# Each agent uses a structured cognitive process:
-# STEP 1: OBSERVE/UNDERSTAND - Gather information
-# STEP 2: HYPOTHESIZE/ANALYZE - Form theories
-# STEP 3: REASON/VERIFY - Think through implications
-# STEP 4: DEDUCE/CONCLUDE - Draw conclusions
-#
-# Your instructions guide this reasoning process.
 
-[analyzer]
-# Guide the project discovery agent's reasoning
-# Example: What should it focus on? What patterns matter in your codebase?
-Always include package-lock.json or yarn.lock if they exist.
-Look for any .env.example files to understand environment variables.
-Include docker-compose.yml if present.
-Our projects typically use monorepo structures - look for workspace configurations.
+# =============================================================================
+# SECTION 1: INSTRUCTIONS
+# =============================================================================
+# Instructions are APPENDED to the agent's default prompt.
+# Use these to add project-specific guidance without replacing the full prompt.
+# =============================================================================
 
-[generator]
-# Guide the Dockerfile creation agent's decisions
-# Example: What constraints apply? What practices should it follow?
-Ensure the container runs as a non-root user named 'appuser'.
-Do not expose any ports other than 8080.
-Install 'curl' for health checks.
-Set the timezone to 'UTC'.
-Define an environment variable 'APP_ENV' with value 'production'.
-Use multi-stage builds for all compiled languages.
 
-# ============================================
-# Additional Agent Instructions (all 10 agents)
-# ============================================
-# You can provide instructions for any of the 10 autonomous AI agents.
-# Use the format [instructions_AGENTNAME] for agents beyond analyzer/generator.
+[instructions_analyzer]
+Project-specific context:
+- This is a Python 3.11 FastAPI application
+- Uses Poetry for dependency management (pyproject.toml)
+- Requires PostgreSQL and Redis connections
+- Has native dependencies needing: gcc, libpq-dev, libffi-dev
+- Entry point: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 [instructions_planner]
-# Guide the strategic planning agent's decisions
-# Example: What infrastructure constraints exist? What standards apply?
-Consider our organization's approved base images: alpine, debian-slim, distroless.
-Prefer multi-stage builds for compiled languages.
-Account for our CI/CD pipeline requiring images under 500MB.
+Dockerfile planning requirements:
+- Use multi-stage builds with at least 2 stages (builder + runtime)
+- Target final image size under 200MB
+- Optimize layer ordering for CI/CD cache efficiency
+- Plan for both development and production targets
+
+[instructions_generator]
+Organization Dockerfile standards:
+- Base image: python:3.11-slim-bookworm
+- Create non-root user 'appuser' with UID 1000
+- Set WORKDIR to /app
+- Include HEALTHCHECK instruction using curl
+- Add OCI labels (org.opencontainers.image.*)
+- Use --no-cache-dir for pip installs
+- Copy only necessary files (not tests, docs, etc.)
+
+[instructions_generator_iterative]
+When fixing Dockerfile issues:
+- Preserve all existing comments
+- Keep the multi-stage build structure
+- Don't change the base image unless necessary
+- Ensure backward compatibility with existing CI/CD
 
 [instructions_reviewer]
-# Guide the security auditor agent's threat analysis
-# Example: What policies must be enforced? What compliance requirements exist?
-Our compliance requires all containers to run as non-root with UID >= 1000.
-Check for hardcoded secrets, API keys, and database passwords.
-Verify no sensitive files (.env, .pem, .key) are copied into the image.
+Security standards for this organization:
+- No packages with HIGH or CRITICAL CVEs
+- Container must run as non-root (UID >= 1000)
+- No secrets or credentials in ENV or ARG
+- All COPY commands should specify --chown
+- Verify no unnecessary packages installed
+- Check for proper signal handling (PID 1)
 
 [instructions_reflector]
-# Guide the detective agent's post-mortem analysis
-# Example: What environment factors should it consider?
-When analyzing failures, consider our network uses a corporate proxy.
-Alpine-compatible solutions are preferred over switching to Debian.
-Common issues in our stack: missing libssl, missing ca-certificates.
+When analyzing failures:
+- Prioritize security fixes over optimization
+- Consider CI/CD build time impact
+- Flag any deviation from company standards
+- Provide specific line numbers for fixes
 
 [instructions_health_detector]
-# Guide the health endpoint discovery agent
-# Example: What patterns does your organization use?
-Our apps expose health at /api/health or /healthz, never just /health.
-Look for Spring Boot Actuator endpoints in Java apps.
-Check for __health__ patterns in Python Flask apps.
+Application health check details:
+- Primary endpoint: GET /api/v1/health
+- Expected response: {"status": "healthy", "version": "..."}
+- Timeout: 5 seconds
+- Interval: 30 seconds
+- Database health included in response
 
 [instructions_readiness_detector]
-# Guide the readiness pattern analysis agent
-# Example: What startup messages do your apps typically produce?
-Look for "Application started" or "Server ready" log messages.
-Our Java apps log "Started Application in X seconds".
-Node.js apps typically log "listening on port" when ready.
+Application startup requirements:
+- Database migrations run on startup (~10s)
+- Redis connection must be established
+- ML model loading takes ~20 seconds
+- Recommended initial delay: 30 seconds
+- Readiness endpoint: GET /api/v1/ready
 
 [instructions_error_analyzer]
-# Guide the error classification agent
-# Example: What common errors occur in your environment?
-Common issues: missing system libraries like libpq, libssl, libffi.
-When seeing DNS errors, consider our corporate proxy requirements.
-EACCES errors usually mean running as wrong user - check permissions.
+Error handling preferences:
+- Network timeouts: retry with exponential backoff
+- Package not found: suggest alternative packages
+- Permission denied: check user/group settings
+- Out of memory: suggest build optimizations
 
 [instructions_iterative_improver]
-# Guide the surgical fix agent
-# Example: How should fixes be applied?
-When fixing issues, add inline comments explaining the fix.
-Prefer apk add over apt-get when using Alpine images.
-Preserve existing LABEL and EXPOSE instructions when modifying.
+When applying fixes:
+- Make minimal changes to fix the issue
+- Add comments explaining the fix
+- Preserve existing optimizations
+- Test one fix at a time
 
-# ============================================
-# SECTION 2: CUSTOM PROMPTS (Advanced)
-# ============================================
-# Use these sections to completely replace the default AI agent prompts.
-# Each section corresponds to an autonomous AI reasoning agent.
-#
-# WARNING: Custom prompts are powerful but should be used carefully.
-# The default prompts use structured cognitive processes (observe, hypothesize,
-# reason, deduce, conclude) designed to work with any technology stack.
-# Only customize if you have specific requirements.
-#
-# Available prompt sections:
-# - [prompt_analyzer]           - Discovers and deduces project requirements
-# - [prompt_planner]            - Strategic thinker for build planning
-# - [prompt_generator]          - Reasons about Dockerfile instructions
-# - [prompt_generator_iterative]- Debugger for surgical fixes
-# - [prompt_reviewer]           - Security auditor for threat analysis
-# - [prompt_reflector]          - Detective for post-mortem analysis
-# - [prompt_health_detector]    - Evidence-based health endpoint discovery
-# - [prompt_readiness_detector] - Behavioral analysis of startup patterns
-# - [prompt_error_analyzer]     - Troubleshooter for error classification
-# - [prompt_iterative_improver] - Surgeon for precise corrections
 
-# ============================================
-# EXAMPLE: Custom Analyzer Prompt
-# ============================================
-# Uncomment and modify to use a custom analyzer prompt:
+# =============================================================================
+# SECTION 2: CUSTOM PROMPTS
+# =============================================================================
+# Custom prompts COMPLETELY REPLACE the agent's default prompt.
+# Use these when you need full control over agent behavior.
 #
-# [prompt_analyzer]
-# You are an autonomous AI reasoning agent analyzing a software project.
-#
-# ## Your Cognitive Process
-#
-# STEP 1 - OBSERVE: What files do you see? What patterns emerge?
-# STEP 2 - HYPOTHESIZE: What type of project could this be?
-# STEP 3 - REASON: How would a human figure out how to run this?
-# STEP 4 - DEDUCE: What runtime environment does this need?
-# STEP 5 - CONCLUDE: Formulate your analysis with confidence levels
-#
-# ## Additional Context for {YOUR_TECHNOLOGY}
-# - {Your specific requirements}
-# - {Your custom analysis rules}
-#
-# {custom_instructions}
+# Available template variables (automatically injected):
+#   {file_tree}        - Project directory structure
+#   {file_contents}    - Contents of relevant project files  
+#   {project_analysis} - Output from analyzer agent
+#   {dockerfile_plan}  - Strategic plan from planner agent
+#   {health_check}     - Health check configuration
+#   {readiness_probe}  - Readiness probe configuration
+#   {dockerfile}       - Generated Dockerfile content
+#   {trivy_output}     - Trivy security scan results
+#   {review}           - Security review from reviewer
+#   {error}            - Error message when failures occur
+#   {context}          - Additional error context
+# =============================================================================
 
-# ============================================
-# EXAMPLE: Custom Generator Prompt
-# ============================================
-# Uncomment and modify to use a custom generator prompt:
-#
-# [prompt_generator]
-# You are an autonomous AI reasoning agent creating a Dockerfile.
-#
-# ## Your Generation Process
-#
-# STEP 1 - UNDERSTAND: What does this application need to run?
-# STEP 2 - DESIGN: Do I need separate build and runtime stages?
-# STEP 3 - REASON: Why this base image? Why these commands?
-# STEP 4 - VERIFY: Are ALL source files copied? Is the entry correct?
-#
-# ## Organization Requirements
-# 1. Always use multi-stage builds
-# 2. Use our private registry: registry.company.com
-# 3. {Your additional requirements}
-#
-# {plan_context}
-# {retry_context}
-# {error_context}
 
-# ============================================
-# EXAMPLE: Custom Security Reviewer Prompt
-# ============================================
-# Uncomment and modify to use a custom reviewer prompt:
-#
-# [prompt_reviewer]
-# You are an autonomous AI reasoning agent reviewing Dockerfile security.
-#
-# ## Your Review Process
-#
-# STEP 1 - UNDERSTAND: What is this container intended to do?
-# STEP 2 - CHECK: Systematically check for privilege, image, secrets, surface risks
-# STEP 3 - ASSESS: Rate each issue by severity (CRITICAL/HIGH/MEDIUM/LOW)
-# STEP 4 - REMEDIATE: Provide specific fixes for each issue
-#
-# ## Organization Security Policies
-# 1. All containers MUST run as non-root
-# 2. Only approved base images: {list}
-# 3. {Your additional security rules}
-#
-# Review the Dockerfile and ensure compliance with all policies.
+[prompt_analyzer]
+You are a senior software architect analyzing a project for containerization.
 
-# ============================================
-# EXAMPLE: Custom Planner Prompt
-# ============================================
-# Uncomment and modify to use a custom planner prompt:
-#
-# [prompt_planner]
-# You are an autonomous AI reasoning agent creating a strategic plan.
-#
-# ## Your Strategic Thinking Process
-#
-# STEP 1 - UNDERSTAND: What exactly needs to be containerized?
-# STEP 2 - ANALYZE: What runtime and build-time tools are needed?
-# STEP 3 - ANTICIPATE: What could go wrong? Binary compatibility?
-# STEP 4 - DESIGN: Multi-stage? What base images? Security measures?
-# STEP 5 - LEARN: What failed before? How to avoid the same mistake?
-#
-# ## Organization Guidelines
-# 1. Consider infrastructure constraints
-# 2. Follow {YOUR_ORGANIZATION} standards
-#
-# {retry_context}
-# {custom_instructions}
+PROJECT FILES:
+{file_tree}
 
-# ============================================
-# EXAMPLE: Custom Reflector Prompt
-# ============================================
-# Uncomment and modify to use a custom reflector prompt:
-#
-# [prompt_reflector]
-# You are an autonomous AI reasoning agent conducting post-mortem analysis.
-#
-# ## Your Analytical Process
-#
-# STEP 1 - EXAMINE: What is the exact error? At what stage did it fail?
-# STEP 2 - IDENTIFY: What is the symptom vs root cause?
-# STEP 3 - TRACE: Work backwards - what assumptions were wrong?
-# STEP 4 - FIX: What minimal change addresses the root cause?
-# STEP 5 - PREVENT: What lesson should be learned?
-#
-# ## Organization Context
-# - Common issues: {your environment-specific factors}
-# - Debugging practices: {your organization's practices}
-#
-# {retry_context}
+FILE CONTENTS:
+{file_contents}
 
-# ============================================
-# EXAMPLE: Custom Health Detector Prompt
-# ============================================
-# Uncomment and modify to use a custom health detector prompt:
-#
-# [prompt_health_detector]
-# You are an autonomous AI reasoning agent discovering health endpoints.
-#
-# ## Your Discovery Process
-#
-# STEP 1 - UNDERSTAND: What type of application is this?
-# STEP 2 - SEARCH: Look for route definitions, health/ready/ping patterns
-# STEP 3 - IDENTIFY: How does the app know which port to listen on?
-# STEP 4 - ASSESS: What evidence supports your conclusion? Confidence?
-#
-# ## Organization Standards
-# - Required health endpoint paths: {your paths}
-# - Standard patterns: {your patterns}
+Analyze and provide:
+1. Primary language and version
+2. Framework(s) detected
+3. Package manager and dependencies
+4. Build requirements
+5. Runtime requirements
+6. Entry point command
+7. Environment variables needed
+8. Ports to expose
 
-# ============================================
-# EXAMPLE: Custom Readiness Detector Prompt
-# ============================================
-# Uncomment and modify to use a custom readiness detector prompt:
-#
-# [prompt_readiness_detector]
-# You are an autonomous AI reasoning agent analyzing startup patterns.
-#
-# ## Your Analysis Process
-#
-# STEP 1 - UNDERSTAND: What happens when this application starts?
-# STEP 2 - FIND SUCCESS: What log messages indicate readiness?
-# STEP 3 - FIND FAILURE: What messages indicate startup failure?
-# STEP 4 - ESTIMATE: How long should startup take?
-#
-# ## Organization Standards
-# - Expected startup time range: {your range}
-# - Standard startup messages: {your messages}
+[prompt_planner]
+You are a DevOps architect creating a Dockerfile generation strategy.
 
-# ============================================
-# EXAMPLE: Custom Error Analyzer Prompt
-# ============================================
-# Uncomment and modify to use a custom error analyzer prompt:
-#
-# [prompt_error_analyzer]
-# You are an autonomous AI reasoning agent classifying errors.
-#
-# ## Your Analysis Process
-#
-# STEP 1 - EXAMINE: What does the error say? At what stage?
-# STEP 2 - CLASSIFY: PROJECT_ERROR, DOCKERFILE_ERROR, or ENVIRONMENT_ERROR?
-# STEP 3 - DETERMINE: Can regenerating the Dockerfile fix this?
-# STEP 4 - GUIDE: Provide specific fix instructions
-#
-# ## Organization Context
-# - Common issues: {your technology-specific error patterns}
-# - Classification criteria: {your custom criteria}
+PROJECT ANALYSIS:
+{project_analysis}
 
-# ============================================
-# EXAMPLE: Custom Iterative Improver Prompt
-# ============================================
-# Uncomment and modify to use a custom iterative improver prompt:
-#
-# [prompt_iterative_improver]
-# You are an autonomous AI reasoning agent making surgical fixes.
-#
-# ## Your Improvement Process
-#
-# STEP 1 - UNDERSTAND: What specific error occurred?
-# STEP 2 - REVIEW: What does the reflection say about root cause?
-# STEP 3 - PLAN: What minimal change addresses this?
-# STEP 4 - APPLY: Make targeted changes, preserve what works
-#
-# ## Key Principles
-# - Minimal intervention - best fix changes least code
-# - Preserve working code - if not broken, don't touch
-# - Explain changes - be clear about what and why
-#
-# VERIFIED BASE IMAGES: {verified_tags}
-# {custom_instructions}
+Create a detailed plan including:
+1. Recommended base image with justification
+2. Build stages (name and purpose of each)
+3. Dependency installation strategy
+4. Security hardening steps
+5. Layer optimization approach
+6. Caching strategy for CI/CD
 
-# ============================================
-# NOTES ON TEMPLATE VARIABLES
-# ============================================
-# Some prompts support template variables that will be replaced at runtime:
-#
-# Common variables:
-# - {custom_instructions}  - User's custom instructions
-# - {retry_context}        - Context from previous failed attempts
-# - {plan_context}         - Current build plan context
-# - {error_context}        - Error details from failed builds
-#
-# Generator-specific variables:
-# - {root_cause}, {why_it_failed}, {lesson_learned} - Reflection data
-# - {specific_fixes}, {verified_tags} - Fix guidance
-# - {image_change_guidance}, {strategy_change_guidance} - Strategy updates
-#
-# You can include these in your custom prompts to maintain dynamic behavior.
+[prompt_generator]
+You are a Docker expert generating a production-grade Dockerfile.
+
+PROJECT ANALYSIS:
+{project_analysis}
+
+GENERATION PLAN:
+{dockerfile_plan}
+
+HEALTH CHECK:
+{health_check}
+
+READINESS PROBE:
+{readiness_probe}
+
+Generate a complete Dockerfile with:
+- Multi-stage build
+- Non-root user
+- Health check
+- Optimized layers
+- Security best practices
+- Helpful comments
+
+[prompt_generator_iterative]
+You are a Docker expert fixing a failed Dockerfile.
+
+CURRENT DOCKERFILE:
+{dockerfile}
+
+ERROR:
+{error}
+
+REVIEW FEEDBACK:
+{review}
+
+Fix the Dockerfile addressing the error while:
+- Preserving working parts
+- Adding comments for changes
+- Maintaining security practices
+
+[prompt_reviewer]
+You are a container security engineer reviewing a Dockerfile.
+
+DOCKERFILE:
+{dockerfile}
+
+TRIVY SCAN RESULTS:
+{trivy_output}
+
+Provide:
+1. Security score (0-100)
+2. Critical issues found
+3. Recommended fixes
+4. Best practice violations
+5. Improved Dockerfile if needed
+
+[prompt_reflector]
+You are a principal engineer analyzing why Dockerfile generation failed.
+
+ERROR:
+{error}
+
+CONTEXT:
+{context}
+
+DOCKERFILE:
+{dockerfile}
+
+Analyze and provide:
+1. Root cause of failure
+2. Classification (build/runtime/security/config)
+3. Specific fix recommendations
+4. Prevention strategies
+
+[prompt_health_detector]
+You are analyzing source code to detect health check endpoints.
+
+FILE TREE:
+{file_tree}
+
+FILE CONTENTS:
+{file_contents}
+
+Identify:
+1. Health check endpoint path
+2. HTTP method
+3. Expected response
+4. Dependencies checked
+5. Recommended HEALTHCHECK command
+
+[prompt_readiness_detector]
+You are analyzing source code to detect application readiness patterns.
+
+FILE TREE:
+{file_tree}
+
+FILE CONTENTS:
+{file_contents}
+
+Identify:
+1. Startup initialization steps
+2. Required external connections
+3. Warm-up requirements
+4. Recommended initial delay
+5. Readiness endpoint if exists
+
+[prompt_error_analyzer]
+You are a DevOps engineer classifying Docker errors.
+
+ERROR MESSAGE:
+{error}
+
+CONTEXT:
+{context}
+
+Classify the error:
+1. Error type (build/runtime/network/permission/resource)
+2. Severity (critical/high/medium/low)
+3. Root cause
+4. Recommended fix
+5. Prevention strategy
+
+[prompt_iterative_improver]
+You are a senior Docker engineer applying specific fixes.
+
+CURRENT DOCKERFILE:
+{dockerfile}
+
+ERROR:
+{error}
+
+SUGGESTED FIX:
+{review}
+
+Apply the fix with:
+- Minimal changes
+- Clear comments
+- Preserved structure
+- Security maintained
