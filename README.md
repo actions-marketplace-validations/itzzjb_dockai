@@ -101,14 +101,15 @@ graph TD
 
 ### Installation
 
-1.  **Clone the repository**:
+1.  **Install via Pip**:
+    ```bash
+    pip install dockai-cli
+    ```
+
+2.  **Or Install from Source (for development)**:
     ```bash
     git clone https://github.com/yourusername/dockai.git
     cd dockai
-    ```
-
-2.  **Install dependencies**:
-    ```bash
     pip install -e .
     ```
 
