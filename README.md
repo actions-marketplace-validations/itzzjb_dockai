@@ -148,19 +148,24 @@ graph TD
 
 2.  **Or Install from Source (for development)**:
     ```bash
-    git clone https://github.com/yourusername/dockai.git
+    git clone https://github.com/itzzjb/dockai.git
     cd dockai
     pip install -e .
     ```
 
 3.  **Set up Environment**:
-    Create a `.env` file in the root directory:
+    Copy the example environment file and configure it:
+    ```bash
+    cp .env.example .env
+    # Edit .env and add your OpenAI API key
+    ```
+    
+    Or create a minimal `.env` file:
     ```bash
     OPENAI_API_KEY=sk-your-api-key-here
-    # Optional overrides
-    # MODEL_GENERATOR=gpt-4o
-    # MODEL_ANALYZER=gpt-4o-mini
     ```
+    
+    See [Configuration](#%EF%B8%8F-configuration) for all available options.
 
 ### Usage
 
@@ -203,34 +208,119 @@ jobs:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 ```
 
+### Advanced Example
+
+```yaml
+name: Auto-Dockerize with DockAI (Advanced)
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  dockai:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run DockAI
+        uses: itzzjb/dockai@v2
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          model_generator: 'gpt-4o'
+          model_analyzer: 'gpt-4o-mini'
+          max_retries: '5'
+          skip_security_scan: 'false'
+          strict_security: 'true'
+          max_image_size_mb: '300'
+          validation_memory: '1g'
+          validation_cpus: '2.0'
+          analyzer_instructions: 'Focus on microservices architecture'
+          generator_instructions: 'Use Alpine-based images where possible'
+```
+
 **Inputs:**
 
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `openai_api_key` | Your OpenAI API Key. | **Yes** | - |
 | `project_path` | Path to the project root. | No | `.` |
-| `model_generator` | Model for generation. | No | `gpt-4o` |
-| `model_analyzer` | Model for analysis. | No | `gpt-4o-mini` |
+| `model_generator` | Model for generation/reflection. | No | `gpt-4o` |
+| `model_analyzer` | Model for analysis/planning. | No | `gpt-4o-mini` |
 | `max_retries` | Max retry attempts. | No | `3` |
 | `skip_security_scan` | Skip Trivy scan. | No | `false` |
 | `strict_security` | Fail on any vulnerability. | No | `false` |
-| `max_image_size_mb` | Max image size in MB. | No | `500` |
+| `max_image_size_mb` | Max image size in MB (0 to disable). | No | `500` |
 | `skip_health_check` | Skip health checks. | No | `false` |
+| `validation_memory` | Memory limit for validation (e.g., `512m`, `1g`). | No | `512m` |
+| `validation_cpus` | CPU limit for validation. | No | `1.0` |
+| `validation_pids` | Max processes for validation. | No | `100` |
+| `analyzer_instructions` | Custom instructions for analyzer. | No | - |
+| `generator_instructions` | Custom instructions for generator. | No | - |
 
 ---
 
 ## ⚙️ Configuration
 
+### Core Settings
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OPENAI_API_KEY` | **Required**. Your OpenAI API key. | - |
-| `MODEL_GENERATOR` | Model for generation/reflection. | `gpt-4o` |
-| `MODEL_ANALYZER` | Model for analysis/planning. | `gpt-4o-mini` |
+| `MODEL_GENERATOR` | Model for generation/reflection (e.g., `gpt-4o`, `gpt-4-turbo`). | `gpt-4o` |
+| `MODEL_ANALYZER` | Model for analysis/planning (e.g., `gpt-4o-mini`, `gpt-4o`). | `gpt-4o-mini` |
 | `MAX_RETRIES` | Max attempts to fix a failing Dockerfile. | `3` |
+
+### Validation Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `DOCKAI_SKIP_SECURITY_SCAN` | Set to `true` to skip Trivy scans. | `false` |
 | `DOCKAI_STRICT_SECURITY` | Set to `true` to fail on any vulnerability. | `false` |
 | `DOCKAI_MAX_IMAGE_SIZE_MB` | Max image size in MB (0 to disable). | `500` |
 | `DOCKAI_SKIP_HEALTH_CHECK` | Set to `true` to skip health checks. | `false` |
+
+### Resource Limits (Validation Sandbox)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_VALIDATION_MEMORY` | Memory limit for container validation (e.g., `512m`, `1g`). | `512m` |
+| `DOCKAI_VALIDATION_CPUS` | CPU limit for container validation. | `1.0` |
+| `DOCKAI_VALIDATION_PIDS` | Max processes for container validation. | `100` |
+
+### Custom Instructions
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_ANALYZER_INSTRUCTIONS` | Custom instructions for the analyzer phase. | - |
+| `DOCKAI_GENERATOR_INSTRUCTIONS` | Custom instructions for the generator phase. | - |
+
+> **Note**: Custom instructions can also be provided via a `.dockai` file in your project root. See the [Custom Instructions](#-custom-instructions) section.
+
+---
+
+## 📝 Custom Instructions
+
+You can customize DockAI's behavior by providing instructions through:
+
+1. **Environment Variables**: Set `DOCKAI_ANALYZER_INSTRUCTIONS` and/or `DOCKAI_GENERATOR_INSTRUCTIONS`.
+2. **A `.dockai` file** in your project root.
+
+### `.dockai` File Format
+
+```ini
+[analyzer]
+# Instructions for the analysis phase
+Focus on identifying microservices architecture.
+Look for any .env.example files to understand environment variables.
+
+[generator]
+# Instructions for the Dockerfile generation phase
+Use Alpine-based images where possible.
+Define an environment variable 'APP_ENV' with value 'production'.
+```
+
+If no sections are specified, the instructions apply to both phases.
 
 ---
 

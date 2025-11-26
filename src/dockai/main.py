@@ -119,15 +119,14 @@ def run(
         
     # Validate API key configuration
     if not os.getenv("OPENAI_API_KEY"):
-        ui.print_error("Configuration Error", "OPENAI_API_KEY not found in environment variables.", "Please create a .env file with your API key.")
+        ui.print_error("Configuration Error", "OPENAI_API_KEY not found in environment variables.", "Please create a .env file with your API key or set the OPENAI_API_KEY environment variable.")
         logger.error("Problem: OPENAI_API_KEY missing")
         raise typer.Exit(code=1)
-
-    # Validate model configuration
-    if not os.getenv("MODEL_ANALYZER") or not os.getenv("MODEL_GENERATOR"):
-        ui.print_error("Configuration Error", "Model configuration missing.", "Please set MODEL_ANALYZER and MODEL_GENERATOR in your .env file.")
-        logger.error("Problem: Model configuration missing")
-        raise typer.Exit(code=1)
+    
+    # Log model configuration (uses defaults if not set)
+    model_analyzer = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
+    model_generator = os.getenv("MODEL_GENERATOR", "gpt-4o")
+    logger.info(f"Using models - Analyzer: {model_analyzer}, Generator: {model_generator}")
 
     ui.print_welcome()
     logger.info(f"Starting analysis for: {path}")
@@ -145,7 +144,7 @@ def run(
         "previous_dockerfile": None,  # For iterative improvement
         "validation_result": {"success": False, "message": ""},
         "retry_count": 0,
-        "max_retries": int(os.getenv("MAX_RETRIES", "5")),
+        "max_retries": int(os.getenv("MAX_RETRIES", "3")),
         "error": None,
         "error_details": None,
         "logs": [],

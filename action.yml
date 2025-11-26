@@ -41,6 +41,26 @@ inputs:
     description: 'Skip health checks during validation (true/false)'
     required: false
     default: 'false'
+  validation_memory:
+    description: 'Memory limit for container validation (e.g., 512m, 1g)'
+    required: false
+    default: '512m'
+  validation_cpus:
+    description: 'CPU limit for container validation'
+    required: false
+    default: '1.0'
+  validation_pids:
+    description: 'Max processes for container validation'
+    required: false
+    default: '100'
+  analyzer_instructions:
+    description: 'Custom instructions for the analyzer phase'
+    required: false
+    default: ''
+  generator_instructions:
+    description: 'Custom instructions for the generator phase'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -52,7 +72,7 @@ runs:
 
     - name: Install DockAI
       shell: bash
-      run: pip install dockai
+      run: pip install dockai-cli
 
     - name: Run DockAI Agent
       shell: bash
@@ -65,6 +85,11 @@ runs:
         DOCKAI_STRICT_SECURITY: ${{ inputs.strict_security }}
         DOCKAI_MAX_IMAGE_SIZE_MB: ${{ inputs.max_image_size_mb }}
         DOCKAI_SKIP_HEALTH_CHECK: ${{ inputs.skip_health_check }}
+        DOCKAI_VALIDATION_MEMORY: ${{ inputs.validation_memory }}
+        DOCKAI_VALIDATION_CPUS: ${{ inputs.validation_cpus }}
+        DOCKAI_VALIDATION_PIDS: ${{ inputs.validation_pids }}
+        DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
+        DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
       run: |
         echo "🐳 Starting DockAI Agent..."
         dockai build ${{ inputs.project_path }} --no-cache
