@@ -69,7 +69,7 @@ def run(
     """
     [bold blue]DockAI[/bold blue]
     
-    [italic]Adaptive Agentic Workflow powered by LangGraph[/italic]
+    [italic]The Customizable AI Dockerfile Generation Framework[/italic]
     """
     if verbose:
         logger.setLevel(logging.DEBUG)
@@ -132,7 +132,7 @@ def run(
     
     try:
         # Execute the workflow with a visual spinner
-        with ui.get_status_spinner("[bold green]Running DockAI Agent...[/bold green]"):
+        with ui.get_status_spinner("[bold green]Running DockAI Framework...[/bold green]"):
             final_state = workflow.invoke(initial_state)
     except Exception as e:
         # Handle unexpected errors gracefully

@@ -1,8 +1,8 @@
 """
 DockAI Adaptive Agent Graph.
 
-This module implements a truly adaptive agentic workflow using LangGraph.
-It defines the state machine that orchestrates the entire DockAI process,
+This module implements the core agentic workflow for the DockAI framework.
+It defines the state machine that orchestrates the entire Dockerfile generation process,
 moving from analysis to planning, generation, validation, and iterative improvement.
 
 Key Workflow Capabilities:

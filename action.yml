@@ -1,5 +1,5 @@
-name: 'DockAI - Universal DevOps Architect'
-description: 'Autonomously generate, validate, and build production-ready Dockerfiles using AI.'
+name: 'DockAI - AI Dockerfile Generation Framework'
+description: 'The Customizable AI Framework that generates, validates, and optimizes production-ready Dockerfiles.'
 author: 'DockAI Team'
 branding:
   icon: 'anchor'
@@ -148,7 +148,7 @@ runs:
       shell: bash
       run: pip install dockai-cli
 
-    - name: Run DockAI Agent
+    - name: Run DockAI Framework
       shell: bash
       env:
         OPENAI_API_KEY: ${{ inputs.openai_api_key }}
@@ -183,5 +183,5 @@ runs:
         DOCKAI_PROMPT_ERROR_ANALYZER: ${{ inputs.prompt_error_analyzer }}
         DOCKAI_PROMPT_ITERATIVE_IMPROVER: ${{ inputs.prompt_iterative_improver }}
       run: |
-        echo "🐳 Starting DockAI Agent..."
+        echo "🐳 Starting DockAI Framework..."
         dockai build ${{ inputs.project_path }} --no-cache

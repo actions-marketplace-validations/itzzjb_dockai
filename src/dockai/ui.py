@@ -42,7 +42,7 @@ def setup_logging(verbose: bool = False):
 
 def print_welcome():
     """Prints the application welcome banner."""
-    console.print(Panel.fit("[bold blue]DockAI[/bold blue]\n[italic]Adaptive Agentic Workflow powered by LangGraph[/italic]"))
+    console.print(Panel.fit("[bold blue]DockAI[/bold blue]\n[italic]The Customizable AI Dockerfile Generation Framework[/italic]"))
 
 def print_error(title: str, message: str, details: str = None):
     """
