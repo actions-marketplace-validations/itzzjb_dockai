@@ -179,7 +179,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Run DockAI
-        uses: yourusername/dockai@main
+        uses: itzzjb/dockai@v2
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 ```
