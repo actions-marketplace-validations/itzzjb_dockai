@@ -35,21 +35,61 @@ Unlike simple template generators, DockAI acts as a **Universal DevOps Architect
 
 ## 🏗️ Architecture Deep Dive
 
-DockAI is built on **LangGraph**, enabling a cyclic, stateful workflow that mimics a human engineer's problem-solving process.
+DockAI is built on **LangGraph**, enabling a cyclic, stateful workflow that mimics a human engineer's problem-solving process. It is not a linear script but a **State Machine** that can loop back, change strategies, and learn from mistakes.
 
 ### The Agentic Workflow
 
-The agent moves through a sophisticated graph of nodes:
+The agent moves through a sophisticated graph of nodes, maintaining a shared `DockAIState` that accumulates knowledge, plans, and error history.
 
-1.  **Scanner (`scanner.py`)**: Efficiently maps the project structure, respecting `.gitignore`.
-2.  **Analyzer (`analyzer.py`)**: The "Brain". Deduced the tech stack, entry points, and dependencies from first principles.
-3.  **Reader (`nodes.py`)**: Smartly reads critical files (using "Head & Tail" truncation for large files) to gather context without wasting tokens.
-4.  **Health & Readiness Detectors**: AI scans code for health routes and startup log patterns.
-5.  **Planner (`agent.py`)**: The "Architect". Formulates a detailed build plan (Base Image, Multi-stage strategy, Security).
-6.  **Generator (`generator.py`)**: The "Builder". Writes the Dockerfile based on the plan.
-7.  **Security Reviewer (`reviewer.py`)**: Static analysis for security best practices.
-8.  **Validator (`validator.py`)**: The "Test Engineer". Builds, runs, and verifies the container.
-9.  **Reflector (`agent.py`)**: The "Debugger". Analyzes failures and guides the next iteration.
+#### 1. 📂 Scanner (`scanner.py`)
+*   **Behavior**: Acts as the "eyes" of the agent.
+*   **Intelligence**: Respects `.gitignore` and `.dockerignore` to avoid sending irrelevant files (like `node_modules` or `venv`) to the LLM, saving tokens and reducing noise.
+*   **Output**: A compressed file tree representation.
+
+#### 2. 🧠 Analyzer (`analyzer.py`)
+*   **Behavior**: The "Brain" that reasons from first principles.
+*   **Intelligence**: Instead of looking for hardcoded file names, it analyzes file extensions, shebangs (`#!/bin/...`), and build scripts to deduce the technology stack.
+*   **Universal Capability**: Can identify "unknown" stacks (e.g., a new language released tomorrow) by recognizing it needs a compiler or interpreter based on file signatures.
+
+#### 3. 📖 Reader (`nodes.py`)
+*   **Behavior**: The "Researcher".
+*   **Intelligence**: Selectively reads only the files identified as "critical" by the Analyzer. Uses "Head & Tail" truncation for large files to fit within context windows while preserving imports and main functions.
+
+#### 4. 🏥 & ⏱️ Detectors (`nodes.py`)
+*   **Health Detector**: Scans code for HTTP routes like `/health`, `/status`, or `/ping`.
+*   **Readiness Detector**: Analyzes logging statements to predict what the app will print when it's ready (e.g., "Server listening on port 3000"). This allows the Validator to wait intelligently rather than sleeping for a fixed time.
+
+#### 5. 📝 Planner (`agent.py`)
+*   **Behavior**: The "Architect".
+*   **Intelligence**: Before writing code, it formulates a `BuildPlan`.
+    *   **Base Image Selection**: Verifies tags against real registries to prevent hallucinations.
+    *   **Strategy**: Decides between Multi-stage builds (for compiled languages) or Slim images (for interpreted ones).
+    *   **Security**: Plans for non-root users and minimal attack surfaces.
+
+#### 6. ⚙️ Generator (`generator.py`)
+*   **Behavior**: The "Builder".
+*   **Intelligence**: Writes the `Dockerfile` and `.dockerignore` based on the Architect's plan. If this is a retry, it incorporates "Lessons Learned" from previous failures to avoid repeating mistakes.
+
+#### 7. 🔒 Security Reviewer (`reviewer.py`)
+*   **Behavior**: The "Security Engineer".
+*   **Intelligence**: Performs a static analysis *before* the build. If it finds critical issues (like running as root or exposed secrets), it rejects the Dockerfile and sends it back to the Generator with specific fix instructions.
+
+#### 8. ✅ Validator (`validator.py`)
+*   **Behavior**: The "QA Engineer".
+*   **Process**:
+    1.  **Builds** the image in a sandboxed environment.
+    2.  **Runs** a container with memory/CPU limits.
+    3.  **Waits** for the "Readiness Pattern" detected earlier.
+    4.  **Probes** the "Health Endpoint" (falling back to host-port checks if `curl` is missing inside the container).
+    5.  **Scans** the final image with **Trivy** for CVEs.
+
+#### 9. 🤔 Reflector (`agent.py`)
+*   **Behavior**: The "Debugger".
+*   **Intelligence**: This is the core of the agent's resilience. When validation fails, it:
+    *   Reads the build logs or runtime errors.
+    *   Classifies the error (e.g., "Missing System Dependency", "Wrong Entrypoint").
+    *   **Updates the Plan**: If the strategy was wrong (e.g., used Alpine but needed Glibc), it instructs the Planner to switch base images.
+    *   **Loops Back**: Triggers a new generation cycle with this new knowledge.
 
 ### The Graph
 
