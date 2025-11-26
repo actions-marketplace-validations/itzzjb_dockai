@@ -181,10 +181,6 @@ jobs:
         uses: yourusername/dockai@main
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-          push_image: 'true'
-          image_name: 'myuser/myapp'
-          registry_username: ${{ secrets.DOCKERHUB_USERNAME }}
-          registry_password: ${{ secrets.DOCKERHUB_TOKEN }}
 ```
 
 **Inputs:**
@@ -193,10 +189,6 @@ jobs:
 |-------|-------------|----------|---------|
 | `openai_api_key` | Your OpenAI API Key. | **Yes** | - |
 | `project_path` | Path to the project root. | No | `.` |
-| `push_image` | Set to `true` to build and push the image. | No | `false` |
-| `image_name` | Name of the image (e.g., `user/repo`). | No | `dockai-app` |
-| `registry_username` | Docker Registry username. | No | - |
-| `registry_password` | Docker Registry password/token. | No | - |
 
 ---
 
@@ -210,6 +202,8 @@ jobs:
 | `MAX_RETRIES` | Max attempts to fix a failing Dockerfile. | `3` |
 | `DOCKAI_SKIP_SECURITY_SCAN` | Set to `true` to skip Trivy scans. | `false` |
 | `DOCKAI_STRICT_SECURITY` | Set to `true` to fail on any vulnerability. | `false` |
+| `DOCKAI_MAX_IMAGE_SIZE_MB` | Max image size in MB (0 to disable). | `500` |
+| `DOCKAI_SKIP_HEALTH_CHECK` | Set to `true` to skip health checks. | `false` |
 
 ---
 
@@ -219,4 +213,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-**Built with ❤️ by the DockAI Team**
+**Built with ❤️ by Januda Bethmin*
