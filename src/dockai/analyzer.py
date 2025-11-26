@@ -1,5 +1,5 @@
 """
-DockAI Analyzer Module
+DockAI Analyzer Module.
 
 This module is responsible for the initial analysis of the repository.
 It acts as the "Brain" of the operation, understanding the project structure,
@@ -8,40 +8,49 @@ identifying the technology stack, and determining the requirements.
 
 import os
 import json
-from typing import Tuple, Any
+from typing import Tuple, Any, Dict, List
+
+# Third-party imports for LangChain and OpenAI integration
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
+# Internal imports for data schemas and callbacks
 from .schemas import AnalysisResult
 from .callbacks import TokenUsageCallback
 
-def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[AnalysisResult, Any]:
+
+def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[AnalysisResult, Dict[str, int]]:
     """
-    Stage 1: The Brain (Analysis).
-    
-    Uses LangChain and Pydantic to autonomously analyze the repository structure
-    and determine the technology stack, requirements, and strategy.
+    Performs the initial analysis of the repository to determine project requirements.
+
+    This function corresponds to "Stage 1: The Brain" of the DockAI process. It uses
+    an LLM to analyze the list of files in the repository and deduce the technology
+    stack, project type (service vs. script), and necessary build/start commands.
 
     Args:
-        file_list: List of all filenames in the repository.
-        custom_instructions: Custom instructions from the user.
+        file_list (list): A list of all filenames in the repository to be analyzed.
+        custom_instructions (str, optional): Specific instructions provided by the user
+            to guide the analysis (e.g., "This is a Django app"). Defaults to "".
 
     Returns:
-        Tuple of (AnalysisResult, usage_dict).
+        Tuple[AnalysisResult, Dict[str, int]]: A tuple containing:
+            - The structured analysis result (AnalysisResult object).
+            - A dictionary tracking token usage for cost monitoring.
     """
+    # Retrieve the model name from environment variables, defaulting to a cost-effective model
     model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     
-    # Initialize Chat Model
+    # Initialize the ChatOpenAI client with temperature 0 for deterministic analysis
     llm = ChatOpenAI(
         model=model_name,
         temperature=0,
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
-    # Define the structured output
+    # Configure the LLM to return a structured output matching the AnalysisResult schema
     structured_llm = llm.with_structured_output(AnalysisResult)
     
-    # Define Prompt
+    # Define the system prompt to establish the agent's persona as a Build Engineer
     system_prompt = """You are an expert Build Engineer and DevOps Architect working as an autonomous AI agent.
 You will receive a list of ALL filenames in a repository.
 
@@ -67,6 +76,7 @@ User Custom Instructions:
 {custom_instructions}
 """
 
+    # Create the chat prompt template
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("user", """Here is the file list: {file_list}
@@ -74,13 +84,16 @@ User Custom Instructions:
 Analyze the project and provide a detailed thought process explaining your reasoning.""")
     ])
     
-    # Create Chain
+    # Create the execution chain: Prompt -> LLM -> Structured Output
     chain = prompt | structured_llm
     
-    # Execute with callback
+    # Initialize callback to track token usage
     callback = TokenUsageCallback()
+    
+    # Convert file list to JSON string for better formatting in the prompt
     file_list_str = json.dumps(file_list)
     
+    # Execute the chain
     result = chain.invoke(
         {
             "custom_instructions": custom_instructions, 

@@ -1,5 +1,5 @@
 """
-DockAI Generator Module
+DockAI Generator Module.
 
 This module is responsible for generating the Dockerfile.
 It acts as the "Architect", using the analysis results and plan to create
@@ -9,11 +9,15 @@ iterative improvement based on feedback.
 
 import os
 from typing import Tuple, Any, Dict, List, Optional
+
+# Third-party imports for LangChain and OpenAI integration
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
+# Internal imports for data schemas and callbacks
 from .schemas import DockerfileResult, IterativeDockerfileResult
 from .callbacks import TokenUsageCallback
+
 
 def generate_dockerfile(
     stack_info: str, 
@@ -27,37 +31,41 @@ def generate_dockerfile(
     **kwargs
 ) -> Tuple[str, str, str, Any]:
     """
-    Stage 2: The Architect (Generation).
-    
-    Uses LangChain and Pydantic to generate a structured Dockerfile.
-    
-    Supports iterative improvement when previous_dockerfile and reflection are provided.
-    The AI will make targeted fixes instead of regenerating from scratch.
+    Orchestrates the Dockerfile generation process.
+
+    This function serves as the main entry point for "Stage 2: The Architect".
+    It decides whether to generate a fresh Dockerfile from scratch or to
+    iteratively improve an existing one based on feedback and reflection.
 
     Args:
-        stack_info: Information about the technology stack.
-        file_contents: Content of critical files.
-        custom_instructions: Custom instructions from the user.
-        feedback_error: Error message from previous attempt (if any).
-        previous_dockerfile: Previous Dockerfile content (for iteration).
-        retry_history: History of previous retries.
-        current_plan: Current generation plan.
-        reflection: Reflection on previous failure.
-        **kwargs: Additional arguments (model_name, etc.).
+        stack_info (str): A summary of the detected technology stack.
+        file_contents (str): The content of critical files to provide context.
+        custom_instructions (str, optional): User-provided instructions. Defaults to "".
+        feedback_error (str, optional): The error message from a previous failed attempt. Defaults to None.
+        previous_dockerfile (str, optional): The content of the previous Dockerfile (for iteration). Defaults to None.
+        retry_history (List[Dict[str, Any]], optional): A history of previous attempts and failures. Defaults to None.
+        current_plan (Dict[str, Any], optional): The strategic plan for generation. Defaults to None.
+        reflection (Dict[str, Any], optional): The analysis of why the previous attempt failed. Defaults to None.
+        **kwargs: Additional arguments, such as 'model_name'.
 
     Returns:
-        Tuple of (dockerfile_content, project_type, thought_process, usage_stats).
+        Tuple[str, str, str, Any]: A tuple containing:
+            - The generated Dockerfile content.
+            - The project type (e.g., 'service', 'script').
+            - The AI's thought process/explanation.
+            - Token usage statistics.
     """
+    # Retrieve model name, defaulting to a high-capability model for code generation
     model_name = kwargs.get("model_name") or os.getenv("MODEL_GENERATOR", "gpt-4o")
     
-    # Initialize Chat Model
+    # Initialize the ChatOpenAI client with temperature 0 for deterministic code generation
     llm = ChatOpenAI(
         model=model_name,
         temperature=0,
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
-    # Check if this is an iterative improvement (has previous dockerfile and reflection)
+    # Determine if we should perform iterative improvement or fresh generation
     is_iterative = previous_dockerfile and reflection and len(previous_dockerfile.strip()) > 0
     
     if is_iterative:
@@ -94,12 +102,31 @@ def _generate_fresh_dockerfile(
     current_plan: Dict[str, Any] = None,
     **kwargs
 ) -> Tuple[str, str, str, Any]:
-    """Generate a new Dockerfile from scratch (first attempt or no previous context)."""
+    """
+    Generates a new Dockerfile from scratch.
+
+    This internal function handles the initial generation logic, incorporating
+    the strategic plan and any lessons learned from previous (failed) attempts
+    if applicable.
+
+    Args:
+        llm: The initialized LangChain LLM object.
+        stack_info (str): Detected stack information.
+        file_contents (str): Content of critical files.
+        custom_instructions (str, optional): User instructions. Defaults to "".
+        feedback_error (str, optional): Error from previous run (if retrying without full reflection). Defaults to None.
+        retry_history (List[Dict[str, Any]], optional): History of failures. Defaults to None.
+        current_plan (Dict[str, Any], optional): Strategic plan. Defaults to None.
+        **kwargs: Additional arguments.
+
+    Returns:
+        Tuple[str, str, str, Any]: Dockerfile content, project type, thought process, usage stats.
+    """
     
-    # Define the structured output
+    # Configure the LLM to return a structured output matching the DockerfileResult schema
     structured_llm = llm.with_structured_output(DockerfileResult)
     
-    # Build retry history context
+    # Construct the retry context to prevent repeating mistakes
     retry_context = ""
     if retry_history and len(retry_history) > 0:
         retry_context = "\n\nLEARN FROM PREVIOUS ATTEMPTS:\n"
@@ -112,7 +139,7 @@ Attempt {i}:
 """
         retry_context += "\nAPPLY THESE LESSONS - do NOT repeat the same mistakes!\n"
     
-    # Build plan context
+    # Construct the plan context to guide the generation strategy
     plan_context = ""
     if current_plan:
         plan_context = f"""
@@ -126,7 +153,7 @@ STRATEGIC PLAN (Follow this guidance):
 - Mitigation Strategies: {', '.join(current_plan.get('mitigation_strategies', []))}
 """
     
-    # Define Prompt
+    # Define the system prompt for the "Senior Docker Architect" persona
     system_template = """You are a Senior Docker Architect working as an autonomous AI agent.
 
 Your Task:
@@ -185,9 +212,9 @@ Requirements (Apply intelligently based on the detected technology):
 {error_context}
 """
 
+    # Incorporate specific error context if available (e.g., from AI error analysis)
     error_context = ""
     if feedback_error:
-        # Check if feedback_error contains structured suggestions (from AI error analysis)
         dockerfile_fix = kwargs.get("dockerfile_fix", "")
         image_suggestion = kwargs.get("image_suggestion", "")
         
@@ -208,6 +235,7 @@ AI-SUGGESTED IMAGE: {image_suggestion}
 Consider using this image strategy.
 """
 
+    # Create the chat prompt template
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_template),
         ("user", """Stack: {stack}
@@ -225,12 +253,13 @@ Custom Instructions: {custom_instructions}
 Generate the Dockerfile and explain your reasoning in the thought process.""")
     ])
     
-    # Create Chain
+    # Create the execution chain
     chain = prompt | structured_llm
     
-    # Execute with callback
+    # Initialize callback to track token usage
     callback = TokenUsageCallback()
     
+    # Execute the chain
     result = chain.invoke(
         {
             "stack": stack_info,
@@ -259,15 +288,35 @@ def _generate_iterative_dockerfile(
     custom_instructions: str = "",
     **kwargs
 ) -> Tuple[str, str, str, Any]:
-    """Generate an improved Dockerfile by iterating on the previous attempt."""
+    """
+    Generates an improved Dockerfile by iterating on a previous attempt.
+
+    This internal function handles the iterative improvement logic. It uses the
+    reflection data (root cause, specific fixes) to modify the previous Dockerfile
+    surgically, rather than rewriting it from scratch.
+
+    Args:
+        llm: The initialized LangChain LLM object.
+        previous_dockerfile (str): The content of the failed Dockerfile.
+        reflection (Dict[str, Any]): Analysis of the failure.
+        stack_info (str): Detected stack information.
+        file_contents (str): Content of critical files.
+        current_plan (Dict[str, Any], optional): Strategic plan. Defaults to None.
+        custom_instructions (str, optional): User instructions. Defaults to "".
+        **kwargs: Additional arguments.
+
+    Returns:
+        Tuple[str, str, str, Any]: Improved Dockerfile content, project type, thought process, usage stats.
+    """
     
+    # Configure the LLM for iterative output
     structured_llm = llm.with_structured_output(IterativeDockerfileResult)
     
-    # Build reflection context
+    # Build reflection context string
     specific_fixes = reflection.get("specific_fixes", [])
     fixes_str = "\n".join([f"  - {fix}" for fix in specific_fixes]) if specific_fixes else "No specific fixes provided"
     
-    # Build plan context
+    # Build updated plan guidance
     plan_guidance = ""
     if current_plan:
         plan_guidance = f"""
@@ -278,6 +327,7 @@ UPDATED PLAN BASED ON LESSONS LEARNED:
 - Use Alpine Runtime: {current_plan.get('use_alpine_runtime', False)}
 """
     
+    # Define the system prompt for the "Iterative Improver" persona
     system_template = """You are a Senior Docker Engineer ITERATING on a failed Dockerfile.
 
 CRITICAL: You are NOT starting from scratch. You are IMPROVING an existing Dockerfile
@@ -315,7 +365,7 @@ VERIFIED BASE IMAGES: {verified_tags}
 {custom_instructions}
 """
 
-    # Build image change guidance
+    # Build image change guidance if recommended by reflection
     image_change_guidance = ""
     if reflection.get("should_change_base_image"):
         suggested = reflection.get("suggested_base_image", "")
@@ -325,7 +375,7 @@ The reflection suggests changing the base image to: {suggested}
 Apply this change to fix compatibility issues.
 """
     
-    # Build strategy change guidance  
+    # Build strategy change guidance if recommended by reflection
     strategy_change_guidance = ""
     if reflection.get("should_change_build_strategy"):
         new_strategy = reflection.get("new_build_strategy", "")
@@ -335,6 +385,7 @@ New strategy: {new_strategy}
 Apply this strategic change to the Dockerfile.
 """
 
+    # Create the chat prompt template
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_template),
         ("user", """PREVIOUS DOCKERFILE (IMPROVE THIS):
@@ -352,9 +403,11 @@ Apply the specific fixes and return an improved Dockerfile.
 Explain what you changed and why in the thought process.""")
     ])
     
+    # Create the execution chain
     chain = prompt | structured_llm
     callback = TokenUsageCallback()
     
+    # Execute the chain
     result = chain.invoke(
         {
             "previous_dockerfile": previous_dockerfile,
@@ -375,7 +428,7 @@ Explain what you changed and why in the thought process.""")
         config={"callbacks": [callback]}
     )
     
-    # Build thought process from iterative result
+    # Format the thought process for display
     thought_process = f"""ITERATIVE IMPROVEMENT:
 Previous Issues Addressed: {', '.join(result.previous_issues_addressed)}
 Changes Made: {', '.join(result.changes_summary)}

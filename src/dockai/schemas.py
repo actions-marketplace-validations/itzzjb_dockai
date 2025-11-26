@@ -1,11 +1,29 @@
+"""
+DockAI Pydantic Schemas.
+
+This module defines the structured data models used throughout the DockAI system.
+These schemas are critical for ensuring type safety and structured output from
+the LLMs (Large Language Models). They cover analysis, planning, generation,
+security review, and reflection phases.
+"""
+
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 
+# ==================== CORE ANALYSIS SCHEMAS ====================
+
 class HealthEndpoint(BaseModel):
+    """Represents a detected health check endpoint."""
     path: str = Field(description="The path of the health check endpoint, e.g., '/health' or '/api/health'")
     port: int = Field(description="The port the service listens on")
 
 class AnalysisResult(BaseModel):
+    """
+    Structured output for the repository analysis phase.
+    
+    This model captures the AI's understanding of the project structure,
+    technology stack, and requirements before any Dockerfile generation begins.
+    """
     thought_process: str = Field(description="Step-by-step reasoning about the technology stack, architecture, and requirements")
     stack: str = Field(description="Detailed description of the detected technology stack, frameworks, and tools")
     project_type: Literal["service", "script"] = Field(description="Type of the project: 'service' (long-running process) or 'script' (runs once and exits)")
@@ -20,21 +38,32 @@ class AnalysisResult(BaseModel):
     recommended_wait_time: int = Field(description="Estimated container initialization time in seconds based on the detected stack", ge=3, le=60)
 
 class DockerfileResult(BaseModel):
+    """Structured output for the Dockerfile generation phase."""
     thought_process: str = Field(description="Reasoning for the Dockerfile design choices and optimizations")
     dockerfile: str = Field(description="The full content of the generated Dockerfile")
     project_type: Literal["service", "script"] = Field(description="Re-confirmed project type based on deep analysis")
 
+# ==================== SECURITY REVIEW SCHEMAS ====================
+
 class SecurityIssue(BaseModel):
+    """Represents a single security issue found in the Dockerfile."""
     severity: Literal["critical", "high", "medium", "low"] = Field(description="Severity of the security issue")
     description: str = Field(description="Description of the security issue")
     line_number: Optional[int] = Field(description="Approximate line number in the Dockerfile")
     suggestion: str = Field(description="How to fix the issue")
 
 class SecurityReviewResult(BaseModel):
+    """
+    Structured output for the security review phase.
+    
+    This model captures the results of the static security analysis, including
+    a boolean pass/fail flag, a list of issues, and potentially a corrected Dockerfile.
+    """
     is_secure: bool = Field(description="True if the Dockerfile is secure enough to proceed, False if critical/high issues exist")
     issues: List[SecurityIssue] = Field(description="List of detected security issues")
     thought_process: str = Field(description="Reasoning for the security assessment")
-    # New: Structured fixes for the generator
+    
+    # Structured fixes for the generator to apply
     dockerfile_fixes: List[str] = Field(
         default=[],
         description="List of specific, actionable fixes to apply to the Dockerfile. Each fix should be a clear instruction."
@@ -44,11 +73,15 @@ class SecurityReviewResult(BaseModel):
         description="If issues are found, provide a corrected version of the Dockerfile with all security issues fixed"
     )
 
-
-# ==================== NEW SCHEMAS FOR ADAPTIVE AGENT ====================
+# ==================== ADAPTIVE AGENT SCHEMAS ====================
 
 class PlanningResult(BaseModel):
-    """AI-generated strategic plan before Dockerfile generation."""
+    """
+    AI-generated strategic plan before Dockerfile generation.
+    
+    This model represents the "Architect" phase, where the agent decides on the
+    best approach (e.g., multi-stage builds, specific base images) before writing code.
+    """
     thought_process: str = Field(description="Step-by-step reasoning about the approach and strategy")
     
     # Strategy selection
@@ -84,7 +117,12 @@ class PlanningResult(BaseModel):
 
 
 class ReflectionResult(BaseModel):
-    """AI reflection on a failed attempt to learn and adapt."""
+    """
+    AI reflection on a failed attempt to learn and adapt.
+    
+    This model captures the "Post-Mortem" analysis, allowing the agent to understand
+    why a previous attempt failed and how to fix it in the next iteration.
+    """
     thought_process: str = Field(description="Deep analysis of what went wrong and why")
     
     # Error analysis
@@ -141,7 +179,12 @@ class ReflectionResult(BaseModel):
 
 
 class HealthEndpointDetectionResult(BaseModel):
-    """AI-detected health endpoints from actual file contents."""
+    """
+    AI-detected health endpoints from actual file contents.
+    
+    This model captures the result of scanning source code for route definitions
+    to identify valid health check paths.
+    """
     thought_process: str = Field(description="Reasoning about health endpoint detection")
     
     # Detection results
@@ -170,7 +213,12 @@ class HealthEndpointDetectionResult(BaseModel):
 
 
 class ReadinessPatternResult(BaseModel):
-    """AI-detected patterns to determine container readiness from logs."""
+    """
+    AI-detected patterns to determine container readiness from logs.
+    
+    This model allows the system to smartly wait for application startup by
+    monitoring logs for specific success/failure patterns instead of using fixed timeouts.
+    """
     thought_process: str = Field(description="Reasoning about readiness pattern detection based on code analysis")
     
     # Patterns - AI determines these from code analysis
@@ -205,7 +253,12 @@ class ReadinessPatternResult(BaseModel):
 
 
 class IterativeDockerfileResult(BaseModel):
-    """Result from iterative Dockerfile improvement."""
+    """
+    Result from iterative Dockerfile improvement.
+    
+    This model captures the output of a refinement step, where the AI modifies
+    an existing Dockerfile based on feedback/errors rather than generating from scratch.
+    """
     thought_process: str = Field(description="Reasoning for the changes made")
     
     # Analysis of previous attempt
@@ -233,6 +286,3 @@ class IterativeDockerfileResult(BaseModel):
     )
     
     project_type: Literal["service", "script"] = Field(description="Re-confirmed project type")
-
-
-

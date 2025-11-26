@@ -1,14 +1,19 @@
 """
-DockAI Adaptive Agent Module
+DockAI Adaptive Agent Module.
 
-This module contains AI-powered components that make DockAI a truly adaptive agent:
-- Planning: Strategize before generation
-- Reflection: Learn from failures
-- Health Detection: Detect endpoints from code
-- Readiness Detection: Smart container startup detection
+This module implements the core AI-driven capabilities of the DockAI system.
+It is responsible for the high-level cognitive tasks that allow the agent to
+adapt, plan, and learn from its interactions.
 
-These components work together to create an agent that learns and improves
-with each iteration, similar to how a human engineer would approach the problem.
+Key Responsibilities:
+1.  **Strategic Planning**: Analyzing project requirements to formulate a build strategy.
+2.  **Failure Reflection**: Analyzing build or runtime failures to derive actionable insights.
+3.  **Health Detection**: Intelligently identifying health check endpoints within the source code.
+4.  **Readiness Pattern Analysis**: Determining how to detect when an application is ready to serve traffic.
+5.  **Iterative Improvement**: Refining Dockerfiles based on feedback loops.
+
+The components in this module leverage Large Language Models (LLMs) to simulate
+the reasoning process of a human DevOps engineer.
 """
 
 import os
@@ -16,9 +21,11 @@ import re
 import logging
 from typing import Tuple, Any, List, Dict, Optional
 
+# Third-party imports for LangChain and OpenAI integration
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 
+# Internal imports for data schemas and callbacks
 from .schemas import (
     PlanningResult,
     ReflectionResult,
@@ -28,6 +35,7 @@ from .schemas import (
 )
 from .callbacks import TokenUsageCallback
 
+# Initialize the logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
 
 
@@ -38,34 +46,42 @@ def create_plan(
     custom_instructions: str = ""
 ) -> Tuple[PlanningResult, Dict[str, int]]:
     """
-    AI-powered planning phase before Dockerfile generation.
-    
-    This creates a strategic plan based on:
-    - Project analysis results
-    - File contents
-    - Previous retry history (learning from mistakes)
-    - Custom user instructions
-    
+    Generates a strategic plan for Dockerfile creation using AI analysis.
+
+    This function acts as the "architect" phase of the process. Before writing any code,
+    it analyzes the project structure, requirements, and any previous failures to
+    formulate a robust build strategy.
+
     Args:
-        analysis_result: Dictionary containing analysis results.
-        file_contents: String containing content of critical files.
-        retry_history: List of previous attempts and failures.
-        custom_instructions: Custom instructions from the user.
+        analysis_result (Dict[str, Any]): The results from the initial project analysis,
+            including detected stack, project type, and suggested base images.
+        file_contents (str): The actual content of critical files (e.g., package.json,
+            requirements.txt) to provide context to the LLM.
+        retry_history (List[Dict[str, Any]], optional): A list of previous attempts,
+            including what was tried and why it failed. This enables the agent to
+            learn from mistakes. Defaults to None.
+        custom_instructions (str, optional): Specific instructions provided by the user
+            to guide the planning process. Defaults to "".
 
     Returns:
-        Tuple of (PlanningResult, usage_dict).
+        Tuple[PlanningResult, Dict[str, int]]: A tuple containing:
+            - The structured planning result (PlanningResult object).
+            - A dictionary tracking token usage for cost monitoring.
     """
+    # Retrieve the model name from environment variables, defaulting to a cost-effective model
     model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     
+    # Initialize the ChatOpenAI client with a low temperature for consistent, strategic output
     llm = ChatOpenAI(
         model=model_name,
-        temperature=0.2,  # Slight creativity for strategy
+        temperature=0.2,  # Low temperature favors deterministic, logical planning
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
+    # Configure the LLM to return a structured output matching the PlanningResult schema
     structured_llm = llm.with_structured_output(PlanningResult)
     
-    # Build retry history context
+    # Construct the context from previous retry attempts to facilitate learning
     retry_context = ""
     if retry_history and len(retry_history) > 0:
         retry_context = "\n\nPREVIOUS ATTEMPTS (LEARN FROM THESE):\n"
@@ -79,6 +95,7 @@ Error type: {attempt.get('error_type', 'Unknown')}
 """
         retry_context += "\nDO NOT repeat the same mistakes. Apply the lessons learned."
     
+    # Define the system prompt to establish the agent's persona and constraints
     system_prompt = """You are a Senior DevOps Architect working as an autonomous AI agent, planning a Dockerfile generation strategy.
 
 Your role is to THINK DEEPLY before any code is generated. Like a chess grandmaster,
@@ -108,6 +125,7 @@ MULTI-STAGE BUILD STRATEGY:
 {custom_instructions}
 """
 
+    # Create the chat prompt template combining system instructions and user input
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("user", """Create a strategic plan for generating a Dockerfile.
@@ -126,9 +144,13 @@ Generate a comprehensive plan that will guide the Dockerfile generation.
 Start by explaining your thought process in detail.""")
     ])
     
+    # Create the execution chain: Prompt -> LLM -> Structured Output
     chain = prompt | structured_llm
+    
+    # Initialize callback to track token usage
     callback = TokenUsageCallback()
     
+    # Execute the chain with the provided context
     result = chain.invoke(
         {
             "stack": analysis_result.get("stack", "Unknown"),
@@ -136,7 +158,7 @@ Start by explaining your thought process in detail.""")
             "suggested_base_image": analysis_result.get("suggested_base_image", ""),
             "build_command": analysis_result.get("build_command", "None detected"),
             "start_command": analysis_result.get("start_command", "None detected"),
-            "file_contents": file_contents[:8000],  # Limit size
+            "file_contents": file_contents[:8000],  # Truncate file contents to avoid token limits
             "retry_context": retry_context,
             "custom_instructions": custom_instructions
         },
@@ -155,33 +177,43 @@ def reflect_on_failure(
     container_logs: str = ""
 ) -> Tuple[ReflectionResult, Dict[str, int]]:
     """
-    AI-powered reflection on a failed Dockerfile attempt.
-    
-    This performs deep analysis of WHY something failed and HOW to fix it,
-    learning from the failure to make the next attempt smarter.
-    
+    Analyzes a failed Dockerfile build or run to determine the root cause and solution.
+
+    This function implements the "reflection" capability of the agent. When a failure
+    occurs, it doesn't just blindly retry. Instead, it analyzes the error logs,
+    the problematic Dockerfile, and the project context to understand *why* it failed
+    and *how* to fix it.
+
     Args:
-        dockerfile_content: The content of the failed Dockerfile.
-        error_message: The error message returned.
-        error_details: Detailed error information.
-        analysis_result: Original analysis result.
-        retry_history: History of previous retries.
-        container_logs: Logs from the failed container.
+        dockerfile_content (str): The content of the Dockerfile that caused the failure.
+        error_message (str): The primary error message returned by the Docker daemon or CLI.
+        error_details (Dict[str, Any]): Additional structured details about the error
+            (e.g., error code, stage where it failed).
+        analysis_result (Dict[str, Any]): The original project analysis context.
+        retry_history (List[Dict[str, Any]], optional): History of previous attempts to
+            avoid cyclic failures. Defaults to None.
+        container_logs (str, optional): Runtime logs from the container if the failure
+            occurred after the build phase. Defaults to "".
 
     Returns:
-        Tuple of (ReflectionResult, usage_dict).
+        Tuple[ReflectionResult, Dict[str, int]]: A tuple containing:
+            - The structured reflection result (ReflectionResult object) with specific fixes.
+            - A dictionary tracking token usage.
     """
-    model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")  # Use stronger model for reflection
+    # Use a more capable model (e.g., GPT-4o) for complex reasoning required in debugging
+    model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
     
+    # Initialize the LLM with temperature 0 for maximum determinism and analytical precision
     llm = ChatOpenAI(
         model=model_name,
         temperature=0,
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
+    # Configure structured output for consistent parsing of the reflection
     structured_llm = llm.with_structured_output(ReflectionResult)
     
-    # Build retry history context
+    # Construct the history of previous failures to provide context
     retry_context = ""
     if retry_history and len(retry_history) > 0:
         retry_context = "\n\nPREVIOUS FAILED ATTEMPTS:\n"
@@ -190,6 +222,7 @@ def reflect_on_failure(
 Attempt {i}: {attempt.get('what_was_tried', 'Unknown')} -> Failed: {attempt.get('why_it_failed', 'Unknown')}
 """
     
+    # Define the system prompt for the "Principal DevOps Engineer" persona
     system_prompt = """You are a Principal DevOps Engineer working as an autonomous AI agent, performing a POST-MORTEM analysis on a failed Dockerfile.
 
 Your goal is to understand EXACTLY what went wrong and create a PRECISE fix.
@@ -221,6 +254,7 @@ RE-ANALYSIS TRIGGERS (set needs_reanalysis=true):
 {retry_context}
 """
 
+    # Create the prompt template
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("user", """Analyze this failed Dockerfile and provide a detailed reflection.
@@ -246,9 +280,13 @@ Perform a deep analysis and provide specific fixes.
 Start by explaining your root cause analysis in the thought process.""")
     ])
     
+    # Create the chain
     chain = prompt | structured_llm
+    
+    # Initialize token usage tracking
     callback = TokenUsageCallback()
     
+    # Execute the chain
     result = chain.invoke(
         {
             "dockerfile": dockerfile_content,
@@ -271,28 +309,33 @@ def detect_health_endpoints(
     analysis_result: Dict[str, Any]
 ) -> Tuple[HealthEndpointDetectionResult, Dict[str, int]]:
     """
-    AI-powered health endpoint detection from actual file contents.
-    
-    Instead of guessing from file names, this reads the actual code
-    to find health check routes and their configurations.
-    
+    Scans source code to identify potential health check endpoints and port configurations.
+
+    This function uses AI to "read" the code, looking for common patterns that indicate
+    where the application exposes its health status (e.g., /health, /ready). It also
+    looks for port configurations to ensure the Dockerfile exposes the correct port.
+
     Args:
-        file_contents: Content of files to analyze.
-        analysis_result: Previous analysis result.
+        file_contents (str): The raw content of the source files to be analyzed.
+        analysis_result (Dict[str, Any]): The results from the initial project analysis.
 
     Returns:
-        Tuple of (HealthEndpointDetectionResult, usage_dict).
+        Tuple[HealthEndpointDetectionResult, Dict[str, int]]: A tuple containing:
+            - The detection result (HealthEndpointDetectionResult object) with found endpoints.
+            - A dictionary tracking token usage.
     """
+    # Use a faster, lighter model for this pattern matching task
     model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     
     llm = ChatOpenAI(
         model=model_name,
-        temperature=0,
+        temperature=0,  # Deterministic output required
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
     structured_llm = llm.with_structured_output(HealthEndpointDetectionResult)
     
+    # Define the system prompt for the "Code Analyst" persona
     system_prompt = """You are an expert code analyst working as an autonomous AI agent, specializing in detecting health check endpoints.
 
 Your task is to analyze the provided source code and identify any health check endpoints.
@@ -334,7 +377,7 @@ Explain your reasoning in the thought process.""")
     result = chain.invoke(
         {
             "stack": analysis_result.get("stack", "Unknown"),
-            "file_contents": file_contents[:10000]  # Limit size
+            "file_contents": file_contents[:10000]  # Limit size to avoid context overflow
         },
         config={"callbacks": [callback]}
     )
@@ -347,28 +390,33 @@ def detect_readiness_patterns(
     analysis_result: Dict[str, Any]
 ) -> Tuple[ReadinessPatternResult, Dict[str, int]]:
     """
-    AI-powered detection of startup/readiness log patterns.
-    
-    Instead of fixed sleep times, this detects patterns in logs
-    that indicate the application has started successfully.
-    
+    Analyzes application logs and code to determine how to detect when the app is ready.
+
+    Instead of relying on arbitrary sleep times, this function identifies the specific
+    log messages or output patterns that signify a successful startup (e.g., "Server
+    running on port 8080"). It also identifies failure patterns to fail fast.
+
     Args:
-        file_contents: Content of files to analyze.
-        analysis_result: Previous analysis result.
+        file_contents (str): The content of the source files.
+        analysis_result (Dict[str, Any]): The results from the initial project analysis.
 
     Returns:
-        Tuple of (ReadinessPatternResult, usage_dict).
+        Tuple[ReadinessPatternResult, Dict[str, int]]: A tuple containing:
+            - The readiness pattern result (ReadinessPatternResult object) with regex patterns.
+            - A dictionary tracking token usage.
     """
+    # Use a cost-effective model for pattern recognition
     model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     
     llm = ChatOpenAI(
         model=model_name,
-        temperature=0,
+        temperature=0,  # Deterministic output required
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
     structured_llm = llm.with_structured_output(ReadinessPatternResult)
     
+    # Define the system prompt for the "Startup Pattern Expert" persona
     system_prompt = """You are an expert at understanding application startup patterns, working as an autonomous AI agent.
 
 Your task is to analyze source code and determine:
@@ -415,7 +463,7 @@ Explain your reasoning in the thought process.""")
         {
             "stack": analysis_result.get("stack", "Unknown"),
             "project_type": analysis_result.get("project_type", "service"),
-            "file_contents": file_contents[:8000]
+            "file_contents": file_contents[:8000]  # Limit size
         },
         config={"callbacks": [callback]}
     )
@@ -433,33 +481,40 @@ def generate_iterative_dockerfile(
     custom_instructions: str = ""
 ) -> Tuple[IterativeDockerfileResult, Dict[str, int]]:
     """
-    Generate an improved Dockerfile based on reflection and previous attempt.
-    
-    Unlike fresh generation, this specifically targets the issues identified
-    in the reflection, making minimal changes to fix the problems.
-    
+    Generates an improved Dockerfile by applying fixes identified in the reflection phase.
+
+    This function represents the "iterative improvement" capability. It takes a
+    failed Dockerfile and the analysis of why it failed (reflection), and produces
+    a new version that addresses the specific issues while preserving what worked.
+
     Args:
-        previous_dockerfile: The previous, failed Dockerfile.
-        reflection: The reflection result containing analysis of failure.
-        analysis_result: Original analysis result.
-        file_contents: Content of critical files.
-        current_plan: The current generation plan.
-        verified_tags: List of verified Docker tags.
-        custom_instructions: Custom instructions.
+        previous_dockerfile (str): The content of the failed Dockerfile.
+        reflection (Dict[str, Any]): The structured reflection result containing
+            root cause analysis and specific fix instructions.
+        analysis_result (Dict[str, Any]): The original project analysis context.
+        file_contents (str): Content of critical files to provide context.
+        current_plan (Dict[str, Any]): The current build strategy/plan.
+        verified_tags (str, optional): A list of verified Docker image tags to ensure
+            valid base images are used. Defaults to "".
+        custom_instructions (str, optional): User-provided instructions. Defaults to "".
 
     Returns:
-        Tuple of (IterativeDockerfileResult, usage_dict).
+        Tuple[IterativeDockerfileResult, Dict[str, int]]: A tuple containing:
+            - The result containing the improved Dockerfile (IterativeDockerfileResult object).
+            - A dictionary tracking token usage.
     """
+    # Use a high-capability model for code generation and complex modification
     model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
     
     llm = ChatOpenAI(
         model=model_name,
-        temperature=0,
+        temperature=0,  # Deterministic output required for code generation
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
     structured_llm = llm.with_structured_output(IterativeDockerfileResult)
     
+    # Define the system prompt for the "Senior Docker Engineer" persona
     system_prompt = """You are a Senior Docker Engineer working as an autonomous AI agent, iterating on a failed Dockerfile.
 
 CRITICAL: You are NOT starting from scratch. You are IMPROVING an existing Dockerfile

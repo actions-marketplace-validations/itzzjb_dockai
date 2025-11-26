@@ -1,12 +1,12 @@
 """
-DockAI Error Classification System
+DockAI Error Classification System.
 
 This module provides AI-powered error classification to distinguish between:
-1. PROJECT_ERROR: Developer-side issues that cannot be fixed by regenerating the Dockerfile
-   (e.g., missing lock files, invalid code, missing dependencies)
-2. DOCKERFILE_ERROR: Issues with the generated Dockerfile that can potentially be fixed by retry
-   (e.g., wrong base image, incorrect commands, build failures)
-3. ENVIRONMENT_ERROR: Issues with the local environment (Docker not running, network issues)
+1.  **PROJECT_ERROR**: Developer-side issues that cannot be fixed by regenerating the Dockerfile
+    (e.g., missing lock files, invalid code, missing dependencies).
+2.  **DOCKERFILE_ERROR**: Issues with the generated Dockerfile that can potentially be fixed by retry
+    (e.g., wrong base image, incorrect commands, build failures).
+3.  **ENVIRONMENT_ERROR**: Issues with the local environment (Docker not running, network issues).
 
 The classification is done dynamically using AI, making it work for any programming language.
 """
@@ -18,11 +18,20 @@ from dataclasses import dataclass
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
 
+# Initialize logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
 
 
 class ErrorType(Enum):
-    """Classification of error types."""
+    """
+    Enumeration of possible error types for classification.
+    
+    Attributes:
+        PROJECT_ERROR: Issues inherent to the user's project code or configuration.
+        DOCKERFILE_ERROR: Issues within the generated Dockerfile that can be corrected.
+        ENVIRONMENT_ERROR: Issues with the host system or Docker daemon.
+        UNKNOWN_ERROR: Fallback for unclassifiable errors.
+    """
     PROJECT_ERROR = "project_error"       # Developer must fix - no retry
     DOCKERFILE_ERROR = "dockerfile_error"  # Can be fixed by retry
     ENVIRONMENT_ERROR = "environment_error"  # Local setup issue - no retry
@@ -30,7 +39,13 @@ class ErrorType(Enum):
 
 
 class ErrorAnalysisResult(BaseModel):
-    """Structured output for AI error analysis."""
+    """
+    Structured output model for the AI error analysis.
+    
+    This schema defines the fields that the LLM must populate when analyzing an error.
+    It ensures that the output is machine-readable and contains all necessary
+    information for decision making.
+    """
     error_type: Literal["project_error", "dockerfile_error", "environment_error", "unknown_error"] = Field(
         description="Classification of the error: 'project_error' for issues the developer must fix in their code/config, 'dockerfile_error' for issues that can be fixed by regenerating the Dockerfile, 'environment_error' for local Docker/system issues, 'unknown_error' if unclear"
     )
@@ -66,7 +81,12 @@ class ErrorAnalysisResult(BaseModel):
 
 @dataclass
 class ClassifiedError:
-    """Represents a classified error with details."""
+    """
+    Internal representation of a classified error.
+    
+    This dataclass holds the result of the error analysis in a format that is
+    easy to pass around within the application.
+    """
     error_type: ErrorType
     message: str
     suggestion: str
@@ -77,6 +97,7 @@ class ClassifiedError:
     readiness_fix: Optional[str] = None # Better readiness pattern
     
     def to_dict(self):
+        """Converts the object to a dictionary for serialization."""
         return {
             "error_type": self.error_type.value,
             "message": self.message,
@@ -91,34 +112,40 @@ class ClassifiedError:
 
 def analyze_error_with_ai(error_message: str, logs: str = "", stack: str = "") -> ClassifiedError:
     """
-    Use AI to analyze and classify an error.
+    Uses AI to analyze and classify an error message.
     
-    This works for any programming language or framework - the AI will understand
-    the error context and provide appropriate classification and suggestions.
+    This function invokes an LLM to understand the context of an error, regardless
+    of the programming language or framework involved. It maps the raw error
+    message to a structured `ClassifiedError` object.
     
     Args:
-        error_message: The error message to classify
-        logs: Additional logs for context
-        stack: The technology stack being used
+        error_message (str): The raw error message to classify.
+        logs (str, optional): Additional logs to provide context (e.g., build logs). Defaults to "".
+        stack (str, optional): The technology stack being used (e.g., "Node.js", "Python"). Defaults to "".
         
     Returns:
-        ClassifiedError with type, message, and suggestions
+        ClassifiedError: An object containing the error type, summary, and suggested fix.
     """
+    # Import locally to avoid circular dependencies if any
     from langchain_openai import ChatOpenAI
     from langchain_core.prompts import ChatPromptTemplate
     from .callbacks import TokenUsageCallback
     
+    # Retrieve model name, defaulting to a cost-effective option
     model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
     
     try:
+        # Initialize the LLM with deterministic settings
         llm = ChatOpenAI(
             model=model_name,
             temperature=0,
             api_key=os.getenv("OPENAI_API_KEY")
         )
         
+        # Configure structured output
         structured_llm = llm.with_structured_output(ErrorAnalysisResult)
         
+        # Define the system prompt for the "DevOps Engineer" persona
         system_prompt = """You are an expert DevOps engineer working as an autonomous AI agent, analyzing Docker build and runtime errors.
 You have deep knowledge of ALL programming languages, frameworks, package managers, and build systems.
 Your goal is to analyze errors like a senior engineer would - understanding the root cause and providing actionable solutions.
@@ -214,6 +241,7 @@ IMPORTANT:
 - Consider the technology stack when determining the root cause
 """
 
+        # Create the chat prompt template
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             ("user", """Analyze this error and classify it:
@@ -229,25 +257,27 @@ Container/Build Logs:
 Classify this error and provide guidance.""")
         ])
         
+        # Create the execution chain
         chain = prompt | structured_llm
         
-        # Use callback to track tokens (optional, for logging)
+        # Initialize callback to track token usage
         callback = TokenUsageCallback()
         
+        # Execute the chain
         result = chain.invoke(
             {
                 "stack": stack or "Unknown",
-                "error_message": error_message[:2000],  # Limit size
+                "error_message": error_message[:2000],  # Limit size to avoid context overflow
                 "logs": logs[:3000] if logs else "No additional logs"
             },
             config={"callbacks": [callback]}
         )
         
-        # Log token usage
+        # Log token usage for debugging
         usage = callback.get_usage()
         logger.debug(f"Error analysis used {usage.get('total_tokens', 0)} tokens")
         
-        # Map string to enum
+        # Map the string result to the ErrorType enum
         error_type_map = {
             "project_error": ErrorType.PROJECT_ERROR,
             "dockerfile_error": ErrorType.DOCKERFILE_ERROR,
@@ -272,7 +302,7 @@ Classify this error and provide guidance.""")
         
     except Exception as e:
         logger.error(f"Problem: AI error analysis failed - {e}")
-        # Return unknown error - let user see the raw error and decide
+        # Fallback to unknown error if AI analysis fails
         return ClassifiedError(
             error_type=ErrorType.UNKNOWN_ERROR,
             message="Error analysis failed - see details below",
@@ -284,18 +314,18 @@ Classify this error and provide guidance.""")
 
 def classify_error(error_message: str, logs: str = "", stack: str = "") -> ClassifiedError:
     """
-    Classify an error using AI.
+    Public entry point to classify an error using AI.
     
-    This function works for ANY programming language or framework.
-    The AI dynamically analyzes the error and provides appropriate guidance.
+    This function checks for necessary configuration (API key) before delegating
+    to the AI analysis function.
     
     Args:
-        error_message: The error message to classify
-        logs: Additional logs for context  
-        stack: The technology stack being used (helps AI give better suggestions)
+        error_message (str): The error message to classify.
+        logs (str, optional): Additional logs for context. Defaults to "".
+        stack (str, optional): The technology stack being used. Defaults to "".
         
     Returns:
-        ClassifiedError with type, message, and suggestions
+        ClassifiedError: The classified error object.
     """
     if not os.getenv("OPENAI_API_KEY"):
         logger.error("Problem: OPENAI_API_KEY not set - cannot analyze error")
@@ -312,14 +342,14 @@ def classify_error(error_message: str, logs: str = "", stack: str = "") -> Class
 
 def format_error_for_display(classified_error: ClassifiedError, verbose: bool = False) -> str:
     """
-    Format a classified error for user-friendly display.
+    Formats a classified error for user-friendly display in the CLI.
     
     Args:
-        classified_error: The classified error to format
-        verbose: Whether to include full original error
+        classified_error (ClassifiedError): The classified error object to format.
+        verbose (bool, optional): Whether to include the full original error message. Defaults to False.
         
     Returns:
-        Formatted error string
+        str: A formatted string ready for printing to the console.
     """
     error_type_display = {
         ErrorType.PROJECT_ERROR: "[PROJECT ERROR] Fix Required",

@@ -1,16 +1,15 @@
 """
-DockAI Adaptive Agent Graph
+DockAI Adaptive Agent Graph.
 
-This module implements a truly adaptive agentic workflow that:
-1. Plans before generating (strategic thinking)
-2. Reflects on failures (learning from mistakes)
-3. Iterates intelligently (targeted fixes, not full regeneration)
-4. Detects health endpoints from code (not just file names)
-5. Uses smart readiness detection (log patterns, not fixed sleep)
-6. Re-analyzes when necessary (adapts to new information)
+This module implements a truly adaptive agentic workflow using LangGraph.
+It defines the state machine that orchestrates the entire DockAI process,
+moving from analysis to planning, generation, validation, and iterative improvement.
 
-The workflow is designed to mimic how a senior engineer would approach
-Dockerfile generation - with planning, learning, and adaptation.
+Key Workflow Capabilities:
+1.  **Strategic Planning**: Plans before generating code.
+2.  **Failure Reflection**: Analyzes failures to learn and adapt.
+3.  **Smart Iteration**: Makes targeted fixes instead of blind retries.
+4.  **Dynamic Routing**: Adapts the workflow based on analysis results (e.g., re-analyzing if assumptions were wrong).
 """
 
 import logging
@@ -33,6 +32,7 @@ from .nodes import (
     increment_retry
 )
 
+# Initialize logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
 
 
@@ -40,10 +40,18 @@ logger = logging.getLogger("dockai")
 
 def should_retry(state: DockAIState) -> Literal["reflect", "end"]:
     """
-    Determine if we should retry based on error classification.
+    Determines the next step after a validation attempt.
     
-    Routes to reflection node for learning before retry,
-    or ends if retry is not appropriate.
+    This function acts as a gatekeeper, deciding whether to retry a failed
+    build/validation or to terminate the process. It considers the error type,
+    retry limits, and whether the error is fixable by the agent.
+
+    Args:
+        state (DockAIState): The current state of the workflow.
+
+    Returns:
+        Literal["reflect", "end"]: "reflect" to proceed to the reflection phase,
+        or "end" to stop the workflow.
     """
     error_details = state.get("error_details")
     
@@ -51,21 +59,22 @@ def should_retry(state: DockAIState) -> Literal["reflect", "end"]:
         error_type = error_details.get("error_type", "")
         should_retry_flag = error_details.get("should_retry", True)
         
-        # Don't retry for project errors or environment errors
+        # Don't retry for project errors (user must fix) or environment errors (system issue)
         if error_type in [ErrorType.PROJECT_ERROR.value, ErrorType.ENVIRONMENT_ERROR.value]:
             logger.error(f"❌ Cannot retry: {error_details.get('message', 'Unknown error')}")
             logger.info(f"💡 Solution: {error_details.get('suggestion', 'Check the error and try again')}")
             return "end"
         
+        # If the error analysis specifically says not to retry
         if not should_retry_flag:
             logger.error(f"❌ {error_details.get('message', 'Unknown error')}")
             return "end"
     
-    # Check retry limits
+    # Check if we have reached the maximum number of retries
     validation_result = state.get("validation_result")
     
+    # Handle security check failures (which happen before validation result is set)
     if state.get("error") and not validation_result:
-        # Security error
         retry_count = state.get("retry_count", 0)
         max_retries = state.get("max_retries", 3)
         if retry_count < max_retries:
@@ -74,9 +83,10 @@ def should_retry(state: DockAIState) -> Literal["reflect", "end"]:
             logger.error("❌ Max retries reached - security check failed.")
             return "end"
 
+    # Handle validation failures
     if validation_result:
         if validation_result["success"]:
-            return "end"
+            return "end"  # Success!
         
         retry_count = state.get("retry_count", 0)
         max_retries = state.get("max_retries", 3)
@@ -91,7 +101,18 @@ def should_retry(state: DockAIState) -> Literal["reflect", "end"]:
 
 
 def check_security(state: DockAIState) -> Literal["validate", "reflect", "end"]:
-    """Check if security review passed, route to validation or retry."""
+    """
+    Checks the result of the security review node.
+
+    If the security review found critical issues, it routes to reflection/retry.
+    Otherwise, it proceeds to the validation phase (building the image).
+
+    Args:
+        state (DockAIState): The current state of the workflow.
+
+    Returns:
+        Literal["validate", "reflect", "end"]: The next node to execute.
+    """
     if state.get("error"):
         retry_count = state.get("retry_count", 0)
         max_retries = state.get("max_retries", 3)
@@ -103,12 +124,18 @@ def check_security(state: DockAIState) -> Literal["validate", "reflect", "end"]:
 
 def check_reanalysis(state: DockAIState) -> Literal["analyze", "plan", "generate"]:
     """
-    After reflection, check if we need to re-analyze the project.
+    Determines the entry point for the next iteration after reflection.
     
-    Routes to:
-    - analyze: If reflection says we need to re-analyze
-    - plan: If we need a new plan but analysis is OK
-    - generate: If we can directly apply fixes
+    Based on the insights gained during reflection, we might need to:
+    - Re-analyze the project (if we misunderstood the stack).
+    - Create a new plan (if the strategy was wrong).
+    - Just regenerate the Dockerfile (if it was a minor syntax/config issue).
+
+    Args:
+        state (DockAIState): The current state of the workflow.
+
+    Returns:
+        Literal["analyze", "plan", "generate"]: The next node to execute.
     """
     needs_reanalysis = state.get("needs_reanalysis", False)
     reflection = state.get("reflection", {})
@@ -131,7 +158,7 @@ def check_reanalysis(state: DockAIState) -> Literal["analyze", "plan", "generate
 
 def create_graph():
     """
-    Create the adaptive agent workflow graph.
+    Constructs and compiles the DockAI state graph.
     
     The workflow structure:
     
@@ -142,10 +169,13 @@ def create_graph():
                                                                             (if failed) reflect → (check_reanalysis)
                                                                                                         ↓
                                                                             ← ← ← ← ← ← ← ← ← ← ← analyze/plan/generate
+    
+    Returns:
+        CompiledGraph: The executable LangGraph workflow.
     """
     workflow = StateGraph(DockAIState)
     
-    # Add nodes
+    # Add nodes to the graph
     workflow.add_node("scan", scan_node)
     workflow.add_node("analyze", analyze_node)
     workflow.add_node("read_files", read_files_node)
@@ -158,10 +188,10 @@ def create_graph():
     workflow.add_node("reflect", reflect_node)
     workflow.add_node("increment_retry", increment_retry)
     
-    # Set entry point
+    # Set the entry point
     workflow.set_entry_point("scan")
     
-    # Main flow edges
+    # Define the main linear flow
     workflow.add_edge("scan", "analyze")
     workflow.add_edge("analyze", "read_files")
     workflow.add_edge("read_files", "detect_health")
@@ -170,7 +200,7 @@ def create_graph():
     workflow.add_edge("plan", "generate")
     workflow.add_edge("generate", "review")
     
-    # Security check routing
+    # Define conditional routing after security review
     workflow.add_conditional_edges(
         "review",
         check_security,
@@ -181,7 +211,7 @@ def create_graph():
         }
     )
     
-    # Validation result routing
+    # Define conditional routing after validation (build/test)
     workflow.add_conditional_edges(
         "validate",
         should_retry,
@@ -191,7 +221,7 @@ def create_graph():
         }
     )
     
-    # After reflection, decide next step
+    # Define the feedback loop
     workflow.add_edge("reflect", "increment_retry")
     
     workflow.add_conditional_edges(

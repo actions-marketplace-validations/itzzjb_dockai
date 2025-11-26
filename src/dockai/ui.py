@@ -1,20 +1,36 @@
 """
-DockAI UI Module
+DockAI UI Module.
 
-This module handles all user interface interactions using Rich.
-It separates the display logic from the main application logic.
+This module handles all user interface interactions using the 'Rich' library.
+It separates the display logic from the main application logic, ensuring that
+console output is consistent, beautiful, and informative. It handles:
+- Logging configuration
+- Status spinners
+- Success/Error/Warning messages
+- Detailed summary and failure reports
 """
 
+import logging
 from rich.console import Console
 from rich.panel import Panel
 from rich.logging import RichHandler
-import logging
 
-# Initialize console
+# Initialize the global Rich console instance
 console = Console()
 
 def setup_logging(verbose: bool = False):
-    """Configure logging with RichHandler."""
+    """
+    Configures the logging system to use RichHandler.
+    
+    This ensures that log messages are beautifully formatted and integrated
+    seamlessly with other console output.
+    
+    Args:
+        verbose (bool): If True, sets the log level to DEBUG. Otherwise, INFO.
+        
+    Returns:
+        logging.Logger: The configured logger instance for the 'dockai' namespace.
+    """
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
         level=level,
@@ -25,37 +41,67 @@ def setup_logging(verbose: bool = False):
     return logging.getLogger("dockai")
 
 def print_welcome():
-    """Print welcome message."""
+    """Prints the application welcome banner."""
     console.print(Panel.fit("[bold blue]DockAI[/bold blue]\n[italic]Adaptive Agentic Workflow powered by LangGraph[/italic]"))
 
 def print_error(title: str, message: str, details: str = None):
-    """Print an error message."""
+    """
+    Prints a formatted error message.
+    
+    Args:
+        title (str): The title of the error.
+        message (str): The main error message.
+        details (str, optional): Additional details or context.
+    """
     console.print(f"[bold red]Error:[/bold red] {title}")
     console.print(message)
     if details:
         console.print(f"[dim]{details}[/dim]")
 
 def print_success(message: str):
-    """Print a success message."""
+    """
+    Prints a formatted success message.
+    
+    Args:
+        message (str): The success message to display.
+    """
     console.print(f"\n[bold green]✅ Success![/bold green] {message}")
 
 def print_warning(message: str):
-    """Print a warning message."""
+    """
+    Prints a formatted warning message.
+    
+    Args:
+        message (str): The warning message to display.
+    """
     console.print(f"[yellow]Warning:[/yellow] {message}")
 
 def display_summary(final_state: dict, output_path: str):
-    """Display the final summary of the execution."""
+    """
+    Displays the final summary of a successful execution.
+    
+    This includes:
+    - Success confirmation
+    - Output file location
+    - Adaptive learning history (retries and lessons learned)
+    - Token usage statistics breakdown
+    - Strategy details
+    
+    Args:
+        final_state (dict): The final state of the workflow.
+        output_path (str): The path where the Dockerfile was saved.
+    """
     print_success(f"Dockerfile validated successfully.")
     console.print(f"[bold green]📄 Final Dockerfile saved to {output_path}[/bold green]")
     
-    # Show retry history summary if there were retries
+    # Show retry history summary if there were retries (Adaptive Learning)
     retry_history = final_state.get("retry_history", [])
     if retry_history:
         console.print(f"\n[cyan]🔄 Adaptive Learning: {len(retry_history)} iterations to reach solution[/cyan]")
         for i, attempt in enumerate(retry_history, 1):
             console.print(f"  [dim]Attempt {i}: {attempt.get('lesson_learned', 'N/A')}[/dim]")
     
-    # Calculate Costs
+    # Calculate Costs and Usage
     total_tokens = 0
     usage_by_stage = {}
     
@@ -68,7 +114,7 @@ def display_summary(final_state: dict, output_path: str):
     
     usage_details = [f"{stage}: {tokens} tokens" for stage, tokens in usage_by_stage.items()]
     
-    # Build summary with adaptive agent stats
+    # Build summary content
     summary_content = f"[bold]Total Tokens:[/bold] {total_tokens}\n\n"
     summary_content += "[bold]Breakdown by Stage:[/bold]\n" + "\n".join(f"  • {d}" for d in usage_details)
     
@@ -86,7 +132,20 @@ def display_summary(final_state: dict, output_path: str):
     ))
 
 def display_failure(final_state: dict):
-    """Display failure details."""
+    """
+    Displays detailed information about a failed execution.
+    
+    This includes:
+    - Failure message
+    - Classified error details (Problem, Solution)
+    - Specific advice based on error type (Project vs Environment vs Dockerfile)
+    - Retry history and lessons learned
+    - Final reflection/root cause analysis
+    - Token usage
+    
+    Args:
+        final_state (dict): The final state of the workflow.
+    """
     console.print(f"\n[bold red]❌ Failed to generate a valid Dockerfile[/bold red]\n")
     
     # Display classified error information if available
@@ -157,5 +216,13 @@ def display_failure(final_state: dict):
         console.print(f"\n[dim]Tokens used: {total_tokens}[/dim]")
 
 def get_status_spinner(message: str):
-    """Return a status spinner context manager."""
+    """
+    Returns a status spinner context manager.
+    
+    Args:
+        message (str): The message to display next to the spinner.
+        
+    Returns:
+        rich.status.Status: A context manager for the spinner.
+    """
     return console.status(message, spinner="dots")

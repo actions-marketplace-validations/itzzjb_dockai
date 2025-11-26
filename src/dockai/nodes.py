@@ -1,14 +1,17 @@
 """
-DockAI Graph Nodes
+DockAI Graph Nodes.
 
 This module contains the node functions for the LangGraph workflow.
-Each node represents a step in the adaptive agent process.
+Each node represents a distinct step in the adaptive agent process,
+encapsulating specific logic for scanning, analysis, generation, validation,
+and reflection.
 """
 
 import os
 import logging
 from typing import Dict, Any, Literal, Optional
 
+# Internal imports for state management and core logic
 from .state import DockAIState
 from .scanner import get_file_tree
 from .analyzer import analyze_repo_needs
@@ -25,13 +28,23 @@ from .agent import (
     generate_iterative_dockerfile
 )
 
+# Initialize logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
 
 
 def scan_node(state: DockAIState) -> DockAIState:
     """
-    Scan the repository directory tree.
-    This is a fast, local operation that builds the file list.
+    Scans the repository directory tree.
+    
+    This is the initial step in the workflow. It performs a fast, local scan
+    of the directory to build a file tree structure, which is used by subsequent
+    nodes to understand the project layout without reading every file's content.
+
+    Args:
+        state (DockAIState): The current state containing the project path.
+
+    Returns:
+        DockAIState: Updated state with the 'file_tree' populated.
     """
     path = state["path"]
     logger.info(f"📁 Scanning directory: {path}")
@@ -42,15 +55,23 @@ def scan_node(state: DockAIState) -> DockAIState:
 
 def analyze_node(state: DockAIState) -> DockAIState:
     """
-    AI-powered analysis of the repository.
+    Performs AI-powered analysis of the repository.
     
-    This node:
-    - Analyzes the file tree to understand the project
-    - Detects stack, build commands, and entry points
-    - Identifies critical files to read
-    - Suggests base images
+    This node acts as the "Brain" (Stage 1). It:
+    - Analyzes the file tree to deduce the project type and stack.
+    - Identifies build commands, start commands, and entry points.
+    - Determines which critical files need to be read for deeper context.
+    - Suggests an initial base image strategy.
     
-    If needs_reanalysis is set, provides focused re-analysis context.
+    If 'needs_reanalysis' is set in the state (triggered by reflection),
+    it performs a focused re-analysis based on the feedback.
+
+    Args:
+        state (DockAIState): The current state with file tree and config.
+
+    Returns:
+        DockAIState: Updated state with 'analysis_result', 'usage_stats',
+        and clears the 'needs_reanalysis' flag.
     """
     file_tree = state["file_tree"]
     config = state.get("config", {})
@@ -61,7 +82,7 @@ def analyze_node(state: DockAIState) -> DockAIState:
     reflection = state.get("reflection")
     
     if needs_reanalysis and reflection:
-        # Add re-analysis focus to instructions
+        # Add re-analysis focus to instructions to guide the LLM
         focus = reflection.get("reanalysis_focus", "")
         if focus:
             instructions += f"\n\nRE-ANALYSIS FOCUS: {focus}\n"
@@ -70,7 +91,7 @@ def analyze_node(state: DockAIState) -> DockAIState:
     else:
         logger.info("🧠 Analyzing repository needs...")
     
-    # Returns (AnalysisResult object, usage_dict)
+    # Execute analysis (returns AnalysisResult object and token usage)
     analysis_result_obj, usage = analyze_repo_needs(file_tree, instructions)
     
     logger.info(f"Analyzer Reasoning:\n{analysis_result_obj.thought_process}")
@@ -90,16 +111,26 @@ def analyze_node(state: DockAIState) -> DockAIState:
     return {
         "analysis_result": analysis_result, 
         "usage_stats": current_stats + [usage_dict],
-        "needs_reanalysis": False  # Clear the flag
+        "needs_reanalysis": False  # Clear the flag as analysis is done
     }
 
 
 def read_files_node(state: DockAIState) -> DockAIState:
     """
-    Read critical files identified by the analyzer.
+    Reads critical files identified by the analyzer.
     
-    This node reads the files that the AI determined are necessary
-    for understanding the project's build and runtime requirements.
+    This node fetches the actual content of the files that the AI determined
+    are necessary for understanding the project's build and runtime requirements
+    (e.g., package.json, requirements.txt, main.py).
+    
+    It includes safeguards to truncate extremely large files to prevent
+    context window overflow.
+
+    Args:
+        state (DockAIState): The current state with analysis results.
+
+    Returns:
+        DockAIState: Updated state with 'file_contents' string.
     """
     path = state["path"]
     files_to_read = state["analysis_result"].get("files_to_read", [])
@@ -115,7 +146,7 @@ def read_files_node(state: DockAIState) -> DockAIState:
             with open(abs_file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
                 
-                # Truncate if too large (50KB limit)
+                # Truncate if too large (50KB limit) to save tokens
                 MAX_SIZE = 50 * 1024
                 if len(content) > MAX_SIZE:
                     content = content[:MAX_SIZE] + "\n... [TRUNCATED DUE TO SIZE] ..."
@@ -142,13 +173,20 @@ def detect_health_node(state: DockAIState) -> DockAIState:
     """
     AI-powered health endpoint detection from actual file contents.
     
-    This is more accurate than the analyzer's file-name-based detection
-    because it reads the actual route definitions in the code.
+    Unlike the initial analysis which might guess based on filenames, this node
+    uses an LLM to scan the code content for route definitions (e.g., @app.get('/health'))
+    to accurately identify health check endpoints.
+
+    Args:
+        state (DockAIState): The current state with file contents.
+
+    Returns:
+        DockAIState: Updated state with 'detected_health_endpoint' and usage stats.
     """
     file_contents = state.get("file_contents", "")
     analysis_result = state.get("analysis_result", {})
     
-    # Skip if already have health endpoint from analyzer with high confidence
+    # Skip if analyzer already found a high-confidence endpoint
     existing_health = analysis_result.get("health_endpoint")
     if existing_health:
         logger.info(f"Using analyzer-detected health endpoint: {existing_health.get('path')}:{existing_health.get('port')}")
@@ -190,9 +228,15 @@ def detect_readiness_node(state: DockAIState) -> DockAIState:
     """
     AI-powered detection of startup log patterns.
     
-    This detects patterns in logs that indicate the application
-    has started successfully, enabling smart readiness checking
-    instead of fixed sleep times.
+    This node analyzes the code to predict what the application will log when
+    it starts successfully (e.g., "Server listening on port 8080"). This allows
+    for smart readiness checking instead of relying on arbitrary sleep times.
+
+    Args:
+        state (DockAIState): The current state with file contents.
+
+    Returns:
+        DockAIState: Updated state with 'readiness_patterns', 'failure_patterns', and usage stats.
     """
     file_contents = state.get("file_contents", "")
     analysis_result = state.get("analysis_result", {})
@@ -229,11 +273,19 @@ def plan_node(state: DockAIState) -> DockAIState:
     """
     AI-powered planning before Dockerfile generation.
     
-    This creates a strategic plan that considers:
-    - The specific technology stack
-    - Previous retry history (learning from mistakes)
-    - Potential challenges and mitigations
-    - Optimal build strategy
+    This node creates a strategic plan ("The Architect" phase). It considers:
+    - The specific technology stack.
+    - Previous retry history (to learn from mistakes).
+    - Potential challenges and mitigations.
+    - Optimal build strategy (e.g., multi-stage, static linking).
+    
+    This planning step ensures the generator has a solid blueprint to follow.
+
+    Args:
+        state (DockAIState): The current state with analysis and history.
+
+    Returns:
+        DockAIState: Updated state with 'current_plan' and usage stats.
     """
     analysis_result = state.get("analysis_result", {})
     file_contents = state.get("file_contents", "")
@@ -278,11 +330,20 @@ def generate_node(state: DockAIState) -> DockAIState:
     """
     AI-powered Dockerfile generation.
     
-    This node handles both:
-    1. Initial generation (fresh Dockerfile based on plan)
-    2. Iterative improvement (targeted fixes based on reflection)
+    This node handles the actual code generation ("The Builder"). It supports two modes:
+    1.  **Initial Generation**: Creates a fresh Dockerfile based on the strategic plan.
+    2.  **Iterative Improvement**: If a previous attempt failed, it uses the reflection
+        data to make targeted, surgical fixes to the existing Dockerfile instead of
+        starting from scratch.
     
-    The decision is based on whether we have a reflection from a previous failure.
+    It also dynamically fetches verified Docker image tags to prevent hallucinations.
+
+    Args:
+        state (DockAIState): The current state with plan, history, and reflection.
+
+    Returns:
+        DockAIState: Updated state with 'dockerfile_content', updated 'analysis_result',
+        usage stats, and clears error/reflection flags.
     """
     analysis_result = state.get("analysis_result", {})
     stack = analysis_result.get("stack", "Unknown")
@@ -294,7 +355,7 @@ def generate_node(state: DockAIState) -> DockAIState:
     previous_dockerfile = state.get("previous_dockerfile")
     retry_count = state.get("retry_count", 0)
     
-    # Fetch verified tags dynamically
+    # Fetch verified tags dynamically to ensure image existence
     suggested_image = analysis_result.get("suggested_base_image", "").strip()
     
     # Check if reflection suggests a different base image
@@ -307,12 +368,11 @@ def generate_node(state: DockAIState) -> DockAIState:
         logger.info(f"Fetching tags for: {suggested_image}")
         verified_tags = get_docker_tags(suggested_image)
     else:
-        # No specific image suggested - let AI determine best approach
         logger.warning("No suggested base image from analysis. AI will determine the best base image.")
     
     verified_tags_str = ", ".join(verified_tags) if verified_tags else "Use your best judgement based on the detected technology stack."
     
-    # Dynamic Model Selection
+    # Dynamic Model Selection: Use smarter model for retries/complex tasks
     if retry_count == 0:
         model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
         logger.info(f"🏗️ Generating Dockerfile (Draft Model: {model_name})...")
@@ -391,8 +451,18 @@ def review_node(state: DockAIState) -> DockAIState:
     """
     AI-powered security review of the generated Dockerfile.
     
-    This node checks for security issues and provides structured
-    fixes that can be directly applied in the next iteration.
+    This node acts as a "Security Auditor". It checks the generated Dockerfile
+    for common security vulnerabilities (e.g., running as root, exposing sensitive ports)
+    and provides structured fixes.
+    
+    If the reviewer can fix the issue automatically, it does so. Otherwise, it
+    flags the error for the next iteration.
+
+    Args:
+        state (DockAIState): The current state with the generated Dockerfile.
+
+    Returns:
+        DockAIState: Updated state with potential errors or a fixed Dockerfile.
     """
     dockerfile_content = state["dockerfile_content"]
     
@@ -447,14 +517,22 @@ def review_node(state: DockAIState) -> DockAIState:
 
 def validate_node(state: DockAIState) -> DockAIState:
     """
-    Validate the Dockerfile by building and running the container.
+    Validates the Dockerfile by building and running the container.
     
-    This node:
-    1. Builds the Docker image
-    2. Runs the container with resource limits
-    3. Uses AI-detected readiness patterns for smart waiting
-    4. Performs health checks if endpoint is detected
-    5. Classifies any errors using AI
+    This is the "Test Engineer" phase. It:
+    1. Builds the Docker image.
+    2. Runs the container with resource limits.
+    3. Uses AI-detected readiness patterns to smartly wait for startup.
+    4. Performs health checks if an endpoint was detected.
+    5. Classifies any errors using AI to determine if they are fixable.
+    
+    It also checks for image size constraints.
+
+    Args:
+        state (DockAIState): The current state with the Dockerfile and analysis.
+
+    Returns:
+        DockAIState: Updated state with 'validation_result', 'error', and 'error_details'.
     """
     path = state["path"]
     dockerfile_content = state["dockerfile_content"]
@@ -495,11 +573,9 @@ def validate_node(state: DockAIState) -> DockAIState:
     
     # Store classified error details for better error handling
     error_details = None
-    container_logs = ""
     
     if classified_error:
         error_details = classified_error.to_dict()
-        container_logs = classified_error.original_error
         logger.info(format_error_for_display(classified_error, verbose=False))
     
     # Check for image size optimization (configurable)
@@ -543,8 +619,19 @@ def reflect_node(state: DockAIState) -> DockAIState:
     """
     AI-powered reflection on failure.
     
-    This is the key to adaptive behavior - the agent reflects on
-    what went wrong and creates a strategy for the next attempt.
+    This node acts as the "Post-Mortem Analyst". It is the key to adaptive behavior.
+    It analyzes the error logs, the failed Dockerfile, and the previous plan to:
+    1. Determine the root cause of the failure.
+    2. Decide if a re-analysis of the project is needed.
+    3. Formulate specific, actionable fixes for the next iteration.
+    
+    This allows the agent to learn from its mistakes rather than blindly retrying.
+
+    Args:
+        state (DockAIState): The current state with error details and history.
+
+    Returns:
+        DockAIState: Updated state with 'reflection', 'retry_history', and 'needs_reanalysis'.
     """
     dockerfile_content = state.get("dockerfile_content", "")
     error_message = state.get("error", "Unknown error")
@@ -606,7 +693,17 @@ def reflect_node(state: DockAIState) -> DockAIState:
 
 
 def increment_retry(state: DockAIState) -> DockAIState:
-    """Helper node to increment retry count."""
+    """
+    Helper node to increment the retry counter.
+    
+    This is used to track the number of attempts and enforce the maximum retry limit.
+
+    Args:
+        state (DockAIState): The current state.
+
+    Returns:
+        DockAIState: Updated state with incremented 'retry_count'.
+    """
     current_count = state.get("retry_count", 0)
     logger.info(f"🔄 Retry {current_count + 1}...")
     return {"retry_count": current_count + 1}

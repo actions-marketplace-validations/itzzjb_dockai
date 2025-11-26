@@ -1,3 +1,11 @@
+"""
+DockAI Main Entry Point.
+
+This module serves as the command-line interface (CLI) entry point for the DockAI application.
+It handles argument parsing, environment validation, logging configuration, and the initialization
+of the main agent workflow.
+"""
+
 import os
 import sys
 import logging
@@ -10,23 +18,40 @@ from . import ui
 # Load environment variables from .env file
 load_dotenv()
 
+# Initialize Typer application
 app = typer.Typer()
 
-# Configure logging
+# Configure logging using the centralized setup from the UI module
 logger = ui.setup_logging()
 
 def load_instructions(path: str):
+    """
+    Loads custom instructions for the AI agent from various sources.
+
+    Instructions can be provided via:
+    1. Environment variables (DOCKAI_ANALYZER_INSTRUCTIONS, DOCKAI_GENERATOR_INSTRUCTIONS).
+    2. A local `.dockai` file in the target directory.
+
+    The `.dockai` file supports sections `[analyzer]` and `[generator]` to target specific
+    phases of the pipeline.
+
+    Args:
+        path (str): The absolute path to the target directory where `.dockai` might exist.
+
+    Returns:
+        Tuple[str, str]: A tuple containing (analyzer_instructions, generator_instructions).
+    """
     analyzer_instructions = ""
     generator_instructions = ""
     
-    # Check environment variables
+    # Check environment variables first
     if os.getenv("DOCKAI_ANALYZER_INSTRUCTIONS"):
         analyzer_instructions += f"\nFrom Environment Variable:\n{os.getenv('DOCKAI_ANALYZER_INSTRUCTIONS')}\n"
         
     if os.getenv("DOCKAI_GENERATOR_INSTRUCTIONS"):
         generator_instructions += f"\nFrom Environment Variable:\n{os.getenv('DOCKAI_GENERATOR_INSTRUCTIONS')}\n"
         
-    # Check .dockai file in the target directory
+    # Check for a .dockai file in the target directory
     dockai_file_path = os.path.join(path, ".dockai")
     if os.path.exists(dockai_file_path):
         try:
@@ -54,7 +79,7 @@ def load_instructions(path: str):
                     if section_content["generator"]:
                         generator_instructions += f"\nFrom .dockai file:\n" + "\n".join(section_content["generator"]) + "\n"
                 else:
-                    # No sections, use for both
+                    # No sections found, apply instructions to both phases
                     shared_instructions = content.strip()
                     if shared_instructions:
                         analyzer_instructions += f"\nFrom .dockai file:\n{shared_instructions}\n"
@@ -74,18 +99,21 @@ def run(
 ):
     """
     DockAI: A LangGraph Agentic Pipeline for generating optimized Dockerfiles.
+    
+    This command initiates the AI agent to analyze the specified project path,
+    plan a build strategy, and generate a production-ready Dockerfile.
     """
     if verbose:
         logger.setLevel(logging.DEBUG)
         logger.debug("Verbose mode enabled")
     
-    # Validate input path
+    # Validate input path existence
     if not os.path.exists(path):
         ui.print_error("Path Error", f"Path '{path}' does not exist.")
         logger.error(f"Problem: Path '{path}' does not exist.")
         raise typer.Exit(code=1)
         
-    # Validate API key
+    # Validate API key configuration
     if not os.getenv("OPENAI_API_KEY"):
         ui.print_error("Configuration Error", "OPENAI_API_KEY not found in environment variables.", "Please create a .env file with your API key.")
         logger.error("Problem: OPENAI_API_KEY missing")
@@ -100,10 +128,10 @@ def run(
     ui.print_welcome()
     logger.info(f"Starting analysis for: {path}")
 
-    # Load instructions
+    # Load custom instructions
     analyzer_instructions, generator_instructions = load_instructions(path)
     
-    # Initialize State with all adaptive agent fields
+    # Initialize the workflow state with all necessary fields
     initial_state = {
         "path": os.path.abspath(path),
         "file_tree": [],
@@ -122,7 +150,7 @@ def run(
             "analyzer_instructions": analyzer_instructions,
             "generator_instructions": generator_instructions
         },
-        # Adaptive agent fields
+        # Adaptive agent fields for learning and planning
         "retry_history": [],  # Full history of attempts for learning
         "current_plan": None,  # AI-generated strategic plan
         "reflection": None,  # AI reflection on failures
@@ -132,17 +160,18 @@ def run(
         "needs_reanalysis": False  # Flag to trigger re-analysis
     }
 
-    # Create and Run Graph
+    # Create and compile the LangGraph workflow
     workflow = create_graph()
     
     try:
+        # Execute the workflow with a visual spinner
         with ui.get_status_spinner("[bold green]Running DockAI Agent...[/bold green]"):
             final_state = workflow.invoke(initial_state)
     except Exception as e:
-        # Handle any unexpected errors gracefully
+        # Handle unexpected errors gracefully
         error_msg = str(e)
         
-        # Check for common LangGraph errors
+        # Check for common LangGraph errors like recursion limits
         if "GraphRecursionError" in error_msg or "recursion" in error_msg.lower():
             ui.print_error(
                 "Max Retries Exceeded", 
@@ -156,7 +185,7 @@ def run(
         
         raise typer.Exit(code=1)
 
-    # Process Results
+    # Process and display the final results
     validation_result = final_state["validation_result"]
     output_path = os.path.join(path, "Dockerfile")
     

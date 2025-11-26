@@ -1,3 +1,16 @@
+"""
+DockAI Docker Validator Module.
+
+This module is responsible for the "Test Engineer" phase of the workflow.
+It validates the generated Dockerfile by:
+1. Building the image (with resource limits).
+2. Running the container in a sandboxed environment.
+3. Performing smart readiness checks (using AI-detected log patterns).
+4. Executing health checks (if endpoints are detected).
+5. Scanning for security vulnerabilities (using Trivy).
+6. Classifying any errors that occur to guide the AI's reflection.
+"""
+
 import subprocess
 import time
 import uuid
@@ -9,11 +22,16 @@ from typing import List, Tuple, Optional
 
 from .errors import classify_error, ClassifiedError, ErrorType
 
+# Initialize logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
+
 
 def run_command(command: List[str], cwd: str = ".") -> Tuple[int, str, str]:
     """
     Run a shell command and return exit code, stdout, stderr.
+    
+    This is a helper function to execute subprocess commands safely and capture
+    their output for analysis.
     
     Args:
         command (List[str]): The command to run as a list of strings.
@@ -34,9 +52,13 @@ def run_command(command: List[str], cwd: str = ".") -> Tuple[int, str, str]:
     except Exception as e:
         return -1, "", str(e)
 
+
 def check_health_endpoint(container_name: str, endpoint: str, port: int, max_attempts: int = 6) -> bool:
     """
     Check if a health endpoint is responding with HTTP 200.
+    
+    This function executes `curl` *inside* the container to verify that the
+    application is responding correctly on the specified path and port.
     
     Args:
         container_name (str): Name of the Docker container.
@@ -51,6 +73,7 @@ def check_health_endpoint(container_name: str, endpoint: str, port: int, max_att
     
     for attempt in range(1, max_attempts + 1):
         # Use docker exec to curl from inside the container
+        # We check for curl existence first to avoid errors in minimal images
         health_cmd = [
             "docker", "exec", container_name,
             "sh", "-c", 
@@ -73,6 +96,7 @@ def check_health_endpoint(container_name: str, endpoint: str, port: int, max_att
     logger.warning(f"Health check failed after {max_attempts} attempts")
     return False
 
+
 def validate_docker_build_and_run(
     directory: str, 
     project_type: str = "service",
@@ -85,21 +109,20 @@ def validate_docker_build_and_run(
     """
     Builds and runs the Dockerfile in the given directory to verify it works.
     
-    This function performs the following steps:
-    1. Builds the Docker image with strict memory limits to prevent host exhaustion.
-    2. Runs a container from the image in a sandboxed environment (limited memory, CPU, PIDs).
-    3. Uses AI-detected readiness patterns OR recommended wait times.
-    4. For services with health endpoints: Performs HTTP health checks.
-    5. For services without health endpoints: Checks if it stays running.
-    6. For scripts: Checks if it exits with code 0.
-    7. Cleans up the container and image.
+    This is the core validation logic. It performs a comprehensive test suite:
+    1. **Build**: Builds the image with strict memory limits to prevent host exhaustion.
+    2. **Run**: Runs the container in a sandboxed environment (limited resources).
+    3. **Readiness**: Uses AI-detected patterns to wait for startup (smart wait).
+    4. **Health**: Checks HTTP endpoints if available.
+    5. **Security**: Optionally runs a Trivy scan.
+    6. **Cleanup**: Removes test containers and images.
     
     Args:
         directory (str): The directory containing the Dockerfile.
         project_type (str): 'service' or 'script'.
         stack (str): The detected technology stack.
         health_endpoint (Optional[Tuple[str, int]]): (endpoint_path, port) for health checks.
-        recommended_wait_time (int): AI-recommended wait time in seconds.
+        recommended_wait_time (int): AI-recommended wait time in seconds (fallback).
         readiness_patterns (List[str]): AI-detected log patterns for startup detection.
         failure_patterns (List[str]): AI-detected log patterns for failure detection.
         
@@ -112,12 +135,14 @@ def validate_docker_build_and_run(
     
     logger.info(f"Validating Dockerfile in {directory} (Type: {project_type}, Stack: {stack})...")
     
-    # 1. Build
+    # 1. Build Phase
     logger.info("Building Docker image (with resource limits)...")
+    # Use 2GB memory limit for build to prevent OOM on host
     build_cmd = ["docker", "build", "--memory=2g", "-t", image_name, "."]
     code, stdout, stderr = run_command(build_cmd, cwd=directory)
     
     if code != 0:
+        # Build failed - classify the error
         error_output = f"{stderr}\n{stdout}"
         classified = classify_error(error_output, logs=error_output, stack=stack)
         error_msg = f"Docker build failed: {classified.message}"
@@ -125,15 +150,14 @@ def validate_docker_build_and_run(
         logger.debug(f"Details: {error_output[:500]}")
         return False, error_msg, 0, classified
     
-    # 2. Run
+    # 2. Run Phase
     logger.info("Running Docker container (sandboxed)...")
     
-    # Configurable resource limits (can be adjusted for different stacks)
+    # Configurable resource limits for runtime validation
     memory_limit = os.getenv("DOCKAI_VALIDATION_MEMORY", "512m")
     cpu_limit = os.getenv("DOCKAI_VALIDATION_CPUS", "1.0")
     pids_limit = os.getenv("DOCKAI_VALIDATION_PIDS", "100")
     
-    # Expose port if health endpoint is provided
     run_cmd = [
         "docker", "run", 
         "-d", 
@@ -141,7 +165,7 @@ def validate_docker_build_and_run(
         f"--memory={memory_limit}",
         f"--cpus={cpu_limit}",
         f"--pids-limit={pids_limit}",
-        "--security-opt=no-new-privileges",
+        "--security-opt=no-new-privileges", # Security best practice
     ]
     
     # Add port mapping if we have a health endpoint
@@ -155,6 +179,7 @@ def validate_docker_build_and_run(
     code, stdout, stderr = run_command(run_cmd)
     
     if code != 0:
+        # Container failed to start - classify the error
         error_output = f"{stderr}\n{stdout}"
         classified = classify_error(error_output, logs=error_output, stack=stack)
         error_msg = f"Container start failed: {classified.message}"
@@ -163,7 +188,8 @@ def validate_docker_build_and_run(
         return False, error_msg, 0, classified
     
     
-    # 3. Use AI-detected readiness patterns OR recommended wait times
+    # 3. Readiness Check Phase
+    # Use AI-detected readiness patterns OR recommended wait times
     if readiness_patterns:
         logger.info(f"Using smart readiness check with {len(readiness_patterns)} patterns...")
         is_ready, ready_msg, _ = check_container_readiness(
@@ -177,7 +203,7 @@ def validate_docker_build_and_run(
         logger.info(f"Waiting {recommended_wait_time}s for container to initialize (AI-recommended)...")
         time.sleep(recommended_wait_time)
     
-    # 4. Check status
+    # 4. Status Check Phase
     inspect_cmd = ["docker", "inspect", "-f", "{{.State.Running}}", container_name]
     code, stdout, stderr = run_command(inspect_cmd)
     is_running = stdout.strip() == "true"
@@ -194,7 +220,7 @@ def validate_docker_build_and_run(
     message = ""
     classified_error = None
 
-    # 5. Validation logic
+    # 5. Validation Logic based on Project Type
     # Health checks are OPTIONAL - only run if explicitly configured
     skip_health_check = os.getenv("DOCKAI_SKIP_HEALTH_CHECK", "false").lower() == "true"
     
@@ -241,6 +267,7 @@ def validate_docker_build_and_run(
                 message = f"Script failed (Exit Code: {exit_code}): {classified_error.message}"
     
     else:
+        # Fallback for unknown project types
         if is_running or exit_code == 0:
             success = True
             message = "Container ran successfully."
@@ -367,14 +394,21 @@ def check_container_readiness(
     Instead of fixed sleep, this polls container logs and looks for
     patterns that indicate successful startup or failure.
     
+    Args:
+        container_name (str): The name of the container to check.
+        readiness_patterns (List[str]): Regex patterns indicating success.
+        failure_patterns (List[str]): Regex patterns indicating failure.
+        max_wait_time (int): Maximum time to wait in seconds.
+        check_interval (int): Time between checks in seconds.
+        
     Returns:
-        Tuple of (is_ready, status_message, logs)
+        Tuple[bool, str, str]: (is_ready, status_message, accumulated_logs)
     """
     start_time = time.time()
     last_log_position = 0
     accumulated_logs = ""
     
-    # Compile regex patterns
+    # Compile regex patterns for performance
     success_regexes = []
     failure_regexes = []
     
@@ -390,7 +424,7 @@ def check_container_readiness(
         except re.error:
             logger.warning(f"Invalid failure regex pattern: {pattern}")
     
-    # Add default patterns if none provided
+    # Add default patterns if none provided to ensure we catch common cases
     if not success_regexes:
         default_success = [
             r"listening on.*port",
@@ -439,15 +473,15 @@ def check_container_readiness(
         accumulated_logs = current_logs
         last_log_position = len(current_logs)
         
-        # Check for success patterns
+        # Check for success patterns in the logs
         for regex in success_regexes:
             if regex.search(current_logs):
                 logger.info("Container readiness detected via log pattern")
                 return True, "Container is ready (detected via log patterns)", accumulated_logs
         
-        # Check for failure patterns
+        # Check for failure patterns in the NEW logs
         for regex in failure_regexes:
-            if regex.search(new_logs):  # Only check new logs for failures
+            if regex.search(new_logs):  # Only check new logs for failures to avoid false positives from old logs
                 logger.warning(f"Failure pattern detected in logs")
                 return False, f"Container startup failed (error pattern detected)", accumulated_logs
         
