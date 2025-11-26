@@ -289,7 +289,7 @@ def classify_error(error_message: str, logs: str = "", stack: str = "") -> Class
     Public entry point to classify an error using AI.
     
     This function checks for necessary configuration (API key) before delegating
-    to the AI analysis function.
+    to the AI analysis function. Supports multiple LLM providers.
     
     Args:
         error_message (str): The error message to classify.
@@ -299,12 +299,20 @@ def classify_error(error_message: str, logs: str = "", stack: str = "") -> Class
     Returns:
         ClassifiedError: The classified error object.
     """
-    if not os.getenv("OPENAI_API_KEY"):
-        logger.error("Problem: OPENAI_API_KEY not set - cannot analyze error")
+    # Check if any LLM provider API key is configured
+    has_api_key = (
+        os.getenv("OPENAI_API_KEY") or 
+        os.getenv("AZURE_OPENAI_API_KEY") or 
+        os.getenv("GOOGLE_API_KEY") or 
+        os.getenv("ANTHROPIC_API_KEY")
+    )
+    
+    if not has_api_key:
+        logger.error("Problem: No LLM API key configured - cannot analyze error")
         return ClassifiedError(
             error_type=ErrorType.UNKNOWN_ERROR,
             message="Cannot analyze error - API key not configured",
-            suggestion="Set OPENAI_API_KEY in your .env file to enable AI error analysis",
+            suggestion="Set an API key in your .env file (OPENAI_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, or AZURE_OPENAI_API_KEY) to enable AI error analysis",
             original_error=error_message[:500],
             should_retry=True
         )

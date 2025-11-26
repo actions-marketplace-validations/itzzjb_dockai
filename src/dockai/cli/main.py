@@ -25,7 +25,20 @@ from ..utils.prompts import load_prompts, set_prompt_config
 load_dotenv()
 
 # Initialize Typer application with Rich markup support
-app = typer.Typer(rich_markup_mode="rich")
+# We use a callback with explicit invoke_without_command handling to ensure 'build' appears as a subcommand
+app = typer.Typer(
+    rich_markup_mode="rich",
+    help="[bold blue]DockAI[/bold blue] - The Customizable AI Dockerfile Generation Framework",
+    no_args_is_help=True,
+    add_completion=True
+)
+
+# Add a version command to make this a multi-command app (so 'build' shows as subcommand)
+@app.command("version", hidden=True)
+def version():
+    """Show version information."""
+    from .. import __version__
+    typer.echo(f"DockAI v{__version__}")
 
 # Configure logging using the centralized setup from the UI module
 logger = ui.setup_logging()
@@ -61,19 +74,24 @@ def load_instructions(path: str):
         prompt_config.generator_instructions or ""
     )
 
-@app.command()
-def run(
+@app.command("build")
+def build(
     path: str = typer.Argument(..., help="Path to the repository to analyze"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose debug logging")
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose debug logging"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Disable Docker build cache (currently not implemented)")
 ):
     """
-    [bold blue]DockAI[/bold blue]
+    Build a Dockerfile for a project using AI analysis.
     
-    [italic]The Customizable AI Dockerfile Generation Framework[/italic]
+    Analyzes the target repository, generates an optimized Dockerfile,
+    validates it against best practices, and saves it to the project directory.
     """
     if verbose:
         logger.setLevel(logging.DEBUG)
         logger.debug("Verbose mode enabled")
+    
+    # Note: no_cache flag is accepted for compatibility but not yet implemented
+    # Docker build caching behavior is handled at the Docker daemon level
     
     # Validate input path existence
     if not os.path.exists(path):

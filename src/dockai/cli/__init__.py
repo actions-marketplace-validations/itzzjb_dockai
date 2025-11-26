@@ -6,7 +6,7 @@ This module contains the command-line interface components:
 - Rich console UI components
 """
 
-from .main import app, run
+from .main import app, build
 from .ui import (
     console,
     setup_logging,
@@ -23,7 +23,7 @@ from ..utils.callbacks import TokenUsageCallback
 
 __all__ = [
     "app",
-    "run",
+    "build",
     "console",
     "setup_logging",
     "print_welcome",
