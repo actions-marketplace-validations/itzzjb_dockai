@@ -7,12 +7,15 @@
 
 DockAI is a **fully customizable**, agentic CLI framework that generates, validates, and optimizes production-ready Dockerfiles for **ANY** application.
 
+**🚀 Built for Platform Engineering**: Embed DockAI into your internal developer platform (Choreo, SkyU, Backstage, etc.) to enable **zero-config deployments** — developers push code, and containerization happens automatically. No Dockerfile knowledge required.
+
 **🎯 Designed for Enterprise Customization**: DockAI works out-of-the-box, but its true power comes from fine-tuning. Each of its 10 AI agents can be customized to match your organization's standards, approved base images, security policies, and specific technology stacks. Think of it as a **foundation model for Dockerfile generation** that you can fine-tune per repository.
 
 Unlike simple template generators, DockAI uses a stateful, cyclic workflow to reason from first principles, allowing it to containerize not just standard stacks (Node, Python, Go) but also legacy systems and **future technologies** it has never seen before. When properly customized for your stack, it becomes a powerful force multiplier for your DevOps team.
 
 ## 📑 Table of Contents
 
+- [Platform Integration (Zero-Config Deployments)](#-platform-integration-zero-config-deployments)
 - [Why Customization Matters](#-why-customization-matters)
 - [Key Features](#-key-features)
 - [The 10 Customizable AI Agents](#-the-10-customizable-ai-agents)
@@ -35,6 +38,337 @@ Unlike simple template generators, DockAI uses a stateful, cyclic workflow to re
 - [FAQ](#-faq)
 - [Contributing](#-contributing)
 - [License](#-license)
+
+---
+
+## 🚀 Platform Integration (Zero-Config Deployments)
+
+**The ultimate developer experience: push code, get deployment.** DockAI is designed to be embedded into Platform Engineering platforms, enabling fully automated containerization without developers ever writing a Dockerfile.
+
+### The Vision: Code → Deploy (No Dockerfile Required)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     ZERO-CONFIG DEPLOYMENT FLOW                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   Developer                Platform (Choreo/SkyU/etc)              Cloud     │
+│   ─────────               ─────────────────────────────           ─────     │
+│                                                                              │
+│   git push ──────────────► Webhook triggered                                 │
+│                                   │                                          │
+│                                   ▼                                          │
+│                            ┌─────────────┐                                   │
+│                            │   DockAI    │ ◄── Platform-specific             │
+│                            │  (embedded) │     customizations                │
+│                            └─────────────┘                                   │
+│                                   │                                          │
+│                                   ▼                                          │
+│                            Dockerfile generated                              │
+│                            (follows platform standards)                      │
+│                                   │                                          │
+│                                   ▼                                          │
+│                            Build & Push to Registry                          │
+│                                   │                                          │
+│                                   ▼                                          │
+│   ◄──────────────────────  Deploy to K8s/Serverless ──────────────► Running │
+│   "Your app is live!"                                                        │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why Platforms Should Embed DockAI
+
+| Traditional Approach | With DockAI Embedded |
+|---------------------|----------------------|
+| ❌ Require Dockerfile in repo | ✅ Auto-generate from code |
+| ❌ Reject apps without Dockerfile | ✅ Accept any repo with code |
+| ❌ Developers learn Docker | ✅ Developers focus on code |
+| ❌ Inconsistent container practices | ✅ Platform enforces standards |
+| ❌ Security issues caught late | ✅ Security baked in at generation |
+
+### Integration with Popular Platforms
+
+#### WSO2 Choreo Integration
+
+[Choreo](https://wso2.com/choreo/) is a digital platform for cloud-native engineering. DockAI can power Choreo's auto-containerization:
+
+```python
+# Example: Choreo build pipeline integration
+class ChoreoBuildService:
+    def __init__(self):
+        self.dockai_config = {
+            "planner_instructions": """
+                CHOREO PLATFORM STANDARDS:
+                - Use Choreo-approved base images from gcr.io/choreo-images/
+                - All services must expose metrics on /metrics
+                - Health check required at /healthz
+                - Max image size: 500MB
+            """,
+            "reviewer_instructions": """
+                CHOREO SECURITY REQUIREMENTS:
+                - Non-root user mandatory (UID 10001)
+                - No shell access in production images
+                - All secrets via Choreo secret management
+                - HTTPS only - no HTTP endpoints
+            """,
+            "generator_instructions": """
+                CHOREO CONVENTIONS:
+                - LABEL choreo.component.type="${component_type}"
+                - LABEL choreo.project.id="${project_id}"
+                - ENV CHOREO_ENVIRONMENT=production
+                - Expose port 8080 for HTTP services
+            """
+        }
+    
+    def containerize_component(self, repo_url: str, component_type: str):
+        """Auto-containerize a Choreo component from source."""
+        # Clone repo, run DockAI with Choreo-specific config
+        # Returns: Dockerfile optimized for Choreo platform
+        pass
+```
+
+#### SkyU Platform Integration
+
+[SkyU](https://skyu.io/) simplifies Kubernetes deployments. DockAI enables SkyU's "bring any code" experience:
+
+```yaml
+# Example: SkyU platform configuration for DockAI
+skyu_dockai_config:
+  # Platform-wide defaults
+  base_images:
+    python: "skyu-registry.io/base/python:3.11-slim"
+    node: "skyu-registry.io/base/node:20-alpine"
+    go: "skyu-registry.io/base/golang:1.21-alpine"
+  
+  security:
+    enforce_non_root: true
+    max_image_size_mb: 400
+    required_labels:
+      - "skyu.io/managed-by=dockai"
+      - "skyu.io/team=${team_name}"
+  
+  # Auto-detected based on repo analysis
+  kubernetes:
+    generate_resource_limits: true
+    default_replicas: 2
+    auto_scaling: true
+```
+
+#### Backstage / Internal Developer Portal
+
+```yaml
+# Backstage Software Template with DockAI
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: deploy-any-service
+  title: Deploy Any Service (No Dockerfile Needed)
+spec:
+  steps:
+    - id: fetch-repo
+      name: Fetch Source Code
+      action: fetch:plain
+      input:
+        url: ${{ parameters.repoUrl }}
+    
+    - id: containerize
+      name: Auto-Generate Dockerfile
+      action: dockai:generate
+      input:
+        sourcePath: ${{ steps.fetch-repo.output.path }}
+        platformConfig: |
+          [instructions_planner]
+          Use company-approved images from harbor.internal/
+          
+          [instructions_reviewer]
+          Enforce SOC2 compliance requirements
+    
+    - id: deploy
+      name: Deploy to Kubernetes
+      action: kubernetes:deploy
+      input:
+        dockerfile: ${{ steps.containerize.output.dockerfile }}
+```
+
+### Platform Integration Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                        PLATFORM ARCHITECTURE                          │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  ┌─────────────┐     ┌─────────────────────────────────────────┐     │
+│  │   GitHub    │     │         Platform Control Plane           │     │
+│  │   GitLab    │────►│  ┌─────────────────────────────────┐    │     │
+│  │   Bitbucket │     │  │      DockAI Service (API)       │    │     │
+│  └─────────────┘     │  │  ┌─────────────────────────┐    │    │     │
+│                      │  │  │ Platform Customizations │    │    │     │
+│                      │  │  │ • Approved base images  │    │    │     │
+│                      │  │  │ • Security policies     │    │    │     │
+│                      │  │  │ • Naming conventions    │    │    │     │
+│                      │  │  │ • Resource limits       │    │    │     │
+│                      │  │  └─────────────────────────┘    │    │     │
+│                      │  └─────────────────────────────────┘    │     │
+│                      │                  │                       │     │
+│                      │                  ▼                       │     │
+│                      │  ┌─────────────────────────────────┐    │     │
+│                      │  │       Container Registry         │    │     │
+│                      │  │   (Harbor/GCR/ECR/ACR)          │    │     │
+│                      │  └─────────────────────────────────┘    │     │
+│                      │                  │                       │     │
+│                      │                  ▼                       │     │
+│                      │  ┌─────────────────────────────────┐    │     │
+│                      │  │     Kubernetes / Serverless      │    │     │
+│                      │  │     Deployment Target            │    │     │
+│                      │  └─────────────────────────────────┘    │     │
+│                      └─────────────────────────────────────────┘     │
+│                                                                       │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Building a DockAI-Powered Platform Service
+
+Here's how to create an API service that wraps DockAI for platform integration:
+
+```python
+# dockai_platform_service.py
+from fastapi import FastAPI, BackgroundTasks
+from pydantic import BaseModel
+import subprocess
+import tempfile
+import os
+
+app = FastAPI(title="DockAI Platform Service")
+
+class ContainerizeRequest(BaseModel):
+    repo_url: str
+    branch: str = "main"
+    team: str
+    platform_config: dict = {}
+
+class ContainerizeResponse(BaseModel):
+    dockerfile: str
+    image_tag: str
+    build_status: str
+    security_scan: dict
+
+@app.post("/containerize", response_model=ContainerizeResponse)
+async def containerize_repo(request: ContainerizeRequest, background_tasks: BackgroundTasks):
+    """
+    Auto-containerize any repository.
+    
+    1. Clone the repo
+    2. Run DockAI with platform-specific customizations
+    3. Build and push to registry
+    4. Return results
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Clone repo
+        subprocess.run(["git", "clone", "--depth=1", "-b", request.branch, 
+                       request.repo_url, tmpdir], check=True)
+        
+        # Write platform-specific .dockai config
+        dockai_config = generate_platform_config(request.team, request.platform_config)
+        with open(os.path.join(tmpdir, ".dockai"), "w") as f:
+            f.write(dockai_config)
+        
+        # Run DockAI
+        result = subprocess.run(
+            ["dockai", "build", tmpdir],
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "OPENAI_API_KEY": os.getenv("PLATFORM_OPENAI_KEY"),
+                # Platform-wide settings
+                "DOCKAI_STRICT_SECURITY": "true",
+                "DOCKAI_MAX_IMAGE_SIZE_MB": "500",
+            }
+        )
+        
+        # Read generated Dockerfile
+        dockerfile_path = os.path.join(tmpdir, "Dockerfile")
+        with open(dockerfile_path) as f:
+            dockerfile_content = f.read()
+        
+        # Build and push (background)
+        image_tag = f"platform-registry.io/{request.team}/app:{request.branch}"
+        background_tasks.add_task(build_and_push, tmpdir, image_tag)
+        
+        return ContainerizeResponse(
+            dockerfile=dockerfile_content,
+            image_tag=image_tag,
+            build_status="building",
+            security_scan={}
+        )
+
+def generate_platform_config(team: str, overrides: dict) -> str:
+    """Generate .dockai config with platform defaults + team overrides."""
+    return f"""
+[instructions_planner]
+PLATFORM REQUIREMENTS:
+- Base images MUST be from platform-registry.io/approved/
+- All images must include platform telemetry agent
+- Maximum final image size: 500MB
+
+[instructions_generator]
+REQUIRED LABELS:
+- LABEL platform.team="{team}"
+- LABEL platform.managed-by="dockai"
+- LABEL platform.version="${{GIT_SHA}}"
+
+REQUIRED ENV:
+- ENV PLATFORM_TELEMETRY_ENABLED=true
+- ENV SERVICE_NAME="${{SERVICE_NAME}}"
+
+[instructions_reviewer]
+SECURITY (enforced by platform):
+- Non-root user with UID >= 10000
+- No secrets in Dockerfile
+- No privileged operations
+- HEALTHCHECK instruction required
+
+{overrides.get('custom_instructions', '')}
+"""
+```
+
+### Developer Experience on DockAI-Powered Platforms
+
+**Before (Traditional):**
+```bash
+# Developer workflow
+1. Write code
+2. Learn Docker basics
+3. Write Dockerfile (trial and error)
+4. Debug build failures
+5. Fix security issues from review
+6. Finally deploy
+# Time: Hours to days
+```
+
+**After (With DockAI Platform):**
+```bash
+# Developer workflow
+1. Write code
+2. git push
+3. ☕ Get coffee
+4. App is deployed
+# Time: Minutes
+```
+
+### Platform Benefits Summary
+
+| Benefit | Description |
+|---------|-------------|
+| **Zero Docker Knowledge Required** | Developers push code, platform handles containerization |
+| **Consistent Standards** | Every container follows platform security and conventions |
+| **Reduced Onboarding** | New developers deploy on day one |
+| **Self-Service at Scale** | No platform team bottleneck for Dockerfile reviews |
+| **Security by Default** | Compliance baked into every generated Dockerfile |
+| **Any Language Support** | DockAI's first-principles approach works with any stack |
+
+> 💡 **For Platform Teams**: DockAI transforms containerization from a developer task to a platform capability. Your developers focus on business logic; your platform handles the infrastructure abstraction.
 
 ---
 
@@ -1209,6 +1543,26 @@ Or in GitHub Actions: `skip_security_scan: 'true'`
 ### Can I see what prompts DockAI is using?
 
 Yes! Run with `--verbose` flag to see detailed logs including the prompts being used. You can also check the `src/dockai/prompts.py` file for default prompts.
+
+### Can I embed DockAI into my platform (Choreo, SkyU, Backstage)?
+
+**Yes — this is one of the best use cases!** DockAI is designed to be embedded into Platform Engineering platforms to enable zero-config deployments:
+
+1. **Wrap DockAI as an API service** in your platform
+2. **Configure platform-wide customizations** (approved images, security policies)
+3. **Trigger on git push** — auto-containerize any repo
+4. **Developers never write Dockerfiles** — they just push code
+
+See the [Platform Integration](#-platform-integration-zero-config-deployments) section for detailed integration patterns with Choreo, SkyU, Backstage, and custom platforms.
+
+### Is DockAI suitable for a multi-tenant platform?
+
+Yes! For multi-tenant platforms:
+- **Platform-level defaults**: Security policies, approved base images
+- **Team-level overrides**: Team-specific registries or conventions
+- **Repo-level customization**: `.dockai` file for specific project needs
+
+The layered configuration system (Organization → Repository → Runtime) is designed exactly for this use case.
 
 ---
 
