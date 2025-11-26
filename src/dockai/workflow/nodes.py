@@ -115,6 +115,8 @@ def analyze_node(state: DockAIState) -> DockAIState:
     }
 
 
+from ..utils.file_utils import smart_truncate
+
 def read_files_node(state: DockAIState) -> DockAIState:
     """
     Reads critical files identified by the analyzer.
@@ -124,8 +126,9 @@ def read_files_node(state: DockAIState) -> DockAIState:
     
     Improvements:
     - Skips lock files (package-lock.json, yarn.lock) to save tokens.
-    - Smart truncation: Keeps head AND tail of large files.
-    - Higher limits for dependency files (package.json, requirements.txt).
+    - Configurable limits via env vars (DOCKAI_MAX_FILE_CHARS, DOCKAI_MAX_FILE_LINES).
+    - Higher default limits (200KB / 5000 lines) for better context.
+    - Smart truncation to preserve file structure.
 
     Args:
         state (DockAIState): The current state with analysis results.
@@ -146,6 +149,15 @@ def read_files_node(state: DockAIState) -> DockAIState:
     # Files to skip
     SKIP_FILES = ["package-lock.json", "yarn.lock", "pnpm-lock.yaml", "Gemfile.lock", "go.sum", "Cargo.lock"]
 
+    # Get limits from env or use new higher defaults
+    # Default: 200KB chars (approx 50k tokens), 5000 lines
+    try:
+        MAX_CHARS = int(os.getenv("DOCKAI_MAX_FILE_CHARS", "200000"))
+        MAX_LINES = int(os.getenv("DOCKAI_MAX_FILE_LINES", "5000"))
+    except ValueError:
+        MAX_CHARS = 200000
+        MAX_LINES = 5000
+
     for rel_path in files_to_read:
         basename = os.path.basename(rel_path)
         
@@ -160,23 +172,17 @@ def read_files_node(state: DockAIState) -> DockAIState:
                 
                 # Determine limits based on file type
                 is_dependency_file = basename in CRITICAL_DEPENDENCY_FILES
-                max_lines = 2000 if is_dependency_file else 1000
-                max_chars = 100 * 1024 if is_dependency_file else 50 * 1024
                 
-                # Truncate if too large (Char limit)
-                if len(content) > max_chars:
-                    half_chars = max_chars // 2
-                    content = content[:half_chars] + f"\n... [TRUNCATED {len(content)-max_chars} CHARS] ...\n" + content[-half_chars:]
-                    logger.warning(f"Truncated large file (chars): {rel_path}")
+                # Dependency files get double the line limit but same char limit
+                # (We really want to see all dependencies)
+                current_max_lines = MAX_LINES * 2 if is_dependency_file else MAX_LINES
+                current_max_chars = MAX_CHARS  # Keep char limit hard to prevent context overflow
                 
-                # Truncate if too many lines
-                lines = content.splitlines()
-                if len(lines) > max_lines:
-                    half_lines = max_lines // 2
-                    head = "\n".join(lines[:half_lines])
-                    tail = "\n".join(lines[-half_lines:])
-                    content = f"{head}\n... [TRUNCATED {len(lines)-max_lines} LINES] ...\n{tail}"
-                    logger.warning(f"Truncated long file (lines): {rel_path}")
+                original_len = len(content)
+                content = smart_truncate(content, basename, current_max_chars, current_max_lines)
+                
+                if len(content) < original_len:
+                    logger.warning(f"Truncated {rel_path}: {original_len} -> {len(content)} chars")
                     
                 file_contents_str += f"--- FILE: {rel_path} ---\n{content}\n\n"
                 files_read += 1

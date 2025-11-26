@@ -94,6 +94,13 @@ Assign different models to different agents for cost optimization:
 | `DOCKAI_VALIDATION_CPUS` | CPU limit for validation | `1.0` |
 | `DOCKAI_VALIDATION_PIDS` | Process limit for validation | `100` |
 
+### File Analysis Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_MAX_FILE_CHARS` | Max characters to read per file | `200000` |
+| `DOCKAI_MAX_FILE_LINES` | Max lines to read per file | `5000` |
+
 ---
 
 ## Custom Instructions

@@ -171,6 +171,8 @@ graph TD
 | `DOCKAI_LLM_PROVIDER` | Provider (`openai`, `azure`, `gemini`, `anthropic`) | `openai` |
 | `MAX_RETRIES` | Maximum retry attempts | `3` |
 | `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy scanning | `false` |
+| `DOCKAI_MAX_FILE_CHARS` | Max chars per file | `200000` |
+| `DOCKAI_MAX_FILE_LINES` | Max lines per file | `5000` |
 
 *Only one API key required for your chosen provider.
 

@@ -81,6 +81,8 @@ jobs:
 | `validation_memory` | Memory limit for validation | `512m` |
 | `validation_cpus` | CPU limit for validation | `1.0` |
 | `validation_pids` | Process limit for validation | `100` |
+| `max_file_chars` | Max characters per file | `200000` |
+| `max_file_lines` | Max lines per file | `5000` |
 
 ### Custom Instructions
 
