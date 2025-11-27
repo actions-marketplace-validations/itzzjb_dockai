@@ -389,6 +389,80 @@ Scans a directory and returns a filtered file list.
 
 ---
 
+### `dockai.utils.file_utils`
+
+#### `estimate_tokens(text)`
+
+Estimates the number of tokens in a string.
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `text` | `str` | Text to estimate tokens for |
+
+**Returns:** `int` - Estimated token count (roughly text_length / 4)
+
+---
+
+#### `smart_truncate(content, filename, max_chars, max_lines)`
+
+Truncates file content while preserving context.
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `content` | `str` | File content to truncate |
+| `filename` | `str` | Filename (for logging) |
+| `max_chars` | `int` | Maximum characters to keep |
+| `max_lines` | `int` | Maximum lines to keep |
+
+**Returns:** `str` - Truncated content with head + tail preservation
+
+---
+
+#### `read_critical_files(path, files_to_read, truncation_enabled)`
+
+Reads critical files with optional smart truncation.
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `path` | `str` | Repository root path |
+| `files_to_read` | `List[str]` | Relative paths to read |
+| `truncation_enabled` | `bool \| None` | Enable truncation (None = use env var) |
+
+**Returns:** `str` - Concatenated file contents
+
+**Truncation Behavior:**
+1. If `truncation_enabled` is explicitly set, use that value
+2. Otherwise check `DOCKAI_TRUNCATION_ENABLED` env var
+3. Default is `False` (no truncation)
+4. Auto-enables if content exceeds `DOCKAI_TOKEN_LIMIT`
+
+**Example:**
+
+```python
+from dockai.utils.file_utils import read_critical_files
+
+# Default: no truncation unless content exceeds token limit
+contents = read_critical_files(
+    "/path/to/repo",
+    ["app.py", "requirements.txt"]
+)
+
+# Explicitly enable truncation
+contents = read_critical_files(
+    "/path/to/repo",
+    ["app.py", "requirements.txt"],
+    truncation_enabled=True
+)
+```
+
+---
+
 ### `dockai.utils.validator`
 
 #### `validate_dockerfile(dockerfile_content, context_path, ...)`
