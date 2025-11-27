@@ -126,7 +126,8 @@ def validate_docker_build_and_run(
     health_endpoint: Optional[Tuple[str, int]] = None,
     recommended_wait_time: int = 5,
     readiness_patterns: List[str] = None,
-    failure_patterns: List[str] = None
+    failure_patterns: List[str] = None,
+    no_cache: bool = False
 ) -> Tuple[bool, str, int, Optional[ClassifiedError]]:
     """
     Builds and runs the Dockerfile in the given directory to verify it works.
@@ -147,6 +148,7 @@ def validate_docker_build_and_run(
         recommended_wait_time (int): AI-recommended wait time in seconds (fallback).
         readiness_patterns (List[str]): AI-detected log patterns for startup detection.
         failure_patterns (List[str]): AI-detected log patterns for failure detection.
+        no_cache (bool): If True, disables Docker build cache.
         
     Returns:
         Tuple[bool, str, int, Optional[ClassifiedError]]: A tuple containing 
@@ -161,6 +163,10 @@ def validate_docker_build_and_run(
     logger.info("Building Docker image (with resource limits)...")
     # Use 2GB memory limit for build to prevent OOM on host
     build_cmd = ["docker", "build", "--memory=2g", "-t", image_name, "."]
+    
+    if no_cache:
+        logger.info("Build cache disabled (--no-cache)")
+        build_cmd.insert(2, "--no-cache")
     code, stdout, stderr = run_command(build_cmd, cwd=directory)
     
     if code != 0:

@@ -141,6 +141,12 @@ def build(
     ui.print_welcome()
     logger.info(f"Starting analysis for: {path}")
 
+    # Check if Dockerfile exists and warn
+    output_path = os.path.join(path, "Dockerfile")
+    if os.path.exists(output_path):
+        logger.warning(f"Dockerfile already exists at {output_path}. It will be overwritten.")
+
+
     # Load custom instructions
     # Load custom instructions
     prompt_config = load_instructions(path)
@@ -162,7 +168,8 @@ def build(
         "usage_stats": [],
         "config": {
             "analyzer_instructions": prompt_config.analyzer_instructions or "",
-            "generator_instructions": prompt_config.generator_instructions or ""
+            "generator_instructions": prompt_config.generator_instructions or "",
+            "no_cache": no_cache
         },
         # Adaptive agent fields for learning and planning
         "retry_history": [],  # Full history of attempts for learning

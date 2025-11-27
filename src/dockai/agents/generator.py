@@ -453,7 +453,7 @@ Explain what you changed and why in the thought process.""")
             "stack": stack_info,
             "build_cmd": kwargs.get("build_command", "None detected"),
             "start_cmd": kwargs.get("start_command", "None detected"),
-            "file_contents": file_contents[:6000],
+            "file_contents": file_contents,
             "custom_instructions": custom_instructions
         },
         config={"callbacks": [callback]}

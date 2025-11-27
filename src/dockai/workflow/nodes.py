@@ -539,6 +539,9 @@ def validate_node(state: DockAIState) -> DockAIState:
     readiness_patterns = state.get("readiness_patterns", [])
     failure_patterns = state.get("failure_patterns", [])
     
+    config = state.get("config", {})
+    no_cache = config.get("no_cache", False)
+    
     success, message, image_size, classified_error = validate_docker_build_and_run(
         path, 
         project_type, 
@@ -546,7 +549,8 @@ def validate_node(state: DockAIState) -> DockAIState:
         health_endpoint, 
         recommended_wait_time,
         readiness_patterns=readiness_patterns,
-        failure_patterns=failure_patterns
+        failure_patterns=failure_patterns,
+        no_cache=no_cache
     )
     
     # Store classified error details for better error handling
