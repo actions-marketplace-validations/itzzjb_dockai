@@ -61,9 +61,11 @@ def test_generate_dockerfile_content(mock_gen, mock_read, mock_analyze, mock_get
     assert result == "FROM python:3.11"
     
     mock_analyze.assert_called_once()
-    # Verify instructions were passed
+    # Verify instructions were passed via AgentContext
     args, kwargs = mock_analyze.call_args
-    assert kwargs.get("custom_instructions") == "Use Alpine"
+    context = kwargs.get("context")
+    assert context is not None
+    assert context.custom_instructions == "Use Alpine"
 
 @patch("dockai.core.mcp_server.os.path.exists")
 @patch("dockai.core.mcp_server.validate_docker_build_and_run")

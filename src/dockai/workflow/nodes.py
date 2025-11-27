@@ -92,8 +92,17 @@ def analyze_node(state: DockAIState) -> DockAIState:
     else:
         logger.info("Analyzing repository needs...")
     
+    # Create unified context for the analyzer
+    from ..core.agent_context import AgentContext
+    analyzer_context = AgentContext(
+        file_tree=file_tree,
+        file_contents=state.get("file_contents", ""),
+        analysis_result=state.get("analysis_result", {}),
+        custom_instructions=instructions
+    )
+    
     # Execute analysis (returns AnalysisResult object and token usage)
-    analysis_result_obj, usage = analyze_repo_needs(file_tree, instructions)
+    analysis_result_obj, usage = analyze_repo_needs(context=analyzer_context)
     
     logger.info(f"Analyzer Reasoning:\n{analysis_result_obj.thought_process}")
     
@@ -173,7 +182,13 @@ def detect_health_node(state: DockAIState) -> DockAIState:
     logger.info("Detecting health endpoints from code...")
     
     try:
-        detection_result, usage = detect_health_endpoints(file_contents, analysis_result)
+        from ..core.agent_context import AgentContext
+        health_context = AgentContext(
+            file_tree=state.get("file_tree", []),
+            file_contents=file_contents,
+            analysis_result=analysis_result
+        )
+        detection_result, usage = detect_health_endpoints(context=health_context)
         
         usage_dict = {
             "stage": "health_detection",
@@ -222,7 +237,13 @@ def detect_readiness_node(state: DockAIState) -> DockAIState:
     logger.info("Detecting startup readiness patterns...")
     
     try:
-        patterns_result, usage = detect_readiness_patterns(file_contents, analysis_result)
+        from ..core.agent_context import AgentContext
+        readiness_context = AgentContext(
+            file_tree=state.get("file_tree", []),
+            file_contents=file_contents,
+            analysis_result=analysis_result
+        )
+        patterns_result, usage = detect_readiness_patterns(context=readiness_context)
         
         usage_dict = {
             "stage": "readiness_detection",
@@ -273,12 +294,17 @@ def plan_node(state: DockAIState) -> DockAIState:
     
     logger.info("Creating generation plan...")
     
-    plan_result, usage = create_plan(
-        analysis_result=analysis_result,
+    # Create unified context for the planner
+    from ..core.agent_context import AgentContext
+    planner_context = AgentContext(
+        file_tree=state.get("file_tree", []),
         file_contents=file_contents,
+        analysis_result=analysis_result,
         retry_history=retry_history,
         custom_instructions=instructions
     )
+    
+    plan_result, usage = create_plan(context=planner_context)
     
     usage_dict = {
         "stage": "planner",
@@ -363,15 +389,19 @@ def generate_node(state: DockAIState) -> DockAIState:
         # Iterative improvement based on reflection
         logger.info("Using iterative improvement strategy...")
         
-        iteration_result, usage = generate_iterative_dockerfile(
-            previous_dockerfile=previous_dockerfile,
-            reflection=reflection,
-            analysis_result=analysis_result,
+        from ..core.agent_context import AgentContext
+        iterative_context = AgentContext(
+            file_tree=state.get("file_tree", []),
             file_contents=file_contents,
+            analysis_result=analysis_result,
             current_plan=current_plan,
+            dockerfile_content=previous_dockerfile,
+            reflection=reflection,
             verified_tags=verified_tags_str,
             custom_instructions=instructions
         )
+        
+        iteration_result, usage = generate_iterative_dockerfile(context=iterative_context)
         
         dockerfile_content = iteration_result.dockerfile
         project_type = iteration_result.project_type
@@ -381,23 +411,23 @@ def generate_node(state: DockAIState) -> DockAIState:
         logger.info(f"Confidence: {iteration_result.confidence_in_fix}")
         
     else:
-        # Fresh generation
-        build_cmd = analysis_result.get("build_command", "None detected")
-        start_cmd = analysis_result.get("start_command", "None detected")
+        # Fresh generation with AgentContext
+        from ..core.agent_context import AgentContext
+        file_tree = state.get("file_tree", [])
         
-        dockerfile_content, project_type, thought_process, usage = generate_dockerfile(
-            stack, 
-            file_contents, 
-            instructions, 
-            feedback_error=state.get("error"),
+        generator_context = AgentContext(
+            file_tree=file_tree,
+            file_contents=file_contents,
+            analysis_result=analysis_result,
+            current_plan=current_plan,
+            retry_history=state.get("retry_history", []),
+            error_message=state.get("error"),
+            error_details=state.get("error_details"),
             verified_tags=verified_tags_str,
-            build_command=build_cmd,
-            start_command=start_cmd,
-            model_name=model_name,
-            dockerfile_fix=state.get("error_details", {}).get("dockerfile_fix") if state.get("error_details") else None,
-            image_suggestion=state.get("error_details", {}).get("image_suggestion") if state.get("error_details") else None,
-            current_plan=current_plan
+            custom_instructions=instructions
         )
+        
+        dockerfile_content, project_type, thought_process, usage = generate_dockerfile(context=generator_context)
     
     logger.info(f"Architect's Reasoning:\n{thought_process}")
     
@@ -445,7 +475,17 @@ def review_node(state: DockAIState) -> DockAIState:
     dockerfile_content = state["dockerfile_content"]
     
     logger.info("Performing Security Review...")
-    review_result, usage = review_dockerfile(dockerfile_content)
+    
+    # Create unified context for the reviewer
+    from ..core.agent_context import AgentContext
+    reviewer_context = AgentContext(
+        file_tree=state.get("file_tree", []),
+        file_contents=state.get("file_contents", ""),
+        analysis_result=state.get("analysis_result", {}),
+        dockerfile_content=dockerfile_content
+    )
+    
+    review_result, usage = review_dockerfile(context=reviewer_context)
     
     usage_dict = {
         "stage": "reviewer",
@@ -626,14 +666,19 @@ def reflect_node(state: DockAIState) -> DockAIState:
     # Get container logs from error details if available
     container_logs = error_details.get("original_error", "") if error_details else ""
     
-    reflection_result, usage = reflect_on_failure(
+    from ..core.agent_context import AgentContext
+    reflect_context = AgentContext(
+        file_tree=state.get("file_tree", []),
+        file_contents=state.get("file_contents", ""),
+        analysis_result=analysis_result,
         dockerfile_content=dockerfile_content,
         error_message=error_message,
         error_details=error_details,
-        analysis_result=analysis_result,
         retry_history=retry_history,
         container_logs=container_logs
     )
+    
+    reflection_result, usage = reflect_on_failure(context=reflect_context)
     
     usage_dict = {
         "stage": "reflector",

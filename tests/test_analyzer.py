@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from dockai.agents.analyzer import analyze_repo_needs
 from dockai.core.schemas import AnalysisResult, HealthEndpoint
+from dockai.core.agent_context import AgentContext
 
 
 class TestAnalyzeRepoNeeds:
@@ -31,7 +32,8 @@ class TestAnalyzeRepoNeeds:
         mock_invoke.return_value = mock_result
         
         file_tree = ["app.py", "requirements.txt", "README.md"]
-        result, usage = analyze_repo_needs(file_tree)
+        context = AgentContext(file_tree=file_tree)
+        result, usage = analyze_repo_needs(context=context)
         
         assert isinstance(result, AnalysisResult)
         assert result.stack == "Python with Flask"
@@ -59,7 +61,8 @@ class TestAnalyzeRepoNeeds:
         mock_invoke.return_value = mock_result
         
         file_tree = ["package.json", "index.js", "src/"]
-        result, usage = analyze_repo_needs(file_tree)
+        context = AgentContext(file_tree=file_tree)
+        result, usage = analyze_repo_needs(context=context)
         
         assert result.stack == "Node.js with Express"
         assert result.suggested_base_image == "node:20-alpine"
@@ -85,7 +88,8 @@ class TestAnalyzeRepoNeeds:
         mock_invoke.return_value = mock_result
         
         file_tree = ["go.mod", "go.sum", "main.go"]
-        result, usage = analyze_repo_needs(file_tree)
+        context = AgentContext(file_tree=file_tree)
+        result, usage = analyze_repo_needs(context=context)
         
         assert result.stack == "Go"
         assert "go.mod" in result.files_to_read
@@ -111,7 +115,8 @@ class TestAnalyzeRepoNeeds:
         mock_invoke.return_value = mock_result
         
         file_tree = ["script.py"]
-        result, usage = analyze_repo_needs(file_tree)
+        context = AgentContext(file_tree=file_tree)
+        result, usage = analyze_repo_needs(context=context)
         
         assert result.project_type == "script"
     
@@ -136,10 +141,11 @@ class TestAnalyzeRepoNeeds:
         mock_invoke.return_value = mock_result
         
         file_tree = ["app.py"]
-        result, usage = analyze_repo_needs(
-            file_tree,
+        context = AgentContext(
+            file_tree=file_tree,
             custom_instructions="Always use alpine images"
         )
+        result, usage = analyze_repo_needs(context=context)
         
         assert "alpine" in result.suggested_base_image
     
@@ -163,7 +169,8 @@ class TestAnalyzeRepoNeeds:
         
         mock_invoke.return_value = mock_result
         
-        result, usage = analyze_repo_needs(["app.py"])
+        context = AgentContext(file_tree=["app.py"])
+        result, usage = analyze_repo_needs(context=context)
         
         assert isinstance(usage, dict)
         assert "total_tokens" in usage
@@ -191,6 +198,7 @@ class TestAnalyzeRepoNeeds:
         
         mock_invoke.return_value = mock_result
         
-        result, usage = analyze_repo_needs(["app.py"])
+        context = AgentContext(file_tree=["app.py"])
+        result, usage = analyze_repo_needs(context=context)
         
         assert result.health_endpoint is None

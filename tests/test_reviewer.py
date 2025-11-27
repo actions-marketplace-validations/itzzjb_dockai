@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from dockai.agents.reviewer import review_dockerfile
 from dockai.core.schemas import SecurityReviewResult, SecurityIssue
+from dockai.core.agent_context import AgentContext
 
 
 class TestReviewDockerfile:
@@ -44,7 +45,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 CMD ["python", "app.py"]
 """
         
-        result, usage = review_dockerfile(dockerfile)
+        context = AgentContext(dockerfile_content=dockerfile)
+        result, usage = review_dockerfile(context=context)
         
         assert isinstance(result, SecurityReviewResult)
         assert result.is_secure is True
@@ -90,7 +92,8 @@ RUN pip install -r requirements.txt
 CMD ["python", "app.py"]
 """
         
-        result, usage = review_dockerfile(dockerfile)
+        context = AgentContext(dockerfile_content=dockerfile)
+        result, usage = review_dockerfile(context=context)
         
         assert result.is_secure is False
         assert len(result.issues) == 1
@@ -133,7 +136,8 @@ CMD ["python", "app.py"]
 ENV SECRET=mysecretkey
 """
         
-        result, usage = review_dockerfile(dockerfile)
+        context = AgentContext(dockerfile_content=dockerfile)
+        result, usage = review_dockerfile(context=context)
         
         assert result.is_secure is False
         assert result.issues[0].severity == "critical"
@@ -162,7 +166,8 @@ ENV SECRET=mysecretkey
         mock_chain.invoke.return_value = mock_result
         mock_prompt.__or__.return_value = mock_chain
         
-        result, usage = review_dockerfile("FROM python:3.11")
+        context = AgentContext(dockerfile_content="FROM python:3.11")
+        result, usage = review_dockerfile(context=context)
         
         assert isinstance(usage, dict)
         assert "total_tokens" in usage
@@ -211,6 +216,7 @@ ENV SECRET=mysecretkey
         
         dockerfile = "FROM python:latest\nCMD python app.py"
         
-        result, usage = review_dockerfile(dockerfile)
+        context = AgentContext(dockerfile_content=dockerfile)
+        result, usage = review_dockerfile(context=context)
         
         assert len(result.issues) == 2

@@ -6,6 +6,7 @@ from dockai.core.errors import (
     ErrorType,
     classify_error,
 )
+from dockai.core.agent_context import AgentContext
 
 
 class TestClassifiedError:
@@ -57,7 +58,8 @@ class TestClassifyError:
         """Test that classify_error returns a ClassifiedError."""
         error_msg = "some error occurred"
         
-        result = classify_error(error_msg)
+        context = AgentContext(error_message=error_msg)
+        result = classify_error(context=context)
         
         assert isinstance(result, ClassifiedError)
         assert result.original_error == error_msg
@@ -66,7 +68,8 @@ class TestClassifyError:
         """Test classifying network-related error."""
         error_msg = "connection timed out"
         
-        result = classify_error(error_msg)
+        context = AgentContext(error_message=error_msg)
+        result = classify_error(context=context)
         
         assert isinstance(result, ClassifiedError)
         # Network errors should generally be retryable
@@ -76,7 +79,8 @@ class TestClassifyError:
         """Test classifying permission error."""
         error_msg = "permission denied: cannot write to /app"
         
-        result = classify_error(error_msg)
+        context = AgentContext(error_message=error_msg)
+        result = classify_error(context=context)
         
         assert isinstance(result, ClassifiedError)
     
@@ -84,7 +88,8 @@ class TestClassifyError:
         """Test classifying unknown error."""
         error_msg = "something weird happened xyz123"
         
-        result = classify_error(error_msg)
+        context = AgentContext(error_message=error_msg)
+        result = classify_error(context=context)
         
         # Should still return a valid ClassifiedError
         assert isinstance(result, ClassifiedError)

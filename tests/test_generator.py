@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
 from dockai.agents.generator import generate_dockerfile
 from dockai.core.schemas import DockerfileResult, IterativeDockerfileResult
+from dockai.core.agent_context import AgentContext
 
 
 class TestGenerateDockerfile:
@@ -44,10 +45,11 @@ CMD ["python", "app.py"]""",
         # Make | operator return our mock chain
         mock_prompt.__or__.return_value = mock_chain
         
-        dockerfile, project_type, thought_process, usage = generate_dockerfile(
-            stack_info="Python with Flask",
+        context = AgentContext(
+            analysis_result={"stack": "Python with Flask"},
             file_contents="flask==2.0.0"
         )
+        dockerfile, project_type, thought_process, usage = generate_dockerfile(context=context)
         
         assert "FROM python:3.11" in dockerfile
         assert project_type == "service"
@@ -82,10 +84,11 @@ CMD ["npm", "start"]""",
         mock_chain.invoke.return_value = mock_result
         mock_prompt.__or__.return_value = mock_chain
         
-        dockerfile, project_type, thought_process, usage = generate_dockerfile(
-            stack_info="Node.js with Express",
+        context = AgentContext(
+            analysis_result={"stack": "Node.js with Express"},
             file_contents='{"name": "app", "dependencies": {"express": "4.18.0"}}'
         )
+        dockerfile, project_type, thought_process, usage = generate_dockerfile(context=context)
         
         assert "FROM node:20" in dockerfile
         assert "npm" in dockerfile
@@ -117,10 +120,11 @@ ENTRYPOINT ["python", "script.py"]""",
         mock_chain.invoke.return_value = mock_result
         mock_prompt.__or__.return_value = mock_chain
         
-        dockerfile, project_type, thought_process, usage = generate_dockerfile(
-            stack_info="Python script",
+        context = AgentContext(
+            analysis_result={"stack": "Python script"},
             file_contents="# Simple Python script"
         )
+        dockerfile, project_type, thought_process, usage = generate_dockerfile(context=context)
         
         assert project_type == "script"
         assert "ENTRYPOINT" in dockerfile
@@ -152,11 +156,12 @@ CMD ["python", "app.py"]""",
         mock_chain.invoke.return_value = mock_result
         mock_prompt.__or__.return_value = mock_chain
         
-        dockerfile, project_type, thought_process, usage = generate_dockerfile(
-            stack_info="Python",
+        context = AgentContext(
+            analysis_result={"stack": "Python"},
             file_contents="# app",
             custom_instructions="Always use alpine-based images"
         )
+        dockerfile, project_type, thought_process, usage = generate_dockerfile(context=context)
         
         assert "alpine" in dockerfile.lower()
     
@@ -174,12 +179,13 @@ CMD ["python", "app.py"]""",
             {"total_tokens": 100, "prompt_tokens": 80, "completion_tokens": 20}
         )
         
-        dockerfile, project_type, thought_process, usage = generate_dockerfile(
-            stack_info="Python",
+        context = AgentContext(
+            analysis_result={"stack": "Python"},
             file_contents="numpy",
-            previous_dockerfile="FROM python:3.11-slim\nRUN pip install numpy",
+            dockerfile_content="FROM python:3.11-slim\nRUN pip install numpy",
             reflection={"root_cause_analysis": "Missing gcc", "specific_fixes": ["Install gcc"]}
         )
+        dockerfile, project_type, thought_process, usage = generate_dockerfile(context=context)
         
         assert "gcc" in dockerfile
     
@@ -207,10 +213,11 @@ CMD ["python", "app.py"]""",
         mock_chain.invoke.return_value = mock_result
         mock_prompt.__or__.return_value = mock_chain
         
-        result = generate_dockerfile(
-            stack_info="Python",
+        context = AgentContext(
+            analysis_result={"stack": "Python"},
             file_contents="# app"
         )
+        result = generate_dockerfile(context=context)
         
         assert isinstance(result, tuple)
         assert len(result) == 4
@@ -247,11 +254,12 @@ CMD ["python", "app.py"]""",
             {"what_was_tried": "slim image", "why_it_failed": "missing build tools"}
         ]
         
-        dockerfile, project_type, thought_process, usage = generate_dockerfile(
-            stack_info="Python with C extensions",
+        context = AgentContext(
+            analysis_result={"stack": "Python with C extensions"},
             file_contents="numpy==1.24.0",
             retry_history=retry_history
         )
+        dockerfile, project_type, thought_process, usage = generate_dockerfile(context=context)
         
         assert "build-essential" in dockerfile or "FROM python" in dockerfile
     
@@ -291,10 +299,11 @@ CMD ["python", "app.py"]""",
             "base_image_strategy": "Use slim for runtime"
         }
         
-        dockerfile, project_type, thought_process, usage = generate_dockerfile(
-            stack_info="Python",
+        context = AgentContext(
+            analysis_result={"stack": "Python"},
             file_contents="# app",
             current_plan=current_plan
         )
+        dockerfile, project_type, thought_process, usage = generate_dockerfile(context=context)
         
         assert "FROM" in dockerfile

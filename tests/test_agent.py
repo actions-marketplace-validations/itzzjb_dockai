@@ -9,6 +9,7 @@ from dockai.agents.agent_functions import (
     generate_iterative_dockerfile,
     safe_invoke_chain,
 )
+from dockai.core.agent_context import AgentContext
 from dockai.core.schemas import (
     PlanningResult,
     ReflectionResult,
@@ -44,10 +45,12 @@ class TestCreatePlan:
         
         mock_invoke.return_value = mock_result
         
-        plan, usage = create_plan(
+        context = AgentContext(
             analysis_result={"stack": "Python", "project_type": "service", "suggested_base_image": "python:3.11"},
             file_contents="# app code"
         )
+        
+        plan, usage = create_plan(context=context)
         
         assert isinstance(plan, PlanningResult)
         assert plan.use_multi_stage is True
@@ -79,11 +82,13 @@ class TestCreatePlan:
             {"what_was_tried": "slim image", "why_it_failed": "missing gcc", "lesson_learned": "need build tools"}
         ]
         
-        plan, usage = create_plan(
+        context = AgentContext(
             analysis_result={"stack": "Python", "project_type": "service"},
             file_contents="# numpy requires compilation",
             retry_history=retry_history
         )
+        
+        plan, usage = create_plan(context=context)
         
         assert len(plan.lessons_applied) > 0
 
@@ -115,12 +120,14 @@ class TestReflectOnFailure:
         
         mock_invoke.return_value = mock_result
         
-        result, usage = reflect_on_failure(
+        context = AgentContext(
             dockerfile_content="FROM python:3.11-slim\nRUN pip install numpy",
             error_message="gcc: command not found",
             error_details={"stage": "build", "exit_code": 1},
             analysis_result={"stack": "Python", "project_type": "service"}
         )
+        
+        result, usage = reflect_on_failure(context=context)
         
         assert isinstance(result, ReflectionResult)
         assert result.confidence_in_fix == "high"
@@ -148,10 +155,12 @@ class TestDetectHealthEndpoints:
         
         mock_invoke.return_value = mock_result
         
-        result, usage = detect_health_endpoints(
+        context = AgentContext(
             file_contents="@app.get('/health')\ndef health(): return {'status': 'ok'}",
             analysis_result={"stack": "Python", "project_type": "service"}
         )
+        
+        result, usage = detect_health_endpoints(context=context)
         
         assert isinstance(result, HealthEndpointDetectionResult)
         assert result.confidence == "high"
@@ -174,10 +183,12 @@ class TestDetectHealthEndpoints:
         
         mock_invoke.return_value = mock_result
         
-        result, usage = detect_health_endpoints(
+        context = AgentContext(
             file_contents="# No health endpoint defined",
             analysis_result={"stack": "Python", "project_type": "service"}
         )
+        
+        result, usage = detect_health_endpoints(context=context)
         
         assert result.confidence == "none"
         assert len(result.health_endpoints_found) == 0
@@ -205,10 +216,12 @@ class TestDetectReadinessPatterns:
         
         mock_invoke.return_value = mock_result
         
-        result, usage = detect_readiness_patterns(
+        context = AgentContext(
             file_contents="from fastapi import FastAPI\napp = FastAPI()",
             analysis_result={"stack": "Python FastAPI", "project_type": "service"}
         )
+        
+        result, usage = detect_readiness_patterns(context=context)
         
         assert isinstance(result, ReadinessPatternResult)
         assert result.technology_detected == "FastAPI"
@@ -242,13 +255,15 @@ class TestGenerateIterativeDockerfile:
             "specific_fixes": ["Install gcc"]
         }
         
-        result, usage = generate_iterative_dockerfile(
-            previous_dockerfile="FROM python:3.11-slim\nRUN pip install numpy",
+        context = AgentContext(
+            dockerfile_content="FROM python:3.11-slim\nRUN pip install numpy",
             reflection=reflection,
             analysis_result={"stack": "Python", "project_type": "service"},
             file_contents="# numpy app",
             current_plan={"use_multi_stage": False}
         )
+        
+        result, usage = generate_iterative_dockerfile(context=context)
         
         assert isinstance(result, IterativeDockerfileResult)
         assert "gcc" in result.dockerfile

@@ -20,17 +20,7 @@ from ..utils.prompts import get_prompt
 from ..core.llm_providers import create_llm
 
 
-def generate_dockerfile(
-    stack_info: str, 
-    file_contents: str, 
-    custom_instructions: str = "", 
-    feedback_error: str = None,
-    previous_dockerfile: str = None,
-    retry_history: List[Dict[str, Any]] = None,
-    current_plan: Dict[str, Any] = None,
-    reflection: Dict[str, Any] = None,
-    **kwargs
-) -> Tuple[str, str, str, Any]:
+def generate_dockerfile(context: 'AgentContext') -> Tuple[str, str, str, Any]:
     """
     Orchestrates the Dockerfile generation process.
 
@@ -39,15 +29,8 @@ def generate_dockerfile(
     iteratively improve an existing one based on feedback and reflection.
 
     Args:
-        stack_info (str): A summary of the detected technology stack.
-        file_contents (str): The content of critical files to provide context.
-        custom_instructions (str, optional): User-provided instructions. Defaults to "".
-        feedback_error (str, optional): The error message from a previous failed attempt. Defaults to None.
-        previous_dockerfile (str, optional): The content of the previous Dockerfile (for iteration). Defaults to None.
-        retry_history (List[Dict[str, Any]], optional): A history of previous attempts and failures. Defaults to None.
-        current_plan (Dict[str, Any], optional): The strategic plan for generation. Defaults to None.
-        reflection (Dict[str, Any], optional): The analysis of why the previous attempt failed. Defaults to None.
-        **kwargs: Additional arguments, such as 'model_name'.
+        context (AgentContext): Unified context containing all project information,
+            file tree, analysis results, retry history, plan, reflection, and custom instructions.
 
     Returns:
         Tuple[str, str, str, Any]: A tuple containing:
@@ -56,7 +39,11 @@ def generate_dockerfile(
             - The AI's thought process/explanation.
             - Token usage statistics.
     """
+    from ..core.agent_context import AgentContext
+    
     # Determine if we should perform iterative improvement or fresh generation
+    previous_dockerfile = context.dockerfile_content
+    reflection = context.reflection
     is_iterative = previous_dockerfile and reflection and len(previous_dockerfile.strip()) > 0
     
     # Create LLM using the provider factory - use different agents for fresh vs iterative
@@ -66,36 +53,18 @@ def generate_dockerfile(
     if is_iterative:
         return _generate_iterative_dockerfile(
             llm=llm,
-            previous_dockerfile=previous_dockerfile,
-            reflection=reflection,
-            stack_info=stack_info,
-            file_contents=file_contents,
-            current_plan=current_plan,
-            custom_instructions=custom_instructions,
-            **kwargs
+            context=context
         )
     else:
         return _generate_fresh_dockerfile(
             llm=llm,
-            stack_info=stack_info,
-            file_contents=file_contents,
-            custom_instructions=custom_instructions,
-            feedback_error=feedback_error,
-            retry_history=retry_history,
-            current_plan=current_plan,
-            **kwargs
+            context=context
         )
 
 
 def _generate_fresh_dockerfile(
     llm,
-    stack_info: str,
-    file_contents: str,
-    custom_instructions: str = "",
-    feedback_error: str = None,
-    retry_history: List[Dict[str, Any]] = None,
-    current_plan: Dict[str, Any] = None,
-    **kwargs
+    context: 'AgentContext'
 ) -> Tuple[str, str, str, Any]:
     """
     Generates a new Dockerfile from scratch.
@@ -106,17 +75,25 @@ def _generate_fresh_dockerfile(
 
     Args:
         llm: The initialized LangChain LLM object.
-        stack_info (str): Detected stack information.
-        file_contents (str): Content of critical files.
-        custom_instructions (str, optional): User instructions. Defaults to "".
-        feedback_error (str, optional): Error from previous run (if retrying without full reflection). Defaults to None.
-        retry_history (List[Dict[str, Any]], optional): History of failures. Defaults to None.
-        current_plan (Dict[str, Any], optional): Strategic plan. Defaults to None.
-        **kwargs: Additional arguments.
+        context (AgentContext): Unified context containing all project information.
 
     Returns:
         Tuple[str, str, str, Any]: Dockerfile content, project type, thought process, usage stats.
     """
+    from ..core.agent_context import AgentContext
+    
+    # Extract values from context
+    stack_info = context.analysis_result.get("stack", "Unknown")
+    file_contents = context.file_contents
+    custom_instructions = context.custom_instructions
+    feedback_error = context.error_message
+    retry_history = context.retry_history
+    current_plan = context.current_plan
+    file_tree = context.file_tree
+    error_details = context.error_details
+    verified_tags = context.verified_tags
+    build_command = context.analysis_result.get("build_command", "None detected")
+    start_command = context.analysis_result.get("start_command", "None detected")
     
     # Configure the LLM to return a structured output matching the DockerfileResult schema
     structured_llm = llm.with_structured_output(DockerfileResult)
@@ -222,8 +199,8 @@ STEP 4 - VERIFY COMPLETENESS:
     # Incorporate specific error context if available (e.g., from AI error analysis)
     error_context = ""
     if feedback_error:
-        dockerfile_fix = kwargs.get("dockerfile_fix", "")
-        image_suggestion = kwargs.get("image_suggestion", "")
+        dockerfile_fix = error_details.get("dockerfile_fix", "") if error_details else ""
+        image_suggestion = error_details.get("image_suggestion", "") if error_details else ""
         
         error_context = f"""
 CRITICAL: The previous Dockerfile failed validation with this error:
@@ -252,6 +229,9 @@ Verified Base Images: {verified_tags}
 Detected Build Command: {build_cmd}
 Detected Start Command: {start_cmd}
 
+Project Files (ONLY copy files that actually exist in this list):
+{file_tree}
+
 File Contents:
 {file_contents}
 
@@ -267,12 +247,14 @@ Generate the Dockerfile and explain your reasoning in the thought process.""")
     callback = TokenUsageCallback()
     
     # Execute the chain
+    file_tree_str = "\n".join(file_tree) if file_tree else "No file tree available"
     result = chain.invoke(
         {
             "stack": stack_info,
-            "verified_tags": kwargs.get("verified_tags", "None provided. Use your best judgement."),
-            "build_cmd": kwargs.get("build_command", "None detected"),
-            "start_cmd": kwargs.get("start_command", "None detected"),
+            "verified_tags": verified_tags or "None provided.  Use your best judgement.",
+            "build_cmd": build_command,
+            "start_cmd": start_command,
+            "file_tree": file_tree_str,
             "file_contents": file_contents,
             "custom_instructions": custom_instructions,
             "error_context": error_context,
@@ -287,13 +269,7 @@ Generate the Dockerfile and explain your reasoning in the thought process.""")
 
 def _generate_iterative_dockerfile(
     llm,
-    previous_dockerfile: str,
-    reflection: Dict[str, Any],
-    stack_info: str,
-    file_contents: str,
-    current_plan: Dict[str, Any] = None,
-    custom_instructions: str = "",
-    **kwargs
+    context: 'AgentContext'
 ) -> Tuple[str, str, str, Any]:
     """
     Generates an improved Dockerfile by iterating on a previous attempt.
@@ -304,17 +280,23 @@ def _generate_iterative_dockerfile(
 
     Args:
         llm: The initialized LangChain LLM object.
-        previous_dockerfile (str): The content of the failed Dockerfile.
-        reflection (Dict[str, Any]): Analysis of the failure.
-        stack_info (str): Detected stack information.
-        file_contents (str): Content of critical files.
-        current_plan (Dict[str, Any], optional): Strategic plan. Defaults to None.
-        custom_instructions (str, optional): User instructions. Defaults to "".
-        **kwargs: Additional arguments.
+        context (AgentContext): Unified context containing all project information.
 
     Returns:
         Tuple[str, str, str, Any]: Improved Dockerfile content, project type, thought process, usage stats.
     """
+    from ..core.agent_context import AgentContext
+    
+    # Extract values from context
+    previous_dockerfile = context.dockerfile_content
+    reflection = context.reflection or {}
+    stack_info = context.analysis_result.get("stack", "Unknown")
+    file_contents = context.file_contents
+    current_plan = context.current_plan
+    custom_instructions = context.custom_instructions
+    verified_tags = context.verified_tags
+    build_command = context.analysis_result.get("build_command", "None detected")
+    start_command = context.analysis_result.get("start_command", "None detected")
     
     # Configure the LLM to return a structured output matching the IterativeDockerfileResult schema
     structured_llm = llm.with_structured_output(IterativeDockerfileResult)
@@ -449,10 +431,10 @@ Explain what you changed and why in the thought process.""")
             "image_change_guidance": image_change_guidance,
             "strategy_change_guidance": strategy_change_guidance,
             "plan_guidance": plan_guidance,
-            "verified_tags": kwargs.get("verified_tags", "None provided"),
+            "verified_tags": verified_tags or "None provided",
             "stack": stack_info,
-            "build_cmd": kwargs.get("build_command", "None detected"),
-            "start_cmd": kwargs.get("start_command", "None detected"),
+            "build_cmd": build_command,
+            "start_cmd": start_command,
             "file_contents": file_contents,
             "custom_instructions": custom_instructions
         },

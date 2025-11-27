@@ -21,7 +21,7 @@ from ..utils.prompts import get_prompt
 from ..core.llm_providers import create_llm
 
 
-def review_dockerfile(dockerfile_content: str) -> Tuple[SecurityReviewResult, Any]:
+def review_dockerfile(context: 'AgentContext') -> Tuple[SecurityReviewResult, Any]:
     """
     Stage 2.5: The Security Engineer (Review).
     
@@ -35,13 +35,14 @@ def review_dockerfile(dockerfile_content: str) -> Tuple[SecurityReviewResult, An
     4. If critical issues are found, it generates a corrected Dockerfile.
 
     Args:
-        dockerfile_content (str): The content of the Dockerfile to review.
+        context (AgentContext): Unified context containing dockerfile_content and other info.
 
     Returns:
         Tuple[SecurityReviewResult, Any]: A tuple containing:
             - The structured security review result.
             - Token usage statistics.
     """
+    from ..core.agent_context import AgentContext
     # Create LLM using the provider factory for the reviewer agent
     llm = create_llm(agent_name="reviewer", temperature=0)
     
@@ -128,7 +129,7 @@ Analyze for security vulnerabilities and provide:
     # Execute the chain
     result = chain.invoke(
         {
-            "dockerfile": dockerfile_content
+            "dockerfile": context.dockerfile_content
         },
         config={"callbacks": [callback]}
     )

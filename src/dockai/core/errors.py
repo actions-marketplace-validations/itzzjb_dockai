@@ -110,7 +110,7 @@ class ClassifiedError:
         }
 
 
-def analyze_error_with_ai(error_message: str, logs: str = "", stack: str = "") -> ClassifiedError:
+def analyze_error_with_ai(context: 'AgentContext') -> ClassifiedError:
     """
     Uses AI to analyze and classify an error message.
     
@@ -119,9 +119,8 @@ def analyze_error_with_ai(error_message: str, logs: str = "", stack: str = "") -
     message to a structured `ClassifiedError` object.
     
     Args:
-        error_message (str): The raw error message to classify.
-        logs (str, optional): Additional logs to provide context (e.g., build logs). Defaults to "".
-        stack (str, optional): The technology stack being used (e.g., "Node.js", "Python"). Defaults to "".
+        context (AgentContext): Unified context containing error_message, container_logs,
+            analysis_result (for stack info), and other relevant information.
         
     Returns:
         ClassifiedError: An object containing the error type, summary, and suggested fix.
@@ -131,6 +130,12 @@ def analyze_error_with_ai(error_message: str, logs: str = "", stack: str = "") -
     from ..utils.callbacks import TokenUsageCallback
     from ..utils.prompts import get_prompt
     from .llm_providers import create_llm
+    from .agent_context import AgentContext
+    
+    # Extract values from context
+    error_message = context.error_message or ""
+    logs = context.container_logs or ""
+    stack = context.analysis_result.get("stack", "") if context.analysis_result else ""
     
     try:
         # Create LLM using the provider factory for the error analyzer agent
@@ -284,7 +289,7 @@ Classify this error and provide guidance.""")
         )
 
 
-def classify_error(error_message: str, logs: str = "", stack: str = "") -> ClassifiedError:
+def classify_error(context: 'AgentContext') -> ClassifiedError:
     """
     Public entry point to classify an error using AI.
     
@@ -292,9 +297,8 @@ def classify_error(error_message: str, logs: str = "", stack: str = "") -> Class
     to the AI analysis function. Supports multiple LLM providers.
     
     Args:
-        error_message (str): The error message to classify.
-        logs (str, optional): Additional logs for context. Defaults to "".
-        stack (str, optional): The technology stack being used. Defaults to "".
+        context (AgentContext): Unified context containing error_message, container_logs,
+            and analysis_result (for stack info).
         
     Returns:
         ClassifiedError: The classified error object.
@@ -302,6 +306,7 @@ def classify_error(error_message: str, logs: str = "", stack: str = "") -> Class
     # Check if any LLM provider API key is configured
     # Import locally to avoid circular dependencies
     from .llm_providers import get_provider_info, get_llm_config
+    from .agent_context import AgentContext
     
     config = get_llm_config()
     provider_info = get_provider_info()
@@ -309,6 +314,8 @@ def classify_error(error_message: str, logs: str = "", stack: str = "") -> Class
     # Check if the default provider has credentials configured
     # This supports all providers including Ollama which might not need an API key
     is_configured = provider_info["credentials_configured"].get(config.default_provider.value, False)
+    
+    error_message = context.error_message or ""
     
     if not is_configured:
         logger.error(f"Problem: {config.default_provider.value.upper()} is not fully configured - cannot analyze error")
@@ -320,7 +327,7 @@ def classify_error(error_message: str, logs: str = "", stack: str = "") -> Class
             should_retry=True
         )
     
-    return analyze_error_with_ai(error_message, logs, stack)
+    return analyze_error_with_ai(context)
 
 
 def format_error_for_display(classified_error: ClassifiedError, verbose: bool = False) -> str:

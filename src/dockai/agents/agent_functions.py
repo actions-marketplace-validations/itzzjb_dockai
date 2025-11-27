@@ -59,12 +59,7 @@ def safe_invoke_chain(chain, input_data: Dict[str, Any], callbacks: list) -> Any
     return chain.invoke(input_data, config={"callbacks": callbacks})
 
 
-def create_plan(
-    analysis_result: Dict[str, Any],
-    file_contents: str,
-    retry_history: List[Dict[str, Any]] = None,
-    custom_instructions: str = ""
-) -> Tuple[PlanningResult, Dict[str, int]]:
+def create_plan(context: 'AgentContext') -> Tuple[PlanningResult, Dict[str, int]]:
     """
     Generates a strategic plan for Dockerfile creation using AI analysis.
 
@@ -73,21 +68,16 @@ def create_plan(
     formulate a robust build strategy.
 
     Args:
-        analysis_result (Dict[str, Any]): The results from the initial project analysis,
-            including detected stack, project type, and suggested base images.
-        file_contents (str): The actual content of critical files (e.g., package.json,
-            requirements.txt) to provide context to the LLM.
-        retry_history (List[Dict[str, Any]], optional): A list of previous attempts,
-            including what was tried and why it failed. This enables the agent to
-            learn from mistakes. Defaults to None.
-        custom_instructions (str, optional): Specific instructions provided by the user
-            to guide the planning process. Defaults to "".
+        context (AgentContext): Unified context containing all project information,
+            file tree, analysis results, retry history, and custom instructions.
 
     Returns:
         Tuple[PlanningResult, Dict[str, int]]: A tuple containing:
             - The structured planning result (PlanningResult object).
             - A dictionary tracking token usage for cost monitoring.
     """
+    from ..core.agent_context import AgentContext
+    
     # Create LLM using the provider factory for the planner agent
     llm = create_llm(agent_name="planner", temperature=0.2)
     
@@ -96,9 +86,9 @@ def create_plan(
     
     # Construct the context from previous retry attempts to facilitate learning
     retry_context = ""
-    if retry_history and len(retry_history) > 0:
+    if context.retry_history and len(context.retry_history) > 0:
         retry_context = "\n\nPREVIOUS ATTEMPTS (LEARN FROM THESE):\n"
-        for i, attempt in enumerate(retry_history, 1):
+        for i, attempt in enumerate(context.retry_history, 1):
             retry_context += f"""
 --- Attempt {i} ---
 What was tried: {attempt.get('what_was_tried', 'Unknown')}
@@ -196,14 +186,14 @@ Start by explaining your thought process in detail.""")
     result = safe_invoke_chain(
         chain,
         {
-            "stack": analysis_result.get("stack", "Unknown"),
-            "project_type": analysis_result.get("project_type", "service"),
-            "suggested_base_image": analysis_result.get("suggested_base_image", ""),
-            "build_command": analysis_result.get("build_command", "None detected"),
-            "start_command": analysis_result.get("start_command", "None detected"),
-            "file_contents": file_contents,  # Truncate file contents to avoid token limits
+            "stack": context.analysis_result.get("stack", "Unknown"),
+            "project_type": context.analysis_result.get("project_type", "service"),
+            "suggested_base_image": context.analysis_result.get("suggested_base_image", ""),
+            "build_command": context.analysis_result.get("build_command", "None detected"),
+            "start_command": context.analysis_result.get("start_command", "None detected"),
+            "file_contents": context.file_contents,
             "retry_context": retry_context,
-            "custom_instructions": custom_instructions
+            "custom_instructions": context.custom_instructions
         },
         [callback]
     )
@@ -212,14 +202,7 @@ Start by explaining your thought process in detail.""")
 
 
 
-def reflect_on_failure(
-    dockerfile_content: str,
-    error_message: str,
-    error_details: Dict[str, Any],
-    analysis_result: Dict[str, Any],
-    retry_history: List[Dict[str, Any]] = None,
-    container_logs: str = ""
-) -> Tuple[ReflectionResult, Dict[str, int]]:
+def reflect_on_failure(context: 'AgentContext') -> Tuple[ReflectionResult, Dict[str, int]]:
     """
     Analyzes a failed Dockerfile build or run to determine the root cause and solution.
 
@@ -244,6 +227,8 @@ def reflect_on_failure(
             - The structured reflection result (ReflectionResult object) with specific fixes.
             - A dictionary tracking token usage.
     """
+    from ..core.agent_context import AgentContext
+    
     # Create LLM using the provider factory for the reflector agent
     llm = create_llm(agent_name="reflector", temperature=0)
     
@@ -252,9 +237,9 @@ def reflect_on_failure(
     
     # Construct the history of previous failures to provide context
     retry_context = ""
-    if retry_history and len(retry_history) > 0:
+    if context.retry_history and len(context.retry_history) > 0:
         retry_context = "\n\nPREVIOUS FAILED ATTEMPTS:\n"
-        for i, attempt in enumerate(retry_history, 1):
+        for i, attempt in enumerate(context.retry_history, 1):
             retry_context += f"""
 Attempt {i}: {attempt.get('what_was_tried', 'Unknown')} -> Failed: {attempt.get('why_it_failed', 'Unknown')}
 """
@@ -347,13 +332,13 @@ Start by explaining your root cause analysis in the thought process.""")
     result = safe_invoke_chain(
         chain,
         {
-            "dockerfile": dockerfile_content,
-            "error_message": error_message,
-            "error_type": error_details.get("error_type", "unknown"),
-            "error_suggestion": error_details.get("suggestion", "None"),
-            "stack": analysis_result.get("stack", "Unknown"),
-            "project_type": analysis_result.get("project_type", "service"),
-            "container_logs": container_logs[:3000] if container_logs else "No logs available",
+            "dockerfile": context.dockerfile_content,
+            "error_message": context.error_message,
+            "error_type": context.error_details.get("error_type", "unknown") if context.error_details else "unknown",
+            "error_suggestion": context.error_details.get("suggestion", "None") if context.error_details else "None",
+            "stack": context.analysis_result.get("stack", "Unknown"),
+            "project_type": context.analysis_result.get("project_type", "service"),
+            "container_logs": context.container_logs[:3000] if context.container_logs else "No logs available",
             "retry_context": retry_context
         },
         [callback]
@@ -362,10 +347,7 @@ Start by explaining your root cause analysis in the thought process.""")
     return result, callback.get_usage()
 
 
-def detect_health_endpoints(
-    file_contents: str,
-    analysis_result: Dict[str, Any]
-) -> Tuple[HealthEndpointDetectionResult, Dict[str, int]]:
+def detect_health_endpoints(context: 'AgentContext') -> Tuple[HealthEndpointDetectionResult, Dict[str, int]]:
     """
     Scans source code to identify potential health check endpoints and port configurations.
 
@@ -382,6 +364,8 @@ def detect_health_endpoints(
             - The detection result (HealthEndpointDetectionResult object) with found endpoints.
             - A dictionary tracking token usage.
     """
+    from ..core.agent_context import AgentContext
+    
     # Create LLM using the provider factory for the health detector agent
     llm = create_llm(agent_name="health_detector", temperature=0)
     
@@ -457,8 +441,8 @@ Explain your reasoning in the thought process.""")
     result = safe_invoke_chain(
         chain,
         {
-            "stack": analysis_result.get("stack", "Unknown"),
-            "file_contents": file_contents  # Limit size to avoid context overflow
+            "stack": context.analysis_result.get("stack", "Unknown"),
+            "file_contents": context.file_contents
         },
         [callback]
     )
@@ -466,10 +450,7 @@ Explain your reasoning in the thought process.""")
     return result, callback.get_usage()
 
 
-def detect_readiness_patterns(
-    file_contents: str,
-    analysis_result: Dict[str, Any]
-) -> Tuple[ReadinessPatternResult, Dict[str, int]]:
+def detect_readiness_patterns(context: 'AgentContext') -> Tuple[ReadinessPatternResult, Dict[str, int]]:
     """
     Analyzes application logs and code to determine how to detect when the app is ready.
 
@@ -486,6 +467,8 @@ def detect_readiness_patterns(
             - The readiness pattern result (ReadinessPatternResult object) with regex patterns.
             - A dictionary tracking token usage.
     """
+    from ..core.agent_context import AgentContext
+    
     # Create LLM using the provider factory for the readiness detector agent
     llm = create_llm(agent_name="readiness_detector", temperature=0)
     
@@ -562,9 +545,9 @@ Explain your reasoning in the thought process.""")
     result = safe_invoke_chain(
         chain,
         {
-            "stack": analysis_result.get("stack", "Unknown"),
-            "project_type": analysis_result.get("project_type", "service"),
-            "file_contents": file_contents  # Limit size
+            "stack": context.analysis_result.get("stack", "Unknown"),
+            "project_type": context.analysis_result.get("project_type", "service"),
+            "file_contents": context.file_contents
         },
         [callback]
     )
@@ -572,15 +555,7 @@ Explain your reasoning in the thought process.""")
     return result, callback.get_usage()
 
 
-def generate_iterative_dockerfile(
-    previous_dockerfile: str,
-    reflection: Dict[str, Any],
-    analysis_result: Dict[str, Any],
-    file_contents: str,
-    current_plan: Dict[str, Any],
-    verified_tags: str = "",
-    custom_instructions: str = ""
-) -> Tuple[IterativeDockerfileResult, Dict[str, int]]:
+def generate_iterative_dockerfile(context: 'AgentContext') -> Tuple[IterativeDockerfileResult, Dict[str, int]]:
     """
     Generates an improved Dockerfile by applying fixes identified in the reflection phase.
 
@@ -604,6 +579,8 @@ def generate_iterative_dockerfile(
             - The result containing the improved Dockerfile (IterativeDockerfileResult object).
             - A dictionary tracking token usage.
     """
+    from ..core.agent_context import AgentContext
+    
     # Create LLM using the provider factory for the iterative improver agent
     llm = create_llm(agent_name="iterative_improver", temperature=0)
     
@@ -692,24 +669,24 @@ Explain your changes in the thought process.""")
     result = safe_invoke_chain(
         chain,
         {
-            "previous_dockerfile": previous_dockerfile,
-            "root_cause": reflection.get("root_cause_analysis", "Unknown"),
-            "specific_fixes": ", ".join(reflection.get("specific_fixes", [])),
-            "should_change_base_image": reflection.get("should_change_base_image", False),
-            "suggested_base_image": reflection.get("suggested_base_image", ""),
-            "should_change_build_strategy": reflection.get("should_change_build_strategy", False),
-            "new_build_strategy": reflection.get("new_build_strategy", ""),
-            "base_image_strategy": current_plan.get("base_image_strategy", ""),
-            "build_strategy": current_plan.get("build_strategy", ""),
-            "use_multi_stage": current_plan.get("use_multi_stage", True),
-            "use_minimal_runtime": current_plan.get("use_minimal_runtime", False),
-            "use_static_linking": current_plan.get("use_static_linking", False),
-            "verified_tags": verified_tags,
-            "stack": analysis_result.get("stack", "Unknown"),
-            "build_command": analysis_result.get("build_command", "None"),
-            "start_command": analysis_result.get("start_command", "None"),
-            "file_contents": file_contents,
-            "custom_instructions": custom_instructions
+            "previous_dockerfile": context.dockerfile_content,
+            "root_cause": context.reflection.get("root_cause_analysis", "Unknown") if context.reflection else "Unknown",
+            "specific_fixes": ", ".join(context.reflection.get("specific_fixes", [])) if context.reflection else "",
+            "should_change_base_image": context.reflection.get("should_change_base_image", False) if context.reflection else False,
+            "suggested_base_image": context.reflection.get("suggested_base_image", "") if context.reflection else "",
+            "should_change_build_strategy": context.reflection.get("should_change_build_strategy", False) if context.reflection else False,
+            "new_build_strategy": context.reflection.get("new_build_strategy", "") if context.reflection else "",
+            "base_image_strategy": context.current_plan.get("base_image_strategy", "") if context.current_plan else "",
+            "build_strategy": context.current_plan.get("build_strategy", "") if context.current_plan else "",
+            "use_multi_stage": context.current_plan.get("use_multi_stage", True) if context.current_plan else True,
+            "use_minimal_runtime": context.current_plan.get("use_minimal_runtime", False) if context.current_plan else False,
+            "use_static_linking": context.current_plan.get("use_static_linking", False) if context.current_plan else False,
+            "verified_tags": context.verified_tags,
+            "stack": context.analysis_result.get("stack", "Unknown"),
+            "build_command": context.analysis_result.get("build_command", "None"),
+            "start_command": context.analysis_result.get("start_command", "None"),
+            "file_contents": context.file_contents,
+            "custom_instructions": context.custom_instructions
         },
         [callback]
     )

@@ -172,7 +172,13 @@ def validate_docker_build_and_run(
     if code != 0:
         # Build failed - classify the error
         error_output = f"{stderr}\n{stdout}"
-        classified = classify_error(error_output, logs=error_output, stack=stack)
+        from ..core.agent_context import AgentContext
+        error_context = AgentContext(
+            error_message=error_output,
+            container_logs=error_output,
+            analysis_result={"stack": stack}
+        )
+        classified = classify_error(context=error_context)
         error_msg = f"Docker build failed: {classified.message}"
         logger.error(f"Problem: {classified.message}")
         logger.debug(f"Details: {error_output[:500]}")
@@ -209,7 +215,13 @@ def validate_docker_build_and_run(
     if code != 0:
         # Container failed to start - classify the error
         error_output = f"{stderr}\n{stdout}"
-        classified = classify_error(error_output, logs=error_output, stack=stack)
+        from ..core.agent_context import AgentContext
+        error_context = AgentContext(
+            error_message=error_output,
+            container_logs=error_output,
+            analysis_result={"stack": stack}
+        )
+        classified = classify_error(context=error_context)
         error_msg = f"Container start failed: {classified.message}"
         logger.error(f"Problem: {classified.message}")
         run_command(["docker", "rmi", image_name])
@@ -277,7 +289,13 @@ def validate_docker_build_and_run(
                 message = "Service is running successfully."
         else:
             success = False
-            classified_error = classify_error(container_logs, logs=container_logs, stack=stack)
+            from ..core.agent_context import AgentContext
+            error_context = AgentContext(
+                error_message=container_logs,
+                container_logs=container_logs,
+                analysis_result={"stack": stack}
+            )
+            classified_error = classify_error(context=error_context)
             message = f"Service stopped unexpectedly (Exit Code: {exit_code}): {classified_error.message}"
 
             
@@ -291,7 +309,13 @@ def validate_docker_build_and_run(
                 message = "Script finished successfully (Exit Code 0)."
             else:
                 success = False
-                classified_error = classify_error(container_logs, logs=container_logs, stack=stack)
+                from ..core.agent_context import AgentContext
+                error_context = AgentContext(
+                    error_message=container_logs,
+                    container_logs=container_logs,
+                    analysis_result={"stack": stack}
+                )
+                classified_error = classify_error(context=error_context)
                 message = f"Script failed (Exit Code: {exit_code}): {classified_error.message}"
     
     else:

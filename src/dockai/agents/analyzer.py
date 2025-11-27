@@ -27,7 +27,7 @@ def safe_invoke_chain(chain, input_data: Dict[str, Any], callbacks: list) -> Any
     return chain.invoke(input_data, config={"callbacks": callbacks})
 
 
-def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[AnalysisResult, Dict[str, int]]:
+def analyze_repo_needs(context: 'AgentContext') -> Tuple[AnalysisResult, Dict[str, int]]:
     """
     Performs the initial analysis of the repository to determine project requirements.
 
@@ -36,15 +36,14 @@ def analyze_repo_needs(file_list: list, custom_instructions: str = "") -> Tuple[
     stack, project type (service vs. script), and necessary build/start commands.
 
     Args:
-        file_list (list): A list of all filenames in the repository to be analyzed.
-        custom_instructions (str, optional): Specific instructions provided by the user
-            to guide the analysis (e.g., "This is a Django app"). Defaults to "".
+        context (AgentContext): Unified context containing file_tree and custom_instructions.
 
     Returns:
         Tuple[AnalysisResult, Dict[str, int]]: A tuple containing:
             - The structured analysis result (AnalysisResult object).
             - A dictionary tracking token usage for cost monitoring.
     """
+    from ..core.agent_context import AgentContext
     # Create LLM using the provider factory for the analyzer agent
     llm = create_llm(agent_name="analyzer", temperature=0)
     
@@ -115,13 +114,13 @@ Analyze the project and provide a detailed thought process explaining your reaso
     callback = TokenUsageCallback()
     
     # Convert file list to JSON string for better formatting in the prompt
-    file_list_str = json.dumps(file_list)
+    file_list_str = json.dumps(context.file_tree)
     
     # Execute the chain (with rate limit handling)
     result = safe_invoke_chain(
         chain,
         {
-            "custom_instructions": custom_instructions, 
+            "custom_instructions": context.custom_instructions, 
             "file_list": file_list_str
         },
         [callback]

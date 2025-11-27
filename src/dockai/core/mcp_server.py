@@ -9,6 +9,7 @@ from dockai.agents.analyzer import analyze_repo_needs
 from dockai.agents.generator import generate_dockerfile
 from dockai.utils.file_utils import read_critical_files
 from dockai.utils.validator import validate_docker_build_and_run
+from dockai.core.agent_context import AgentContext
 
 # Initialize logger
 logging.basicConfig(level=logging.INFO)
@@ -34,8 +35,9 @@ def analyze_project(path: str) -> str:
     logger.info(f"Analyzing project at: {path}")
     file_tree = get_file_tree(path)
     
-    # Run analysis
-    analysis_result, _ = analyze_repo_needs(file_tree)
+    # Run analysis with AgentContext
+    analyzer_context = AgentContext(file_tree=file_tree)
+    analysis_result, _ = analyze_repo_needs(context=analyzer_context)
     
     summary = [
         f"Stack: {analysis_result.stack}",
@@ -69,20 +71,21 @@ def generate_dockerfile_content(path: str, instructions: Optional[str] = None) -
     # 1. Scan
     file_tree = get_file_tree(path)
     
-    # 2. Analyze
-    analysis_result, _ = analyze_repo_needs(file_tree, custom_instructions=instructions)
+    # 2. Analyze with AgentContext
+    analyzer_context = AgentContext(file_tree=file_tree, custom_instructions=instructions or "")
+    analysis_result, _ = analyze_repo_needs(context=analyzer_context)
     
     # 3. Read Files
     file_contents = read_critical_files(path, analysis_result.files_to_read)
     
-    # 4. Generate
-    dockerfile_content, _, thought_process, _ = generate_dockerfile(
-        stack=analysis_result.stack,
+    # 4. Generate with AgentContext
+    generator_context = AgentContext(
+        file_tree=file_tree,
         file_contents=file_contents,
-        custom_instructions=instructions,
-        build_command=analysis_result.build_command,
-        start_command=analysis_result.start_command
+        analysis_result=analysis_result.model_dump(),
+        custom_instructions=instructions or ""
     )
+    dockerfile_content, _, thought_process, _ = generate_dockerfile(context=generator_context)
     
     return dockerfile_content
 
