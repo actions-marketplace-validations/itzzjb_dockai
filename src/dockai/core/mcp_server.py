@@ -1,3 +1,14 @@
+"""
+DockAI MCP Server Module.
+
+This module provides a Model Context Protocol (MCP) server implementation
+that allows AI tools like Claude Desktop and Cursor to interact with DockAI
+functionality directly. It exposes tools for:
+- Project analysis
+- Dockerfile generation
+- Dockerfile validation
+- Full agentic workflow execution
+"""
 
 import os
 import logging

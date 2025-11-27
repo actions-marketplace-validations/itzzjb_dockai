@@ -6,8 +6,10 @@ This module contains the core components of the DockAI framework:
 - Pydantic schemas for structured data
 - State management for the workflow
 - Error classification and handling
+- AgentContext for unified agent context
 """
 
+from .agent_context import AgentContext
 from .llm_providers import (
     LLMProvider,
     LLMConfig,
@@ -38,6 +40,8 @@ from .errors import (
 )
 
 __all__ = [
+    # Agent Context
+    "AgentContext",
     # LLM Providers
     "LLMProvider",
     "LLMConfig", 
