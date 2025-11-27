@@ -148,10 +148,17 @@ def read_files_node(state: DockAIState) -> DockAIState:
     """
     path = state["path"]
     files_to_read = state["analysis_result"].get("files_to_read", [])
+    config = state.get("config", {})
+    
+    # Truncation setting priority:
+    # 1. Config value (if explicitly set)
+    # 2. Environment variable DOCKAI_TRUNCATION_ENABLED
+    # 3. Default: None (let read_critical_files decide, will auto-enable if token limit exceeded)
+    truncation_enabled = config.get("truncation_enabled", None)
     
     logger.info(f"Reading {len(files_to_read)} critical files...")
     
-    file_contents_str = read_critical_files(path, files_to_read)
+    file_contents_str = read_critical_files(path, files_to_read, truncation_enabled=truncation_enabled)
     
     return {"file_contents": file_contents_str}
 

@@ -152,7 +152,7 @@ def test_read_files_node():
         assert "print('hello')" in result["file_contents"]
 
 def test_read_files_node_truncation():
-    """Test that large files are truncated"""
+    """Test that large files are truncated when truncation is enabled"""
     import tempfile
     import os
     
@@ -166,12 +166,103 @@ def test_read_files_node_truncation():
         
         state = {
             "path": tmpdir,
-            "analysis_result": {"files_to_read": ["large.py"]}
+            "analysis_result": {"files_to_read": ["large.py"]},
+            "config": {"truncation_enabled": True}  # Enable truncation for this test
         }
         
         result = read_files_node(state)
         
         assert "TRUNCATED" in result["file_contents"]
+
+
+def test_read_files_node_no_truncation_by_default():
+    """Test that large files are NOT truncated by default when under token limit"""
+    import tempfile
+    import os
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create large file (but under default token limit of 100K tokens)
+        test_file = os.path.join(tmpdir, "large.py")
+        with open(test_file, "w") as f:
+            # Write more than 5000 lines but within token limits
+            for i in range(6000):
+                f.write(f"line {i}\n")
+        
+        state = {
+            "path": tmpdir,
+            "analysis_result": {"files_to_read": ["large.py"]}
+            # No config - truncation should be disabled by default
+        }
+        
+        result = read_files_node(state)
+        
+        # Should NOT be truncated (file is under token limit)
+        assert "TRUNCATED" not in result["file_contents"]
+        # Should contain all lines
+        assert "line 5999" in result["file_contents"]
+
+
+def test_read_files_node_auto_truncation_on_token_limit():
+    """Test that truncation auto-enables when token limit is exceeded"""
+    import tempfile
+    import os
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a very large file that will exceed token limit
+        test_file = os.path.join(tmpdir, "huge.py")
+        with open(test_file, "w") as f:
+            # Write ~500K chars which is > 100K tokens (at ~4 chars/token)
+            for i in range(50000):
+                f.write(f"# This is line number {i} with some padding text to make it longer\n")
+        
+        # Set a low token limit for testing
+        os.environ["DOCKAI_TOKEN_LIMIT"] = "1000"  # Very low limit
+        
+        try:
+            state = {
+                "path": tmpdir,
+                "analysis_result": {"files_to_read": ["huge.py"]}
+                # No truncation_enabled - should auto-enable due to token limit
+            }
+            
+            result = read_files_node(state)
+            
+            # Should be auto-truncated due to exceeding token limit
+            assert "TRUNCATED" in result["file_contents"]
+        finally:
+            # Clean up env var
+            del os.environ["DOCKAI_TOKEN_LIMIT"]
+
+
+def test_read_files_node_truncation_via_env_var():
+    """Test that truncation can be enabled via environment variable"""
+    import tempfile
+    import os
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create large file
+        test_file = os.path.join(tmpdir, "large.py")
+        with open(test_file, "w") as f:
+            for i in range(6000):
+                f.write(f"line {i}\n")
+        
+        # Enable truncation via env var
+        os.environ["DOCKAI_TRUNCATION_ENABLED"] = "true"
+        
+        try:
+            state = {
+                "path": tmpdir,
+                "analysis_result": {"files_to_read": ["large.py"]}
+                # No config - should use env var
+            }
+            
+            result = read_files_node(state)
+            
+            # Should be truncated due to env var
+            assert "TRUNCATED" in result["file_contents"]
+        finally:
+            # Clean up env var
+            del os.environ["DOCKAI_TRUNCATION_ENABLED"]
 
 @patch("dockai.workflow.nodes.generate_dockerfile")
 @patch("dockai.workflow.nodes.get_docker_tags")

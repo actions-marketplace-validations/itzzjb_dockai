@@ -4,6 +4,15 @@ import logging
 
 logger = logging.getLogger("dockai")
 
+# Approximate tokens per character (rough estimate: 1 token ≈ 4 chars for English text/code)
+CHARS_PER_TOKEN = 4
+
+
+def estimate_tokens(text: str) -> int:
+    """Estimate the number of tokens in a string (rough approximation)."""
+    return len(text) // CHARS_PER_TOKEN
+
+
 def smart_truncate(content: str, filename: str, max_chars: int, max_lines: int) -> str:
     """
     Truncates file content while preserving as much context as possible.
@@ -35,20 +44,39 @@ def smart_truncate(content: str, filename: str, max_chars: int, max_lines: int) 
         
     return content
 
-def read_critical_files(path: str, files_to_read: list[str]) -> str:
+def read_critical_files(path: str, files_to_read: list[str], truncation_enabled: bool = None) -> str:
     """
-    Reads critical files from the repository with smart truncation.
+    Reads critical files from the repository with optional smart truncation.
+    
+    Truncation behavior:
+    1. If truncation_enabled is explicitly set (True/False), use that.
+    2. Otherwise, check DOCKAI_TRUNCATION_ENABLED env var (true/false/1/0).
+    3. Default is False (no truncation).
+    4. Auto-enables truncation if total content exceeds DOCKAI_TOKEN_LIMIT.
     
     Args:
         path: Root path of the repository.
         files_to_read: List of relative paths to read.
+        truncation_enabled: Whether to truncate large files (default: None = use env var).
         
     Returns:
         String containing concatenated file contents.
     """
+    # Determine truncation setting from env var if not explicitly provided
+    if truncation_enabled is None:
+        env_truncation = os.getenv("DOCKAI_TRUNCATION_ENABLED", "false").lower()
+        truncation_enabled = env_truncation in ("true", "1", "yes", "on")
+    
+    # Get token limit for auto-truncation (default: 100K tokens ≈ 400K chars)
+    try:
+        TOKEN_LIMIT = int(os.getenv("DOCKAI_TOKEN_LIMIT", "100000"))
+    except ValueError:
+        TOKEN_LIMIT = 100000
+    
     file_contents_str = ""
     files_read = 0
     files_failed = []
+    auto_truncation_triggered = False
     
     # Files that should be read fully if possible (dependencies)
     CRITICAL_DEPENDENCY_FILES = ["package.json", "requirements.txt", "Gemfile", "go.mod", "Cargo.toml", "pom.xml", "build.gradle"]
@@ -78,21 +106,36 @@ def read_critical_files(path: str, files_to_read: list[str]) -> str:
                 # Determine limits based on file type
                 is_dependency_file = basename in CRITICAL_DEPENDENCY_FILES
                 
-                # Dependency files get double the line limit but same char limit
-                current_max_lines = MAX_LINES * 2 if is_dependency_file else MAX_LINES
-                current_max_chars = MAX_CHARS
-                
-                original_len = len(content)
-                content = smart_truncate(content, basename, current_max_chars, current_max_lines)
-                
-                if len(content) < original_len:
-                    logger.warning(f"Truncated {rel_path}: {original_len} -> {len(content)} chars")
+                # Only truncate if truncation is enabled
+                if truncation_enabled:
+                    # Dependency files get double the line limit but same char limit
+                    current_max_lines = MAX_LINES * 2 if is_dependency_file else MAX_LINES
+                    current_max_chars = MAX_CHARS
+                    
+                    original_len = len(content)
+                    content = smart_truncate(content, basename, current_max_chars, current_max_lines)
+                    
+                    if len(content) < original_len:
+                        logger.warning(f"Truncated {rel_path}: {original_len} -> {len(content)} chars")
                     
                 file_contents_str += f"--- FILE: {rel_path} ---\n{content}\n\n"
                 files_read += 1
         except Exception as e:
             logger.warning(f"Could not read {rel_path}: {e}")
             files_failed.append(rel_path)
+    
+    # Auto-truncation: If total content exceeds token limit, re-read with truncation enabled
+    estimated_tokens = estimate_tokens(file_contents_str)
+    if not truncation_enabled and estimated_tokens > TOKEN_LIMIT:
+        logger.warning(
+            f"Content exceeds token limit ({estimated_tokens:,} tokens > {TOKEN_LIMIT:,} limit). "
+            f"Auto-enabling truncation..."
+        )
+        # Re-read files with truncation enabled
+        return read_critical_files(path, files_to_read, truncation_enabled=True)
+    
+    if truncation_enabled:
+        logger.info(f"Final content size: ~{estimated_tokens:,} tokens")
     
     logger.info(f"Successfully read {files_read} files" + (f", {len(files_failed)} failed" if files_failed else ""))
     return file_contents_str
