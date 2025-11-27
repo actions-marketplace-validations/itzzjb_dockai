@@ -300,19 +300,22 @@ def classify_error(error_message: str, logs: str = "", stack: str = "") -> Class
         ClassifiedError: The classified error object.
     """
     # Check if any LLM provider API key is configured
-    has_api_key = (
-        os.getenv("OPENAI_API_KEY") or 
-        os.getenv("AZURE_OPENAI_API_KEY") or 
-        os.getenv("GOOGLE_API_KEY") or 
-        os.getenv("ANTHROPIC_API_KEY")
-    )
+    # Import locally to avoid circular dependencies
+    from .llm_providers import get_provider_info, get_llm_config
     
-    if not has_api_key:
-        logger.error("Problem: No LLM API key configured - cannot analyze error")
+    config = get_llm_config()
+    provider_info = get_provider_info()
+    
+    # Check if the default provider has credentials configured
+    # This supports all providers including Ollama which might not need an API key
+    is_configured = provider_info["credentials_configured"].get(config.default_provider.value, False)
+    
+    if not is_configured:
+        logger.error(f"Problem: {config.default_provider.value.upper()} is not fully configured - cannot analyze error")
         return ClassifiedError(
             error_type=ErrorType.UNKNOWN_ERROR,
-            message="Cannot analyze error - API key not configured",
-            suggestion="Set an API key in your .env file (OPENAI_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, or AZURE_OPENAI_API_KEY) to enable AI error analysis",
+            message="Cannot analyze error - LLM provider not configured",
+            suggestion=f"Set the required environment variables for {config.default_provider.value} in your .env file",
             original_error=error_message[:500],
             should_retry=True
         )

@@ -2,14 +2,15 @@
 Rate Limit Handler for DockAI.
 
 This module provides intelligent rate limit detection, exponential backoff,
-and retry logic for API calls to OpenAI and Docker Hub.
+This module provides intelligent rate limit detection, exponential backoff,
+and retry logic for API calls to LLM providers and Docker Hub.
 """
 
 import time
 import logging
 from typing import Callable, Any, Optional, Dict
 from functools import wraps
-import openai
+
 
 logger = logging.getLogger("dockai")
 
@@ -116,38 +117,57 @@ def with_rate_limit_handling(
                     
                     return result
                 
-                except openai.RateLimitError as e:
-                    last_exception = e
-                    
-                    if attempt >= max_retries:
-                        logger.error(f"✗ Max retries ({max_retries}) exceeded for rate limit")
-                        raise RateLimitExceededError(
-                            f"Rate limit exceeded after {max_retries} retries. "
-                            f"Please wait a few minutes and try again, or upgrade your OpenAI API tier."
-                        ) from e
-                   
-                    # Extract retry-after from headers if available
-                    retry_after = None
-                    if hasattr(e, 'response') and e.response:
-                        retry_after = e.response.headers.get('Retry-After')
-                        if retry_after:
-                            try:
-                                retry_after = int(retry_after)
-                            except (ValueError, TypeError):
-                                retry_after = None
-                    
-                    # Calculate delay
-                    delay = handler.calculate_delay(attempt, retry_after)
-                    
-                    logger.warning(
-                        f"⚠ Rate limit hit (attempt {attempt + 1}/{max_retries}). "
-                        f"Waiting {delay:.1f}s before retry..."
+                except Exception as e:
+                    # Check for rate limit errors in a generic way
+                    error_str = str(e).lower()
+                    is_rate_limit = (
+                        'rate limit' in error_str or 
+                        '429' in error_str or 
+                        'too many requests' in error_str or
+                        'quota exceeded' in error_str
                     )
                     
-                    time.sleep(delay)
-                    continue
-                
-                except Exception as e:
+                    # Also check for specific OpenAI RateLimitError if the library is available/used
+                    # This handles cases where the exception type is specific but message might vary
+                    if not is_rate_limit:
+                        try:
+                            import openai
+                            if isinstance(e, openai.RateLimitError):
+                                is_rate_limit = True
+                        except ImportError:
+                            pass
+
+                    if is_rate_limit:
+                        last_exception = e
+                        
+                        if attempt >= max_retries:
+                            logger.error(f"✗ Max retries ({max_retries}) exceeded for rate limit")
+                            raise RateLimitExceededError(
+                                f"Rate limit exceeded after {max_retries} retries. "
+                                f"Please wait a few minutes and try again, or upgrade your API tier."
+                            ) from e
+                    
+                        # Extract retry-after from headers if available (generic approach)
+                        retry_after = None
+                        if hasattr(e, 'response') and e.response:
+                            retry_after = e.response.headers.get('Retry-After')
+                            if retry_after:
+                                try:
+                                    retry_after = int(retry_after)
+                                except (ValueError, TypeError):
+                                    retry_after = None
+                        
+                        # Calculate delay
+                        delay = handler.calculate_delay(attempt, retry_after)
+                        
+                        logger.warning(
+                            f"⚠ Rate limit hit (attempt {attempt + 1}/{max_retries}). "
+                            f"Waiting {delay:.1f}s before retry..."
+                        )
+                        
+                        time.sleep(delay)
+                        continue
+                    
                     # Don't retry on other exceptions
                     raise
             
@@ -168,37 +188,7 @@ class RateLimitExceededError(Exception):
     pass
 
 
-def create_rate_limited_llm(model_name: str, api_key: str, temperature: float = 0, **kwargs):
-    """
-    Create a ChatOpenAI instance with built-in rate limit handling.
-    
-    This wrapper ensures all LLM calls automatically handle rate limits
-    with exponential backoff.
-    
-    Args:
-        model_name (str): The OpenAI model to use
-        api_key (str): OpenAI API key
-        temperature (float): LLM temperature setting
-        **kwargs: Additional arguments to pass to ChatOpenAI
-        
-    Returns:
-        ChatOpenAI instance with rate limit handling
-    """
-    from langchain_openai import ChatOpenAI
-    
-    # Create the LLM with standard parameters
-    llm = ChatOpenAI(
-        model=model_name,
-        temperature=temperature,
-        api_key=api_key,
-        # Add timeout to prevent hanging
-        request_timeout=60,
-        # Add retry configuration for transient errors
-        max_retries=3,
-        **kwargs
-    )
-    
-    return llm
+
 
 
 def handle_registry_rate_limit(func: Callable) -> Callable:

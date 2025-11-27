@@ -6,11 +6,11 @@ multiple providers (OpenAI, Azure OpenAI, Google Gemini, Anthropic). It enables 
 to configure different models for each AI agent in the DockAI workflow.
 
 Supported Providers:
-- openai: OpenAI API (GPT-4, GPT-4o, GPT-4o-mini, etc.)
+- openai: OpenAI API
 - azure: Azure OpenAI Service
-- gemini: Google Gemini (Gemini Pro, Gemini 1.5 Pro, etc.)
-- anthropic: Anthropic Claude (Claude 3.5 Sonnet, Claude 3 Opus, etc.)
-- ollama: Ollama (Llama 3, Mistral, etc.)
+- gemini: Google Gemini
+- anthropic: Anthropic Claude
+- ollama: Ollama
 
 Configuration is done via environment variables:
 - DOCKAI_LLM_PROVIDER: Default provider (openai, azure, gemini, anthropic, ollama)
@@ -67,8 +67,8 @@ DEFAULT_MODELS = {
         "powerful": "claude-sonnet-4-20250514", # Powerful Claude model
     },
     LLMProvider.OLLAMA: {
-        "fast": "llama3",            # Fast Ollama model (e.g., Llama 3 8B)
-        "powerful": "llama3",        # Powerful Ollama model (e.g., Llama 3 70B - user should configure)
+        "fast": "llama3",            # Fast Ollama model
+        "powerful": "llama3",        # Powerful Ollama model
     },
 }
 

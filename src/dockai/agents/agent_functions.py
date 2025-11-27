@@ -33,7 +33,7 @@ from ..core.schemas import (
     IterativeDockerfileResult
 )
 from ..utils.callbacks import TokenUsageCallback
-from ..utils.rate_limiter import with_rate_limit_handling, create_rate_limited_llm
+from ..utils.rate_limiter import with_rate_limit_handling
 from ..utils.prompts import get_prompt
 from ..core.llm_providers import create_llm
 

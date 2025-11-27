@@ -12,10 +12,10 @@ from langchain_core.outputs import LLMResult
 
 class TokenUsageCallback(BaseCallbackHandler):
     """
-    A custom callback handler to track OpenAI API token usage.
+    A custom callback handler to track LLM API token usage.
 
     This class hooks into the LangChain execution lifecycle to capture token
-    usage statistics returned by the LLM provider (e.g., OpenAI). This allows
+    usage statistics returned by the LLM provider. This allows
     DockAI to report the cost of each operation to the user.
 
     Attributes:

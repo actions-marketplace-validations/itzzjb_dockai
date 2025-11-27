@@ -27,6 +27,7 @@ from ..agents.agent_functions import (
     detect_readiness_patterns,
     generate_iterative_dockerfile
 )
+from ..core.llm_providers import get_model_for_agent
 
 # Initialize logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
@@ -104,7 +105,7 @@ def analyze_node(state: DockAIState) -> DockAIState:
         "prompt_tokens": usage.get("prompt_tokens", 0),
         "completion_tokens": usage.get("completion_tokens", 0),
         "total_tokens": usage.get("total_tokens", 0),
-        "model": os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
+        "model": get_model_for_agent("analyzer")
     }
     
     current_stats = state.get("usage_stats", [])
@@ -179,7 +180,7 @@ def detect_health_node(state: DockAIState) -> DockAIState:
             "prompt_tokens": usage.get("prompt_tokens", 0),
             "completion_tokens": usage.get("completion_tokens", 0),
             "total_tokens": usage.get("total_tokens", 0),
-            "model": os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
+            "model": get_model_for_agent("health_detector")
         }
         
         current_stats = state.get("usage_stats", [])
@@ -228,7 +229,7 @@ def detect_readiness_node(state: DockAIState) -> DockAIState:
             "prompt_tokens": usage.get("prompt_tokens", 0),
             "completion_tokens": usage.get("completion_tokens", 0),
             "total_tokens": usage.get("total_tokens", 0),
-            "model": os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
+            "model": get_model_for_agent("readiness_detector")
         }
         
         current_stats = state.get("usage_stats", [])
@@ -284,7 +285,7 @@ def plan_node(state: DockAIState) -> DockAIState:
         "prompt_tokens": usage.get("prompt_tokens", 0),
         "completion_tokens": usage.get("completion_tokens", 0),
         "total_tokens": usage.get("total_tokens", 0),
-        "model": os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
+        "model": get_model_for_agent("planner")
     }
     
     current_stats = state.get("usage_stats", [])
@@ -351,10 +352,10 @@ def generate_node(state: DockAIState) -> DockAIState:
     
     # Dynamic Model Selection: Use smarter model for retries/complex tasks
     if retry_count == 0:
-        model_name = os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
+        model_name = get_model_for_agent("analyzer") # Use fast model for draft
         logger.info(f"Generating Dockerfile (Draft Model: {model_name})...")
     else:
-        model_name = os.getenv("MODEL_GENERATOR", "gpt-4o")
+        model_name = get_model_for_agent("generator") # Use powerful model for fixes
         logger.info(f"Improving Dockerfile (Expert Model: {model_name}, attempt {retry_count + 1})...")
     
     # Decide: Fresh generation or iterative improvement?
@@ -451,7 +452,7 @@ def review_node(state: DockAIState) -> DockAIState:
         "prompt_tokens": usage.get("prompt_tokens", 0),
         "completion_tokens": usage.get("completion_tokens", 0),
         "total_tokens": usage.get("total_tokens", 0),
-        "model": os.getenv("MODEL_ANALYZER", "gpt-4o-mini")
+        "model": get_model_for_agent("reviewer")
     }
     
     current_stats = state.get("usage_stats", [])
@@ -635,7 +636,7 @@ def reflect_node(state: DockAIState) -> DockAIState:
         "prompt_tokens": usage.get("prompt_tokens", 0),
         "completion_tokens": usage.get("completion_tokens", 0),
         "total_tokens": usage.get("total_tokens", 0),
-        "model": os.getenv("MODEL_GENERATOR", "gpt-4o")
+        "model": get_model_for_agent("reflector")
     }
     
     current_stats = state.get("usage_stats", [])
