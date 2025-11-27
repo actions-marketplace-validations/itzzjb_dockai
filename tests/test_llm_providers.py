@@ -42,7 +42,7 @@ def test_load_ollama_config(clean_env):
     
     config = load_llm_config_from_env()
     
-    assert config.provider == LLMProvider.OLLAMA
+    assert config.default_provider == LLMProvider.OLLAMA
     assert config.ollama_base_url == "http://custom-ollama:11434"
 
 def test_load_ollama_config_default(clean_env):
@@ -51,7 +51,7 @@ def test_load_ollama_config_default(clean_env):
     
     config = load_llm_config_from_env()
     
-    assert config.provider == LLMProvider.OLLAMA
+    assert config.default_provider == LLMProvider.OLLAMA
     assert config.ollama_base_url == "http://localhost:11434"
 
 @patch("langchain_ollama.ChatOllama")
@@ -85,6 +85,28 @@ def test_get_provider_info_ollama(clean_env):
     
     info = get_provider_info()
     
-    assert info["provider"] == "ollama"
-    assert info["credentials_configured"] is True
+    assert info["default_provider"] == "ollama"
+    assert info["credentials_configured"]["ollama"] is True
     assert info["ollama_base_url"] == "http://info-test:11434"
+
+@patch("langchain_openai.ChatOpenAI")
+@patch("langchain_ollama.ChatOllama")
+def test_mixed_provider_creation(mock_chat_ollama, mock_chat_openai, clean_env):
+    """Test creating LLMs with mixed providers."""
+    os.environ["DOCKAI_LLM_PROVIDER"] = "ollama"
+    os.environ["DOCKAI_MODEL_ANALYZER"] = "openai/gpt-4o-mini"
+    os.environ["OPENAI_API_KEY"] = "sk-test-key"
+    
+    # Reset global config
+    import dockai.core.llm_providers
+    dockai.core.llm_providers._llm_config = None
+    
+    # Create analyzer LLM (should be OpenAI)
+    llm_analyzer = create_llm("analyzer")
+    mock_chat_openai.assert_called_once()
+    assert mock_chat_openai.call_args.kwargs["model"] == "gpt-4o-mini"
+    
+    # Create generator LLM (should be Ollama default)
+    llm_generator = create_llm("generator")
+    mock_chat_ollama.assert_called_once()
+    assert mock_chat_ollama.call_args.kwargs["model"] == "llama3"

@@ -67,6 +67,27 @@ Assign different models to different agents for cost optimization:
 | Anthropic | `claude-3-5-haiku-latest` | `claude-sonnet-4-20250514` |
 | Ollama | `llama3` | `llama3` |
 
+### Mixed Provider Configuration
+
+You can use different providers for different agents by prefixing the model name with `provider/`. This is useful for balancing cost, privacy, and performance.
+
+**Example**: Use local Ollama for everything, but OpenAI for the initial analysis.
+
+```bash
+# Default provider for all agents
+DOCKAI_LLM_PROVIDER=ollama
+
+# Override specifically for the analyzer agent
+DOCKAI_MODEL_ANALYZER=openai/gpt-4o-mini
+```
+
+**Supported Prefixes**:
+- `openai/`
+- `azure/`
+- `gemini/`
+- `anthropic/`
+- `ollama/`
+
 ---
 
 ## Workflow Settings

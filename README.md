@@ -68,7 +68,7 @@ That's it. DockAI handles the rest.
   <tr>
     <td width="50%">
       <h3>⚡ Multi-Provider LLMs</h3>
-      <p>Supports OpenAI, Azure OpenAI, Google Gemini, Anthropic Claude, and Ollama. Mix models per agent for cost optimization.</p>
+      <p>Supports OpenAI, Azure, Gemini, Anthropic, and Ollama. <strong>Mix and match providers</strong> per agent (e.g., OpenAI for analysis, Ollama for generation).</p>
     </td>
     <td width="50%">
       <h3>🔧 Fully Customizable</h3>
@@ -261,6 +261,16 @@ jobs:
     google_api_key: ${{ secrets.GOOGLE_API_KEY }}
     max_retries: 5
     strict_security: true
+```
+
+### Mixed Provider Example
+
+Use **Ollama** locally for most tasks, but **OpenAI** for complex analysis:
+
+```bash
+# .env
+DOCKAI_LLM_PROVIDER=ollama
+DOCKAI_MODEL_ANALYZER=openai/gpt-4o-mini
 ```
 
 See [GitHub Actions Guide](./docs/github-actions.md) for all options.

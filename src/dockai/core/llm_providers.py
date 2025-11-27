@@ -109,7 +109,7 @@ class LLMConfig:
     Ollama-specific attributes:
         ollama_base_url: Base URL for Ollama API (default: http://localhost:11434)
     """
-    provider: LLMProvider = LLMProvider.OPENAI
+    default_provider: LLMProvider = LLMProvider.OPENAI
     
     # Per-agent model configuration
     models: dict = field(default_factory=dict)
@@ -249,7 +249,7 @@ def load_llm_config_from_env() -> LLMConfig:
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     
     return LLMConfig(
-        provider=provider,
+        default_provider=provider,
         models=models,
         azure_endpoint=azure_endpoint,
         azure_api_version=azure_api_version,
@@ -279,7 +279,7 @@ def get_model_for_agent(agent_name: str, config: Optional[LLMConfig] = None) -> 
     
     # Fall back to default model for this agent's type
     model_type = AGENT_MODEL_TYPE.get(agent_name, "fast")
-    return DEFAULT_MODELS[config.provider][model_type]
+    return DEFAULT_MODELS[config.default_provider][model_type]
 
 
 def create_llm(
@@ -311,20 +311,33 @@ def create_llm(
     
     model_name = get_model_for_agent(agent_name, config)
     
-    logger.debug(f"Creating LLM for agent '{agent_name}': provider={config.provider.value}, model={model_name}")
+    # Determine provider for this specific agent
+    provider = config.default_provider
     
-    if config.provider == LLMProvider.OPENAI:
+    # Check if model name specifies a provider (e.g. "gemini/gemini-pro")
+    if "/" in model_name:
+        parts = model_name.split("/", 1)
+        try:
+            provider = LLMProvider(parts[0])
+            model_name = parts[1]
+        except ValueError:
+            # Not a valid provider prefix, assume it's part of the model name
+            pass
+            
+    logger.debug(f"Creating LLM for agent '{agent_name}': provider={provider.value}, model={model_name}")
+    
+    if provider == LLMProvider.OPENAI:
         return _create_openai_llm(model_name, temperature, **kwargs)
-    elif config.provider == LLMProvider.AZURE:
+    elif provider == LLMProvider.AZURE:
         return _create_azure_llm(model_name, temperature, config, **kwargs)
-    elif config.provider == LLMProvider.GEMINI:
+    elif provider == LLMProvider.GEMINI:
         return _create_gemini_llm(model_name, temperature, config, **kwargs)
-    elif config.provider == LLMProvider.ANTHROPIC:
+    elif provider == LLMProvider.ANTHROPIC:
         return _create_anthropic_llm(model_name, temperature, **kwargs)
-    elif config.provider == LLMProvider.OLLAMA:
+    elif provider == LLMProvider.OLLAMA:
         return _create_ollama_llm(model_name, temperature, config, **kwargs)
     else:
-        raise ValueError(f"Unsupported LLM provider: {config.provider}")
+        raise ValueError(f"Unsupported LLM provider: {provider}")
 
 
 def _create_openai_llm(model_name: str, temperature: float, **kwargs) -> Any:
@@ -423,27 +436,26 @@ def get_provider_info() -> dict:
     config = get_llm_config()
     
     info = {
-        "provider": config.provider.value,
+        "default_provider": config.default_provider.value,
         "models": {},
-        "credentials_configured": False,
+        "credentials_configured": {},
     }
     
-    # Check credentials
-    if config.provider == LLMProvider.OPENAI:
-        info["credentials_configured"] = bool(os.getenv("OPENAI_API_KEY"))
-    elif config.provider == LLMProvider.AZURE:
-        info["credentials_configured"] = bool(
-            os.getenv("AZURE_OPENAI_API_KEY") and config.azure_endpoint
-        )
+    # Check credentials for all providers
+    info["credentials_configured"]["openai"] = bool(os.getenv("OPENAI_API_KEY"))
+    
+    info["credentials_configured"]["azure"] = bool(
+        os.getenv("AZURE_OPENAI_API_KEY") and config.azure_endpoint
+    )
+    if info["credentials_configured"]["azure"]:
         info["azure_endpoint"] = config.azure_endpoint
         info["azure_api_version"] = config.azure_api_version
-    elif config.provider == LLMProvider.GEMINI:
-        info["credentials_configured"] = bool(os.getenv("GOOGLE_API_KEY"))
-    elif config.provider == LLMProvider.ANTHROPIC:
-        info["credentials_configured"] = bool(os.getenv("ANTHROPIC_API_KEY"))
-    elif config.provider == LLMProvider.OLLAMA:
-        info["credentials_configured"] = True # No credentials needed usually
-        info["ollama_base_url"] = config.ollama_base_url
+        
+    info["credentials_configured"]["gemini"] = bool(os.getenv("GOOGLE_API_KEY"))
+    info["credentials_configured"]["anthropic"] = bool(os.getenv("ANTHROPIC_API_KEY"))
+    
+    info["credentials_configured"]["ollama"] = True
+    info["ollama_base_url"] = config.ollama_base_url
     
     # Get model for each agent
     for agent in AGENT_MODEL_TYPE.keys():
@@ -456,10 +468,11 @@ def log_provider_info() -> None:
     """Logs the current LLM provider configuration."""
     info = get_provider_info()
     
-    logger.info(f"LLM Provider: {info['provider'].upper()}")
+    logger.info(f"Default LLM Provider: {info['default_provider'].upper()}")
     
-    if not info["credentials_configured"]:
-        logger.warning(f"Credentials not configured for {info['provider']} provider!")
+    # Check if default provider has credentials
+    if not info["credentials_configured"].get(info['default_provider'], False):
+        logger.warning(f"Credentials not configured for default provider {info['default_provider']}!")
     
     # Group models by unique value for cleaner output
     model_groups = {}

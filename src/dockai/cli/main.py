@@ -107,13 +107,14 @@ def build(
     set_llm_config(llm_config)
     
     # Validate API key configuration based on provider
-    if llm_config.provider == LLMProvider.OPENAI:
+    # Validate API key configuration based on default provider
+    if llm_config.default_provider == LLMProvider.OPENAI:
         if not os.getenv("OPENAI_API_KEY"):
             ui.print_error("Configuration Error", "OPENAI_API_KEY not found in environment variables.", 
                           "Please create a .env file with your API key or set the OPENAI_API_KEY environment variable.")
             logger.error("Problem: OPENAI_API_KEY missing")
             raise typer.Exit(code=1)
-    elif llm_config.provider == LLMProvider.AZURE:
+    elif llm_config.default_provider == LLMProvider.AZURE:
         if not os.getenv("AZURE_OPENAI_API_KEY"):
             ui.print_error("Configuration Error", "AZURE_OPENAI_API_KEY not found in environment variables.",
                           "Please set AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT environment variables.")
@@ -124,13 +125,13 @@ def build(
                           "Please set the AZURE_OPENAI_ENDPOINT environment variable.")
             logger.error("Problem: AZURE_OPENAI_ENDPOINT missing")
             raise typer.Exit(code=1)
-    elif llm_config.provider == LLMProvider.GEMINI:
+    elif llm_config.default_provider == LLMProvider.GEMINI:
         if not os.getenv("GOOGLE_API_KEY"):
             ui.print_error("Configuration Error", "GOOGLE_API_KEY not found in environment variables.",
                           "Please set the GOOGLE_API_KEY environment variable.")
             logger.error("Problem: GOOGLE_API_KEY missing")
             raise typer.Exit(code=1)
-    elif llm_config.provider == LLMProvider.ANTHROPIC:
+    elif llm_config.default_provider == LLMProvider.ANTHROPIC:
         if not os.getenv("ANTHROPIC_API_KEY"):
             ui.print_error("Configuration Error", "ANTHROPIC_API_KEY not found in environment variables.",
                           "Please set the ANTHROPIC_API_KEY environment variable.")
