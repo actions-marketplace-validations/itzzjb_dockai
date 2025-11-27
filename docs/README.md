@@ -55,7 +55,7 @@
 
 ## Version
 
-This documentation is for **DockAI v2.3.0**.
+This documentation is for **DockAI v2.4.0**.
 
 ## Support
 
