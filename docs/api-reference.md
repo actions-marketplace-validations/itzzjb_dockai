@@ -21,7 +21,7 @@ dockai/
 
 ### `dockai.agents.analyzer`
 
-#### `analyze_repo_needs(file_list, custom_instructions="")`
+#### `analyze_repo_needs(context: AgentContext)`
 
 Performs AI-powered analysis of the repository to determine project requirements.
 
@@ -29,8 +29,7 @@ Performs AI-powered analysis of the repository to determine project requirements
 
 | Name | Type | Description |
 |------|------|-------------|
-| `file_list` | `list` | List of file paths in the repository |
-| `custom_instructions` | `str` | Additional instructions for the analyzer |
+| `context` | `AgentContext` | Unified context with `file_tree` and `custom_instructions` |
 
 **Returns:** `Tuple[AnalysisResult, Dict[str, int]]`
 
@@ -38,9 +37,13 @@ Performs AI-powered analysis of the repository to determine project requirements
 
 ```python
 from dockai.agents.analyzer import analyze_repo_needs
+from dockai.core.agent_context import AgentContext
 
-file_list = ["app.py", "requirements.txt", "README.md"]
-result, usage = analyze_repo_needs(file_list, "Focus on Flask patterns")
+context = AgentContext(
+    file_tree=["app.py", "requirements.txt", "README.md"],
+    custom_instructions="Focus on Flask patterns"
+)
+result, usage = analyze_repo_needs(context=context)
 
 print(result.stack)              # "Python with Flask"
 print(result.project_type)       # "service"
@@ -52,7 +55,7 @@ print(result.files_to_read)      # ["app.py", "requirements.txt"]
 
 ### `dockai.agents.generator`
 
-#### `generate_dockerfile(stack_info, file_contents, ...)`
+#### `generate_dockerfile(context: AgentContext)`
 
 Generates a Dockerfile based on analysis results and strategic plan.
 
@@ -60,14 +63,7 @@ Generates a Dockerfile based on analysis results and strategic plan.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `stack_info` | `str` | Detected technology stack |
-| `file_contents` | `str` | Content of critical files |
-| `custom_instructions` | `str` | User instructions |
-| `feedback_error` | `str` | Error from previous attempt |
-| `previous_dockerfile` | `str` | Previous Dockerfile for iteration |
-| `retry_history` | `List[Dict]` | History of attempts |
-| `current_plan` | `Dict` | Strategic plan |
-| `reflection` | `Dict` | Reflection on failure |
+| `context` | `AgentContext` | Unified context with all project information |
 
 **Returns:** `Tuple[str, str, str, Any]` - (dockerfile, project_type, thought_process, usage)
 
@@ -75,12 +71,14 @@ Generates a Dockerfile based on analysis results and strategic plan.
 
 ```python
 from dockai.agents.generator import generate_dockerfile
+from dockai.core.agent_context import AgentContext
 
-dockerfile, project_type, thoughts, usage = generate_dockerfile(
-    stack_info="Python 3.11 with FastAPI",
+context = AgentContext(
+    analysis_result={"stack": "Python 3.11 with FastAPI"},
     file_contents="fastapi==0.100.0\nuvicorn==0.23.0",
     custom_instructions="Use multi-stage build"
 )
+dockerfile, project_type, thoughts, usage = generate_dockerfile(context=context)
 
 print(dockerfile)      # Generated Dockerfile content
 print(project_type)    # "service"
@@ -90,7 +88,7 @@ print(project_type)    # "service"
 
 ### `dockai.agents.reviewer`
 
-#### `review_dockerfile(dockerfile_content)`
+#### `review_dockerfile(context: AgentContext)`
 
 Performs security review of a generated Dockerfile.
 
@@ -98,7 +96,7 @@ Performs security review of a generated Dockerfile.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `dockerfile_content` | `str` | The Dockerfile to review |
+| `context` | `AgentContext` | Unified context with `dockerfile_content` |
 
 **Returns:** `Tuple[SecurityReviewResult, Any]`
 
@@ -106,14 +104,18 @@ Performs security review of a generated Dockerfile.
 
 ```python
 from dockai.agents.reviewer import review_dockerfile
+from dockai.core.agent_context import AgentContext
 
-result, usage = review_dockerfile("""
+context = AgentContext(
+    dockerfile_content="""
 FROM python:3.11
 WORKDIR /app
 COPY . .
 RUN pip install -r requirements.txt
 CMD ["python", "app.py"]
-""")
+"""
+)
+result, usage = review_dockerfile(context=context)
 
 print(result.is_secure)         # False (running as root)
 print(len(result.issues))       # Number of issues found
@@ -124,7 +126,7 @@ print(result.fixed_dockerfile)  # Corrected version
 
 ### `dockai.agents.agent_functions`
 
-#### `create_plan(analysis_result, file_contents, retry_history, custom_instructions)`
+#### `create_plan(context: AgentContext)`
 
 Creates a strategic plan for Dockerfile generation.
 
@@ -132,16 +134,13 @@ Creates a strategic plan for Dockerfile generation.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `analysis_result` | `Dict` | Results from project analysis |
-| `file_contents` | `str` | Critical file contents |
-| `retry_history` | `List[Dict]` | Previous attempt history |
-| `custom_instructions` | `str` | Custom guidance |
+| `context` | `AgentContext` | Unified context with `analysis_result`, `file_contents`, `retry_history` |
 
 **Returns:** `Tuple[PlanningResult, Dict[str, int]]`
 
 ---
 
-#### `reflect_on_failure(error_message, dockerfile_content, logs, ...)`
+#### `reflect_on_failure(context: AgentContext)`
 
 Analyzes a failed attempt to learn and adapt.
 
@@ -149,16 +148,13 @@ Analyzes a failed attempt to learn and adapt.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `error_message` | `str` | The error that occurred |
-| `dockerfile_content` | `str` | The Dockerfile that failed |
-| `logs` | `str` | Build/run logs |
-| `retry_history` | `List[Dict]` | Previous attempts |
+| `context` | `AgentContext` | Unified context with `error_message`, `dockerfile_content`, `container_logs`, `retry_history` |
 
 **Returns:** `Tuple[ReflectionResult, Dict[str, int]]`
 
 ---
 
-#### `detect_health_endpoints(file_contents, stack)`
+#### `detect_health_endpoints(context: AgentContext)`
 
 Detects health check endpoints from source code.
 
@@ -166,14 +162,13 @@ Detects health check endpoints from source code.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `file_contents` | `str` | Source code content |
-| `stack` | `str` | Detected technology stack |
+| `context` | `AgentContext` | Unified context with `file_contents` and `analysis_result` |
 
 **Returns:** `Tuple[HealthEndpointDetectionResult, Dict[str, int]]`
 
 ---
 
-#### `detect_readiness_patterns(file_contents, stack, analysis_result)`
+#### `detect_readiness_patterns(context: AgentContext)`
 
 Detects application startup patterns for readiness checks.
 
@@ -181,15 +176,50 @@ Detects application startup patterns for readiness checks.
 
 | Name | Type | Description |
 |------|------|-------------|
-| `file_contents` | `str` | Source code content |
-| `stack` | `str` | Detected technology stack |
-| `analysis_result` | `Dict` | Optional analysis context |
+| `context` | `AgentContext` | Unified context with `file_contents` and `analysis_result` |
 
 **Returns:** `Tuple[ReadinessPatternResult, Dict[str, int]]`
 
 ---
 
 ## Core Module
+
+### `dockai.core.agent_context`
+
+#### `AgentContext`
+
+Dataclass that provides unified context to all AI agents.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file_tree` | `List[str]` | List of project files |
+| `file_contents` | `str` | Critical file contents |
+| `analysis_result` | `Dict[str, Any]` | Stack detection results |
+| `current_plan` | `Optional[Dict]` | Strategic build plan |
+| `retry_history` | `List[Dict]` | Previous attempts & lessons |
+| `dockerfile_content` | `Optional[str]` | Current/previous Dockerfile |
+| `reflection` | `Optional[Dict]` | Failure analysis |
+| `error_message` | `Optional[str]` | Last error message |
+| `error_details` | `Optional[Dict]` | Classified error details |
+| `container_logs` | `str` | Container runtime logs |
+| `custom_instructions` | `str` | User guidance |
+| `verified_tags` | `str` | Valid Docker image tags |
+| `retry_count` | `int` | Current retry number |
+
+**Example:**
+
+```python
+from dockai.core.agent_context import AgentContext
+
+context = AgentContext(
+    file_tree=["app.py", "requirements.txt"],
+    file_contents="flask==2.0.0",
+    analysis_result={"stack": "Python with Flask", "project_type": "service"},
+    custom_instructions="Use alpine base images"
+)
+```
+
+---
 
 ### `dockai.core.schemas`
 

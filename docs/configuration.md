@@ -121,8 +121,16 @@ DOCKAI_MODEL_ANALYZER=openai/gpt-4o-mini
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DOCKAI_MAX_FILE_CHARS` | Max characters to read per file | `200000` |
-| `DOCKAI_MAX_FILE_LINES` | Max lines to read per file | `5000` |
+| `DOCKAI_TRUNCATION_ENABLED` | Enable smart file truncation | `false` |
+| `DOCKAI_TOKEN_LIMIT` | Token limit that triggers auto-truncation | `100000` |
+| `DOCKAI_MAX_FILE_CHARS` | Max characters per file (when truncating) | `200000` |
+| `DOCKAI_MAX_FILE_LINES` | Max lines per file (when truncating) | `5000` |
+
+**Truncation Behavior**:
+- **Default**: Truncation is OFF - files are read in full
+- **Env Var**: Set `DOCKAI_TRUNCATION_ENABLED=true` to always truncate large files
+- **Auto-truncation**: If total content exceeds `DOCKAI_TOKEN_LIMIT`, truncation auto-enables
+- **Token Estimation**: ~1 token ≈ 4 characters
 
 ---
 
