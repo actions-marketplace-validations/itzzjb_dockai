@@ -165,8 +165,8 @@ def load_llm_config_from_env() -> LLMConfig:
     
     Environment Variables:
         DOCKAI_LLM_PROVIDER: Provider name (openai, azure, gemini)
+        DOCKAI_LLM_PROVIDER: Provider name (openai, azure, gemini)
         DOCKAI_MODEL_<AGENT>: Model for specific agent
-        MODEL_ANALYZER / MODEL_GENERATOR: Legacy model env vars
         
         Azure-specific:
         AZURE_OPENAI_ENDPOINT: Azure endpoint URL
@@ -212,24 +212,6 @@ def load_llm_config_from_env() -> LLMConfig:
         model = os.getenv(env_var)
         if model:
             models[agent] = model
-    
-    # Support legacy MODEL_ANALYZER and MODEL_GENERATOR env vars
-    legacy_analyzer = os.getenv("MODEL_ANALYZER")
-    legacy_generator = os.getenv("MODEL_GENERATOR")
-    
-    if legacy_analyzer and "analyzer" not in models:
-        models["analyzer"] = legacy_analyzer
-        # Also use for other "fast" agents if not specified
-        for agent, model_type in AGENT_MODEL_TYPE.items():
-            if model_type == "fast" and agent not in models:
-                models[agent] = legacy_analyzer
-                
-    if legacy_generator and "generator" not in models:
-        models["generator"] = legacy_generator
-        # Also use for other "powerful" agents if not specified
-        for agent, model_type in AGENT_MODEL_TYPE.items():
-            if model_type == "powerful" and agent not in models:
-                models[agent] = legacy_generator
     
     # Load Azure-specific settings
     azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")

@@ -68,11 +68,8 @@ def load_instructions(path: str):
     set_prompt_config(prompt_config)
     logger.debug("Custom prompts and instructions configuration loaded")
     
-    # Return analyzer and generator instructions for backward compatibility with the config dict
-    return (
-        prompt_config.analyzer_instructions or "",
-        prompt_config.generator_instructions or ""
-    )
+    # Return prompt configuration directly
+    return prompt_config
 
 @app.command("build")
 def build(
@@ -145,7 +142,8 @@ def build(
     logger.info(f"Starting analysis for: {path}")
 
     # Load custom instructions
-    analyzer_instructions, generator_instructions = load_instructions(path)
+    # Load custom instructions
+    prompt_config = load_instructions(path)
     
     # Initialize the workflow state with all necessary fields
     initial_state = {
@@ -163,8 +161,8 @@ def build(
         "logs": [],
         "usage_stats": [],
         "config": {
-            "analyzer_instructions": analyzer_instructions,
-            "generator_instructions": generator_instructions
+            "analyzer_instructions": prompt_config.analyzer_instructions or "",
+            "generator_instructions": prompt_config.generator_instructions or ""
         },
         # Adaptive agent fields for learning and planning
         "retry_history": [],  # Full history of attempts for learning
