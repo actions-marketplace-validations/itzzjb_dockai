@@ -10,9 +10,10 @@ Supported Providers:
 - azure: Azure OpenAI Service
 - gemini: Google Gemini (Gemini Pro, Gemini 1.5 Pro, etc.)
 - anthropic: Anthropic Claude (Claude 3.5 Sonnet, Claude 3 Opus, etc.)
+- ollama: Ollama (Llama 3, Mistral, etc.)
 
 Configuration is done via environment variables:
-- DOCKAI_LLM_PROVIDER: Default provider (openai, azure, gemini, anthropic)
+- DOCKAI_LLM_PROVIDER: Default provider (openai, azure, gemini, anthropic, ollama)
 - DOCKAI_MODEL_<AGENT>: Model name for each agent
 - Provider-specific credentials (OPENAI_API_KEY, AZURE_OPENAI_*, GOOGLE_API_KEY, ANTHROPIC_API_KEY)
 
@@ -44,6 +45,7 @@ class LLMProvider(str, Enum):
     AZURE = "azure"
     GEMINI = "gemini"
     ANTHROPIC = "anthropic"
+    OLLAMA = "ollama"
 
 
 # Default models for each provider
@@ -63,6 +65,10 @@ DEFAULT_MODELS = {
     LLMProvider.ANTHROPIC: {
         "fast": "claude-3-5-haiku-latest",   # Fast Claude model
         "powerful": "claude-sonnet-4-20250514", # Powerful Claude model
+    },
+    LLMProvider.OLLAMA: {
+        "fast": "llama3",            # Fast Ollama model (e.g., Llama 3 8B)
+        "powerful": "llama3",        # Powerful Ollama model (e.g., Llama 3 70B - user should configure)
     },
 }
 
@@ -99,6 +105,9 @@ class LLMConfig:
         
     Gemini-specific attributes:
         google_project: Google Cloud project ID (optional)
+
+    Ollama-specific attributes:
+        ollama_base_url: Base URL for Ollama API (default: http://localhost:11434)
     """
     provider: LLMProvider = LLMProvider.OPENAI
     
@@ -115,6 +124,9 @@ class LLMConfig:
     
     # Gemini-specific settings
     google_project: Optional[str] = None
+
+    # Ollama-specific settings
+    ollama_base_url: str = "http://localhost:11434"
 
 
 # Global LLM configuration instance
@@ -163,6 +175,9 @@ def load_llm_config_from_env() -> LLMConfig:
         
         Gemini-specific:
         GOOGLE_CLOUD_PROJECT: Google Cloud project ID
+
+        Ollama-specific:
+        OLLAMA_BASE_URL: Base URL for Ollama API
     
     Returns:
         LLMConfig: Configuration loaded from environment.
@@ -229,6 +244,9 @@ def load_llm_config_from_env() -> LLMConfig:
     
     # Load Gemini-specific settings
     google_project = os.getenv("GOOGLE_CLOUD_PROJECT")
+
+    # Load Ollama-specific settings
+    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     
     return LLMConfig(
         provider=provider,
@@ -237,6 +255,7 @@ def load_llm_config_from_env() -> LLMConfig:
         azure_api_version=azure_api_version,
         azure_deployment_map=azure_deployment_map,
         google_project=google_project,
+        ollama_base_url=ollama_base_url,
     )
 
 
@@ -302,6 +321,8 @@ def create_llm(
         return _create_gemini_llm(model_name, temperature, config, **kwargs)
     elif config.provider == LLMProvider.ANTHROPIC:
         return _create_anthropic_llm(model_name, temperature, **kwargs)
+    elif config.provider == LLMProvider.OLLAMA:
+        return _create_ollama_llm(model_name, temperature, config, **kwargs)
     else:
         raise ValueError(f"Unsupported LLM provider: {config.provider}")
 
@@ -378,6 +399,18 @@ def _create_anthropic_llm(model_name: str, temperature: float, **kwargs) -> Any:
     )
 
 
+def _create_ollama_llm(model_name: str, temperature: float, config: LLMConfig, **kwargs) -> Any:
+    """Creates an Ollama LLM instance."""
+    from langchain_ollama import ChatOllama
+    
+    return ChatOllama(
+        model=model_name,
+        temperature=temperature,
+        base_url=config.ollama_base_url,
+        **kwargs
+    )
+
+
 def get_provider_info() -> dict:
     """
     Returns information about the current LLM provider configuration.
@@ -408,6 +441,9 @@ def get_provider_info() -> dict:
         info["credentials_configured"] = bool(os.getenv("GOOGLE_API_KEY"))
     elif config.provider == LLMProvider.ANTHROPIC:
         info["credentials_configured"] = bool(os.getenv("ANTHROPIC_API_KEY"))
+    elif config.provider == LLMProvider.OLLAMA:
+        info["credentials_configured"] = True # No credentials needed usually
+        info["ollama_base_url"] = config.ollama_base_url
     
     # Get model for each agent
     for agent in AGENT_MODEL_TYPE.keys():

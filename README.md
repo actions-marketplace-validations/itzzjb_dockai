@@ -68,7 +68,7 @@ That's it. DockAI handles the rest.
   <tr>
     <td width="50%">
       <h3>⚡ Multi-Provider LLMs</h3>
-      <p>Supports OpenAI, Azure OpenAI, Google Gemini, and Anthropic Claude. Mix models per agent for cost optimization.</p>
+      <p>Supports OpenAI, Azure OpenAI, Google Gemini, Anthropic Claude, and Ollama. Mix models per agent for cost optimization.</p>
     </td>
     <td width="50%">
       <h3>🔧 Fully Customizable</h3>
@@ -133,7 +133,7 @@ Create a `.env` file:
 # Required: Choose your LLM provider and add the API key
 OPENAI_API_KEY=sk-your-api-key
 
-# Optional: Use a different provider (openai, azure, gemini, anthropic)
+# Optional: Use a different provider (openai, azure, gemini, anthropic, ollama)
 # DOCKAI_LLM_PROVIDER=openai
 ```
 
@@ -206,7 +206,8 @@ graph TD
 | `GOOGLE_API_KEY` | Google Gemini API key | Required* |
 | `ANTHROPIC_API_KEY` | Anthropic Claude API key | Required* |
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | Required* |
-| `DOCKAI_LLM_PROVIDER` | Provider (`openai`, `azure`, `gemini`, `anthropic`) | `openai` |
+| `OLLAMA_BASE_URL` | Ollama Base URL | `http://localhost:11434` |
+| `DOCKAI_LLM_PROVIDER` | Provider (`openai`, `azure`, `gemini`, `anthropic`, `ollama`) | `openai` |
 | `MAX_RETRIES` | Maximum retry attempts | `3` |
 | `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy scanning | `false` |
 | `DOCKAI_MAX_FILE_CHARS` | Max chars per file | `200000` |

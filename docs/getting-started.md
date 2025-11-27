@@ -20,6 +20,7 @@ This guide will help you install, configure, and run DockAI for the first time.
 | **Azure OpenAI** | GPT-4o, GPT-4o-mini | `AZURE_OPENAI_API_KEY` |
 | **Google Gemini** | Gemini 1.5 Pro, Flash | `GOOGLE_API_KEY` |
 | **Anthropic** | Claude Sonnet 4, Haiku 3.5 | `ANTHROPIC_API_KEY` |
+| **Ollama** | Llama 3, Mistral | `OLLAMA_BASE_URL` |
 
 ### Optional: Trivy Security Scanner
 

@@ -28,6 +28,7 @@ DockAI supports three configuration methods (in priority order):
 | `AZURE_OPENAI_API_VERSION` | Azure OpenAI | Default: `2024-02-15-preview` |
 | `GOOGLE_API_KEY` | Google Gemini | If using Gemini |
 | `ANTHROPIC_API_KEY` | Anthropic | If using Anthropic |
+| `OLLAMA_BASE_URL` | Ollama | Default: `http://localhost:11434` |
 
 ### LLM Provider Selection
 
@@ -35,7 +36,7 @@ DockAI supports three configuration methods (in priority order):
 |----------|-------------|---------|
 | `DOCKAI_LLM_PROVIDER` | Provider selection | `openai` |
 
-**Valid values**: `openai`, `azure`, `gemini`, `anthropic`
+**Valid values**: `openai`, `azure`, `gemini`, `anthropic`, `ollama`
 
 ---
 
@@ -64,6 +65,7 @@ Assign different models to different agents for cost optimization:
 | Azure | `gpt-4o-mini` | `gpt-4o` |
 | Gemini | `gemini-1.5-flash` | `gemini-1.5-pro` |
 | Anthropic | `claude-3-5-haiku-latest` | `claude-sonnet-4-20250514` |
+| Ollama | `llama3` | `llama3` |
 
 ---
 

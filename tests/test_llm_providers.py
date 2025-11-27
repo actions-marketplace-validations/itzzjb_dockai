@@ -1,0 +1,90 @@
+import os
+import pytest
+from unittest.mock import patch, MagicMock
+from dockai.core.llm_providers import (
+    LLMProvider,
+    LLMConfig,
+    load_llm_config_from_env,
+    create_llm,
+    get_provider_info,
+    _llm_config
+)
+
+@pytest.fixture
+def clean_env():
+    """Clean environment variables before and after tests."""
+    # Save original env
+    original_env = dict(os.environ)
+    
+    # Clear relevant env vars
+    keys_to_clear = [
+        "DOCKAI_LLM_PROVIDER",
+        "OLLAMA_BASE_URL",
+        "OPENAI_API_KEY",
+        "AZURE_OPENAI_API_KEY",
+        "GOOGLE_API_KEY",
+        "ANTHROPIC_API_KEY"
+    ]
+    for key in keys_to_clear:
+        if key in os.environ:
+            del os.environ[key]
+            
+    yield
+    
+    # Restore original env
+    os.environ.clear()
+    os.environ.update(original_env)
+
+def test_load_ollama_config(clean_env):
+    """Test loading Ollama configuration from environment."""
+    os.environ["DOCKAI_LLM_PROVIDER"] = "ollama"
+    os.environ["OLLAMA_BASE_URL"] = "http://custom-ollama:11434"
+    
+    config = load_llm_config_from_env()
+    
+    assert config.provider == LLMProvider.OLLAMA
+    assert config.ollama_base_url == "http://custom-ollama:11434"
+
+def test_load_ollama_config_default(clean_env):
+    """Test loading Ollama configuration with defaults."""
+    os.environ["DOCKAI_LLM_PROVIDER"] = "ollama"
+    
+    config = load_llm_config_from_env()
+    
+    assert config.provider == LLMProvider.OLLAMA
+    assert config.ollama_base_url == "http://localhost:11434"
+
+@patch("langchain_ollama.ChatOllama")
+def test_create_ollama_llm(mock_chat_ollama, clean_env):
+    """Test creating an Ollama LLM instance."""
+    os.environ["DOCKAI_LLM_PROVIDER"] = "ollama"
+    os.environ["OLLAMA_BASE_URL"] = "http://test-url:11434"
+    
+    # Reset global config to force reload
+    import dockai.core.llm_providers
+    dockai.core.llm_providers._llm_config = None
+    
+    llm = create_llm("analyzer", temperature=0.5)
+    
+    mock_chat_ollama.assert_called_once()
+    call_kwargs = mock_chat_ollama.call_args.kwargs
+    
+    assert call_kwargs["base_url"] == "http://test-url:11434"
+    assert call_kwargs["temperature"] == 0.5
+    # Default model for analyzer is "llama3"
+    assert call_kwargs["model"] == "llama3"
+
+def test_get_provider_info_ollama(clean_env):
+    """Test provider info for Ollama."""
+    os.environ["DOCKAI_LLM_PROVIDER"] = "ollama"
+    os.environ["OLLAMA_BASE_URL"] = "http://info-test:11434"
+    
+    # Reset global config
+    import dockai.core.llm_providers
+    dockai.core.llm_providers._llm_config = None
+    
+    info = get_provider_info()
+    
+    assert info["provider"] == "ollama"
+    assert info["credentials_configured"] is True
+    assert info["ollama_base_url"] == "http://info-test:11434"
