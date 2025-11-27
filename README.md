@@ -74,6 +74,15 @@ That's it. DockAI handles the rest.
       <h3>🔧 Fully Customizable</h3>
       <p>Override prompts, instructions, and model selection per agent. Use <code>.dockai</code> files for repo-specific configs.</p>
     </td>
+  <tr>
+    <td width="50%">
+      <h3>📦 Smart Registry Integration</h3>
+      <p>Automatically validates base images against <strong>Docker Hub, GCR, Quay, and GHCR</strong>. Prioritizes small, secure variants like <code>alpine</code> and <code>slim</code>.</p>
+    </td>
+    <td width="50%">
+      <h3>🚀 Performance Optimized</h3>
+      <p>Intelligent caching prevents redundant network calls. Semantic version sorting ensures you always get the latest stable releases.</p>
+    </td>
   </tr>
 </table>
 

@@ -31,7 +31,7 @@ src/dockai/
 ├── agents/         # AI Agent logic (Analyzer, Generator, etc.)
 ├── cli/            # Command-line interface (Typer)
 ├── core/           # Core logic (State, Config, MCP Server)
-├── utils/          # Helpers (File I/O, Docker wrapper)
+├── utils/          # Helpers (File I/O, Docker wrapper, Registry Integration)
 └── workflow/       # LangGraph nodes and graph definition
 ```
 

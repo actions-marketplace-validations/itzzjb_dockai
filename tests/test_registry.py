@@ -1,6 +1,11 @@
-"""Tests for the registry module."""
+import pytest
 from unittest.mock import patch, MagicMock
 from dockai.utils.registry import get_docker_tags, _get_image_prefix
+
+@pytest.fixture(autouse=True)
+def clear_registry_cache():
+    """Clear the lru_cache of get_docker_tags before each test."""
+    get_docker_tags.cache_clear()
 
 @patch("dockai.utils.registry.httpx.get")
 def test_get_docker_tags_docker_hub(mock_get):
