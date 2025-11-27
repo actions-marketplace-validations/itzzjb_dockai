@@ -165,7 +165,6 @@ def load_llm_config_from_env() -> LLMConfig:
     
     Environment Variables:
         DOCKAI_LLM_PROVIDER: Provider name (openai, azure, gemini)
-        DOCKAI_LLM_PROVIDER: Provider name (openai, azure, gemini)
         DOCKAI_MODEL_<AGENT>: Model for specific agent
         
         Azure-specific:
