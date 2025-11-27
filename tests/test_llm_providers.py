@@ -23,7 +23,11 @@ def clean_env():
         "OPENAI_API_KEY",
         "AZURE_OPENAI_API_KEY",
         "GOOGLE_API_KEY",
-        "ANTHROPIC_API_KEY"
+        "ANTHROPIC_API_KEY",
+        "DOCKAI_MODEL_ANALYZER",
+        "DOCKAI_MODEL_GENERATOR",
+        "MODEL_ANALYZER",
+        "MODEL_GENERATOR"
     ]
     for key in keys_to_clear:
         if key in os.environ:
