@@ -201,7 +201,7 @@ Start by explaining your thought process in detail.""")
             "suggested_base_image": analysis_result.get("suggested_base_image", ""),
             "build_command": analysis_result.get("build_command", "None detected"),
             "start_command": analysis_result.get("start_command", "None detected"),
-            "file_contents": file_contents[:8000],  # Truncate file contents to avoid token limits
+            "file_contents": file_contents,  # Truncate file contents to avoid token limits
             "retry_context": retry_context,
             "custom_instructions": custom_instructions
         },
@@ -458,7 +458,7 @@ Explain your reasoning in the thought process.""")
         chain,
         {
             "stack": analysis_result.get("stack", "Unknown"),
-            "file_contents": file_contents[:10000]  # Limit size to avoid context overflow
+            "file_contents": file_contents  # Limit size to avoid context overflow
         },
         [callback]
     )
@@ -564,7 +564,7 @@ Explain your reasoning in the thought process.""")
         {
             "stack": analysis_result.get("stack", "Unknown"),
             "project_type": analysis_result.get("project_type", "service"),
-            "file_contents": file_contents[:8000]  # Limit size
+            "file_contents": file_contents  # Limit size
         },
         [callback]
     )
@@ -708,7 +708,7 @@ Explain your changes in the thought process.""")
             "stack": analysis_result.get("stack", "Unknown"),
             "build_command": analysis_result.get("build_command", "None"),
             "start_command": analysis_result.get("start_command", "None"),
-            "file_contents": file_contents[:6000],
+            "file_contents": file_contents,
             "custom_instructions": custom_instructions
         },
         [callback]
