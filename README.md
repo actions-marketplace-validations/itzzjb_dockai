@@ -16,7 +16,6 @@
   <a href="https://pypi.org/project/dockai-cli/"><img src="https://img.shields.io/pypi/v/dockai-cli?style=flat-square&color=blue" alt="PyPI Version" /></a>
   <a href="https://pypi.org/project/dockai-cli/"><img src="https://img.shields.io/pypi/pyversions/dockai-cli?style=flat-square" alt="Python Version" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License" /></a>
-  <a href="https://github.com/itzzjb/dockai/actions"><img src="https://img.shields.io/github/actions/workflow/status/itzzjb/dockai/test.yml?style=flat-square" alt="Build Status" /></a>
 </p>
 
 <p align="center">
