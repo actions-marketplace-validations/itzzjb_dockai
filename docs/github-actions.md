@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Run DockAI
-        uses: itzzjb/dockai@v2
+        uses: itzzjb/dockai@v3
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 ```
@@ -121,7 +121,7 @@ jobs:
 ### Basic OpenAI
 
 ```yaml
-- uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v3
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 ```
@@ -129,7 +129,7 @@ jobs:
 ### Google Gemini
 
 ```yaml
-- uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v3
   with:
     llm_provider: gemini
     google_api_key: ${{ secrets.GOOGLE_API_KEY }}
@@ -138,7 +138,7 @@ jobs:
 ### Anthropic Claude
 
 ```yaml
-- uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v3
   with:
     llm_provider: anthropic
     anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -147,7 +147,7 @@ jobs:
 ### Azure OpenAI
 
 ```yaml
-- uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v3
   with:
     llm_provider: azure
     azure_openai_api_key: ${{ secrets.AZURE_OPENAI_API_KEY }}
@@ -159,7 +159,7 @@ jobs:
 Use faster models for simple tasks:
 
 ```yaml
-- uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v3
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     model_analyzer: gpt-4o-mini
@@ -174,7 +174,7 @@ Use faster models for simple tasks:
 Fail on any security vulnerability:
 
 ```yaml
-- uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v3
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     strict_security: 'true'
@@ -184,7 +184,7 @@ Fail on any security vulnerability:
 ### Custom Instructions
 
 ```yaml
-- uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v3
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     generator_instructions: |
@@ -201,7 +201,7 @@ Fail on any security vulnerability:
 For complex projects that may need multiple attempts:
 
 ```yaml
-- uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v3
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     max_retries: '5'
@@ -231,7 +231,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Generate Dockerfile
-        uses: itzzjb/dockai@v2
+        uses: itzzjb/dockai@v3
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
       
@@ -266,7 +266,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Generate Dockerfile
-        uses: itzzjb/dockai@v2
+        uses: itzzjb/dockai@v3
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           strict_security: 'true'
@@ -300,7 +300,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Generate Dockerfile for ${{ matrix.service }}
-        uses: itzzjb/dockai@v2
+        uses: itzzjb/dockai@v3
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           project_path: services/${{ matrix.service }}
@@ -323,7 +323,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Regenerate Dockerfile
-        uses: itzzjb/dockai@v2
+        uses: itzzjb/dockai@v3
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           strict_security: 'true'
@@ -364,7 +364,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: itzzjb/dockai@v2
+      - uses: itzzjb/dockai@v3
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           project_path: ${{ inputs.project_path }}

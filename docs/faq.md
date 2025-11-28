@@ -92,7 +92,7 @@ dockai build .
 Or in GitHub Actions:
 
 ```yaml
-- uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v3
   with:
     skip_security_scan: 'true'
 ```

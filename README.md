@@ -108,7 +108,7 @@ Automate Dockerfile generation in your pipelines.
 ```yaml
 steps:
   - uses: actions/checkout@v3
-  - uses: itzzjb/dockai@v2
+  - uses: itzzjb/dockai@v3
     with:
       openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 ```
@@ -257,7 +257,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: itzzjb/dockai@v2
+      - uses: itzzjb/dockai@v3
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 ```
@@ -265,7 +265,7 @@ jobs:
 ### Multi-Provider Example
 
 ```yaml
-- uses: itzzjb/dockai@v2
+- uses: itzzjb/dockai@v3
   with:
     llm_provider: gemini
     google_api_key: ${{ secrets.GOOGLE_API_KEY }}
