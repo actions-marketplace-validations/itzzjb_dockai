@@ -14,10 +14,13 @@ name: Auto-Dockerize with DockAI
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   dockai:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required if committing Dockerfile
     steps:
       - uses: actions/checkout@v4
       
@@ -25,7 +28,19 @@ jobs:
         uses: itzzjb/dockai@v3
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+      
+      # Optional: Commit the generated Dockerfile to your repository
+      - name: Commit and push Dockerfile
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add Dockerfile .dockerignore 2>/dev/null || git add Dockerfile
+          git diff --staged --quiet || git commit -m "chore: auto-generate Dockerfile with DockAI"
+          git push
 ```
+
+> 💡 **Note**: The commit step is optional. Remove it if you only want to generate the Dockerfile at runtime without saving it to your repository. See [Committing Generated Dockerfile](#committing-generated-dockerfile) for more details.
 
 ---
 
@@ -255,6 +270,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      packages: write  # Required for GHCR push
     steps:
       - uses: actions/checkout@v4
       
@@ -401,7 +418,211 @@ Set these at the organization level:
 
 ---
 
+## Committing Generated Dockerfile
+
+By default, DockAI generates the Dockerfile at **runtime only** - it's not automatically committed to your repository. This is useful for:
+- **Runtime builds**: Building Docker images in CI/CD without cluttering your repo
+- **Testing**: Trying different configurations without committing changes
+- **Dynamic generation**: Generating Dockerfiles on-demand for different environments
+
+However, if you want to **save the Dockerfile to your repository**, you can add a commit step to your workflow.
+
+---
+
+### Why Commit the Dockerfile?
+
+Committing the generated Dockerfile has several benefits:
+
+✅ **Version Control**: Track changes to your Dockerfile over time  
+✅ **Code Review**: Review Dockerfile changes in pull requests  
+✅ **Transparency**: See exactly what Docker configuration is being used  
+✅ **Offline Builds**: Build images without re-running DockAI  
+✅ **Manual Edits**: Make manual adjustments to the AI-generated Dockerfile
+
+---
+
+### How to Commit the Dockerfile
+
+Add a commit step **after** the DockAI action in your workflow:
+
+```yaml
+name: Generate and Commit Dockerfile
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  dockai:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for pushing commits
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Generate Dockerfile
+        uses: itzzjb/dockai@v3
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+      
+      - name: Commit and push Dockerfile
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add Dockerfile .dockerignore 2>/dev/null || git add Dockerfile
+          git diff --staged --quiet || git commit -m "chore: auto-generate Dockerfile with DockAI"
+          git push
+```
+
+---
+
+### Explanation of the Commit Step
+
+Let's break down what this step does:
+
+1. **Conditional Execution**: Only runs on `push` or `workflow_dispatch` events
+   ```yaml
+   if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+   ```
+
+2. **Git Configuration**: Sets up git with the GitHub Actions bot identity
+   ```bash
+   git config --local user.email "github-actions[bot]@users.noreply.github.com"
+   git config --local user.name "github-actions[bot]"
+   ```
+
+3. **Stage Files**: Adds the generated files (handles missing `.dockerignore` gracefully)
+   ```bash
+   git add Dockerfile .dockerignore 2>/dev/null || git add Dockerfile
+   ```
+
+4. **Commit Only if Changed**: Only creates a commit if there are actual changes
+   ```bash
+   git diff --staged --quiet || git commit -m "chore: auto-generate Dockerfile with DockAI"
+   ```
+
+5. **Push to Repository**: Pushes the commit to the current branch
+   ```bash
+   git push
+   ```
+
+---
+
+### Avoiding Commits on Pull Requests
+
+The `if` condition prevents committing on pull requests, which is usually desired:
+
+```yaml
+if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+```
+
+This means:
+- ✅ **Commits on push to main/develop**: Dockerfile is saved to the branch
+- ✅ **Commits on manual trigger**: Dockerfile is saved when you manually run the workflow
+- ❌ **No commits on PRs**: Avoids polluting PR branches with automated commits
+
+If you **do** want to commit on PRs, remove the `if` condition or adjust it:
+
+```yaml
+# Commit on all events
+- name: Commit and push Dockerfile
+  run: |
+    git config --local user.email "github-actions[bot]@users.noreply.github.com"
+    git config --local user.name "github-actions[bot]"
+    git add Dockerfile .dockerignore 2>/dev/null || git add Dockerfile
+    git diff --staged --quiet || git commit -m "chore: auto-generate Dockerfile with DockAI"
+    git push
+```
+
+---
+
+### Custom Commit Messages
+
+You can customize the commit message to include more context:
+
+```yaml
+- name: Commit and push Dockerfile
+  run: |
+    git config --local user.email "github-actions[bot]@users.noreply.github.com"
+    git config --local user.name "github-actions[bot]"
+    git add Dockerfile .dockerignore 2>/dev/null || git add Dockerfile
+    git diff --staged --quiet || git commit -m "chore: update Dockerfile for ${{ github.ref_name }} @ ${{ github.sha }}"
+    git push
+```
+
+Or use environment variables for more dynamic messages:
+
+```yaml
+- name: Commit and push Dockerfile
+  env:
+    COMMIT_MSG: "feat: regenerate Dockerfile with DockAI v3"
+  run: |
+    git config --local user.email "github-actions[bot]@users.noreply.github.com"
+    git config --local user.name "github-actions[bot]"
+    git add Dockerfile .dockerignore 2>/dev/null || git add Dockerfile
+    git diff --staged --quiet || git commit -m "$COMMIT_MSG"
+    git push
+```
+
+---
+
+### Creating a Pull Request Instead
+
+Instead of committing directly, you can create a pull request with the changes:
+
+```yaml
+name: Generate Dockerfile PR
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sunday
+  workflow_dispatch:
+
+jobs:
+  dockai:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Generate Dockerfile
+        uses: itzzjb/dockai@v3
+        with:
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+      
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          title: 'chore: Update Dockerfile with DockAI'
+          commit-message: 'chore: Regenerate Dockerfile with DockAI'
+          branch: dockerfile-update
+          body: |
+            ## Automated Dockerfile Update
+            
+            This PR updates the Dockerfile using DockAI.
+            
+            Please review the changes before merging.
+```
+
+---
+
+### Required Permissions
+
+Ensure your workflow has write permissions to commit and push:
+
+```yaml
+permissions:
+  contents: write
+```
+
+This is usually enabled by default, but some organizations may restrict it. If you get a permission error, check your repository or organization settings.
+
+---
+
 ## Troubleshooting
+
+
 
 ### "API key not found"
 

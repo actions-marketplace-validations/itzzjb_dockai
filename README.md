@@ -262,6 +262,8 @@ jobs:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
 ```
 
+> 💡 **Tip**: By default, the Dockerfile is generated at runtime and not committed. If you want to save it to your repository, see the [Committing Generated Dockerfile](./docs/github-actions.md#committing-generated-dockerfile) guide.
+
 ### Multi-Provider Example
 
 ```yaml
