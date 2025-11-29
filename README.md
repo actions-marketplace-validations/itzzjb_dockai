@@ -163,43 +163,42 @@ dockai build /path/to/project --verbose
 ```mermaid
 flowchart TB
     subgraph Discovery["📊 Discovery Phase"]
-        Scan["📂 Scanner<br/>Find all files"]
-        Analyze["🧠 Analyzer<br/>Detect tech stack"]
-        Read["📖 Reader<br/>Read critical files"]
-        Health["🏥 Health Detector<br/>Find health endpoints"]
-        Ready["⏱️ Readiness Detector<br/>Find startup patterns"]
+        scan["📂 scan_node<br/>Scan directory tree"]
+        analyze["🧠 analyze_node<br/>AI: Detect stack & requirements"]
+        read["📖 read_files_node<br/>Read critical files"]
+        health["🏥 detect_health_node<br/>AI: Find health endpoints"]
+        ready["⏱️ detect_readiness_node<br/>AI: Find startup patterns"]
     end
     
     subgraph Generation["⚙️ Generation Phase"]
-        Plan["📝 Planner<br/>Create build strategy"]
-        Generate["⚙️ Generator<br/>Write Dockerfile"]
+        plan["📝 plan_node<br/>AI: Create build strategy"]
+        generate["⚙️ generate_node<br/>AI: Write Dockerfile"]
     end
     
     subgraph Validation["✅ Validation Phase"]
-        Review["🔒 Security Reviewer<br/>Audit & harden"]
-        Validate["✅ Validator<br/>Build & test"]
+        review["🔒 review_node<br/>AI: Security audit"]
+        validate["✅ validate_node<br/>Build, test & scan"]
     end
     
-    subgraph Feedback["🔄 Feedback Loop"]
-        Reflect["🤔 Reflector<br/>Analyze failure"]
-        Increment["🔄 Increment Retry"]
+    subgraph Feedback["🔄 Self-Correction Loop"]
+        reflect["🤔 reflect_node<br/>AI: Analyze failure"]
+        increment["🔄 increment_retry<br/>Update retry count"]
     end
     
-    Start([▶ Start]) --> Scan
-    Scan --> Analyze --> Read --> Health --> Ready --> Plan
-    Plan --> Generate --> Review
+    Start([▶ Start]) --> scan
+    scan --> analyze --> read --> health --> ready --> plan
+    plan --> generate --> review
     
-    Review -->|"✅ Secure"| Validate
-    Review -->|"❌ Critical Issues"| Reflect
+    review -->|"check_security: pass"| validate
+    review -->|"check_security: fail"| reflect
     
-    Validate -->|"✅ Success"| End([🏁 Done])
-    Validate -->|"❌ Failed"| Reflect
+    validate -->|"should_retry: end"| End([🏁 Done])
+    validate -->|"should_retry: reflect"| reflect
     
-    Reflect --> Increment
-    Increment -->|"Fix Code"| Generate
-    Increment -->|"New Strategy"| Plan
-    Increment -->|"Re-Analyze"| Analyze
-    Increment -->|"Max Retries"| Fail([❌ Fail])
+    reflect --> increment
+    increment -->|"check_reanalysis: generate"| generate
+    increment -->|"check_reanalysis: plan"| plan
+    increment -->|"check_reanalysis: analyze"| analyze
 ```
 
 ---

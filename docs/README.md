@@ -187,39 +187,46 @@ Then you can talk to your AI assistant naturally:
 
 ## 🏗️ How DockAI Works (Overview)
 
-DockAI uses a **multi-agent architecture** powered by LangGraph. Each agent specializes in a specific task:
+DockAI uses a **multi-agent architecture** powered by [LangGraph](https://langchain-ai.github.io/langgraph/). The workflow is defined in `src/dockai/workflow/graph.py` with 11 nodes:
 
 ```mermaid
 flowchart TB
     subgraph Discovery["📊 Discovery Phase"]
-        scan["📂 Scanner"]
-        analyze["🧠 Analyzer"]
-        read["📖 Reader"]
-        health["🏥 Health Detector"]
-        ready["⏱️ Readiness Detector"]
+        scan["📂 scan_node"]
+        analyze["🧠 analyze_node"]
+        read["📖 read_files_node"]
+        health["🏥 detect_health_node"]
+        ready["⏱️ detect_readiness_node"]
     end
     
     subgraph Generation["⚙️ Generation Phase"]
-        plan["📝 Planner"]
-        generate["⚙️ Generator"]
+        plan["📝 plan_node"]
+        generate["⚙️ generate_node"]
     end
     
     subgraph Validation["✅ Validation Phase"]
-        review["🔒 Reviewer"]
-        validate["✅ Validator"]
+        review["🔒 review_node"]
+        validate["✅ validate_node"]
     end
     
-    subgraph Feedback["🔄 Feedback Loop"]
-        reflect["🤔 Reflector"]
+    subgraph Feedback["🔄 Self-Correction Loop"]
+        reflect["🤔 reflect_node"]
+        increment["🔄 increment_retry"]
     end
     
     scan --> analyze --> read --> health --> ready --> plan
-    plan --> generate --> review --> validate
+    plan --> generate --> review
     
-    validate -->|"❌ Failed"| reflect
-    reflect -->|"Retry"| plan
-    reflect -->|"Major Change"| analyze
-    validate -->|"✅ Success"| done["📦 Done"]
+    review -->|"check_security"| validate
+    review -->|"error"| reflect
+    
+    validate -->|"success"| done["📦 END"]
+    validate -->|"should_retry"| reflect
+    
+    reflect --> increment
+    increment -->|"generate"| generate
+    increment -->|"plan"| plan  
+    increment -->|"analyze"| analyze
 ```
 
 **Key innovation**: The self-correcting loop. When validation fails, the Reflector agent analyzes what went wrong, identifies the root cause, and provides guidance for the next attempt. This means DockAI can handle projects that don't work on the first try.

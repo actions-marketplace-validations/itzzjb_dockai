@@ -63,26 +63,27 @@ DockAI is built on three main pillars:
 flowchart TB
     subgraph Interfaces["🖥️ User Interfaces"]
         cli["CLI\n(dockai build)"]
-        action["GitHub Action"]
-        mcp["MCP Server\n(AI Assistants)"]
+        action["GitHub Action\n(itzzjb/dockai@v3)"]
+        mcp["MCP Server\n(mcp_server.py)"]
     end
     
-    subgraph Workflow["⚙️ LangGraph Workflow"]
-        scan["Scan"] --> analyze["Analyze"] --> read["Read Files"]
-        read --> health["Health Detection"] --> ready["Readiness Detection"]
-        ready --> plan["Plan"] --> generate["Generate"]
-        generate --> review["Review"] --> validate["Validate"]
+    subgraph Workflow["⚙️ LangGraph Workflow (graph.py)"]
+        scan["scan_node"] --> analyze["analyze_node"] --> read["read_files_node"]
+        read --> health["detect_health_node"] --> ready["detect_readiness_node"]
+        ready --> plan["plan_node"] --> generate["generate_node"]
+        generate --> review["review_node"] --> validate["validate_node"]
         
-        validate -->|"❌ Failed"| reflect["Reflect"]
-        reflect -->|"Retry"| plan
-        reflect -->|"Re-analyze"| analyze
-        validate -->|"✅ Success"| done["Done"]
+        validate -->|"should_retry"| reflect["reflect_node"]
+        reflect --> increment["increment_retry"]
+        increment -->|"check_reanalysis"| plan
+        increment -->|"check_reanalysis"| analyze
+        validate -->|"end"| done["END"]
     end
     
     subgraph Services["🔧 Core Services"]
-        llm["LLM Providers\n(OpenAI, Gemini, etc.)"]
-        docker["Docker Engine"]
-        registry["Registry Client"]
+        llm["LLM Providers\n(llm_providers.py)\nOpenAI, Azure, Gemini,\nAnthropic, Ollama"]
+        docker["Docker Engine\n(validator.py)"]
+        registry["Registry Client\n(registry.py)"]
         security["Security Scanners\n(Trivy, Hadolint)"]
     end
     
@@ -140,58 +141,61 @@ DockAI's workflow isn't a simple linear pipeline—it has loops, conditionals, a
 The workflow is defined in `src/dockai/workflow/graph.py`:
 
 ```python
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, END, START
 
-def create_workflow() -> CompiledStateGraph:
-    """Create the DockAI workflow graph."""
+def create_graph() -> CompiledStateGraph:
+    """Create the LangGraph workflow for Dockerfile generation."""
     
-    graph = StateGraph(GraphState)
+    workflow = StateGraph(GraphState)
     
-    # Add all nodes
-    graph.add_node("scan", scan_node)
-    graph.add_node("analyze", analyze_node)
-    graph.add_node("read_files", read_files_node)
-    graph.add_node("detect_health", detect_health_node)
-    graph.add_node("detect_readiness", detect_readiness_node)
-    graph.add_node("plan", plan_node)
-    graph.add_node("generate", generate_node)
-    graph.add_node("review", review_node)
-    graph.add_node("validate", validate_node)
-    graph.add_node("reflect", reflect_node)
+    # Add all 11 nodes
+    workflow.add_node("scan", scan_node)
+    workflow.add_node("analyze", analyze_node)
+    workflow.add_node("read_files", read_files_node)
+    workflow.add_node("detect_health", detect_health_node)
+    workflow.add_node("detect_readiness", detect_readiness_node)
+    workflow.add_node("plan", plan_node)
+    workflow.add_node("generate", generate_node)
+    workflow.add_node("review", review_node)
+    workflow.add_node("validate", validate_node)
+    workflow.add_node("reflect", reflect_node)
+    workflow.add_node("increment_retry", increment_retry)  # Simple state updater
     
-    # Define edges (the flow)
-    graph.add_edge("scan", "analyze")
-    graph.add_edge("analyze", "read_files")
-    graph.add_edge("read_files", "detect_health")
-    graph.add_edge("detect_health", "detect_readiness")
-    graph.add_edge("detect_readiness", "plan")
-    graph.add_edge("plan", "generate")
-    graph.add_edge("generate", "review")
+    # Linear flow through discovery and generation
+    workflow.add_edge(START, "scan")
+    workflow.add_edge("scan", "analyze")
+    workflow.add_edge("analyze", "read_files")
+    workflow.add_edge("read_files", "detect_health")
+    workflow.add_edge("detect_health", "detect_readiness")
+    workflow.add_edge("detect_readiness", "plan")
+    workflow.add_edge("plan", "generate")
+    workflow.add_edge("generate", "review")
     
-    # Conditional edges based on review result
-    graph.add_conditional_edges(
+    # Conditional edge after security review
+    workflow.add_conditional_edges(
         "review",
-        decide_after_review,
-        {"validate": "validate", "reflect": "reflect", END: END}
+        check_security,
+        {"validate": "validate", "reflect": "reflect", "end": END}
     )
     
-    # Conditional edges based on validation result
-    graph.add_conditional_edges(
+    # Conditional edge after validation
+    workflow.add_conditional_edges(
         "validate",
-        decide_after_validation,
-        {"done": END, "reflect": "reflect"}
+        should_retry,
+        {"end": END, "reflect": "reflect"}
     )
     
-    # Reflection can loop back to different stages
-    graph.add_conditional_edges(
-        "reflect",
-        decide_after_reflection,
-        {"plan": "plan", "generate": "generate", "analyze": "analyze", END: END}
+    # Reflect always leads to increment_retry
+    workflow.add_edge("reflect", "increment_retry")
+    
+    # After incrementing, decide where to loop back
+    workflow.add_conditional_edges(
+        "increment_retry",
+        check_reanalysis,
+        {"plan": "plan", "generate": "generate", "analyze": "analyze"}
     )
     
-    graph.set_entry_point("scan")
-    
-    return graph.compile()
+    return workflow.compile()
 ```
 
 ### The GraphState

@@ -98,7 +98,8 @@ export OPENAI_API_KEY=sk-your-key
 ### 3. Test MCP Server
 
 ```bash
-dockai mcp-server --help
+# Run the MCP server directly
+python -m dockai.core.mcp_server
 ```
 
 ### 4. Configure Your AI Client
@@ -118,7 +119,7 @@ pip install dockai-cli
 
 # Verify installation
 dockai --version
-which dockai  # Get full path for configuration
+python -c "from dockai.core.mcp_server import mcp; print('MCP Server available')"
 ```
 
 ### Using pipx (Isolated Environment)
@@ -126,8 +127,8 @@ which dockai  # Get full path for configuration
 ```bash
 pipx install dockai-cli
 
-# Get path
-pipx environment dockai-cli
+# Verify
+pipx run dockai --version
 ```
 
 ### Using Docker
@@ -135,11 +136,12 @@ pipx environment dockai-cli
 ```bash
 docker pull ghcr.io/itzzjb/dockai:latest
 
-# Run MCP server in Docker
+# Run MCP server in Docker (requires volume mount for project access)
 docker run -it --rm \
   -e OPENAI_API_KEY=$OPENAI_API_KEY \
+  -v /path/to/your/projects:/projects \
   ghcr.io/itzzjb/dockai:latest \
-  dockai mcp-server
+  python -m dockai.core.mcp_server
 ```
 
 ### From Source
@@ -156,7 +158,7 @@ pip install -e .
 
 ### Environment Variables
 
-Set these before starting the MCP server:
+Set these before starting the MCP server (via the `env` section in your MCP client config):
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -166,19 +168,18 @@ Set these before starting the MCP server:
 | `GOOGLE_API_KEY` | If using Gemini | Google AI key |
 | `ANTHROPIC_API_KEY` | If using Anthropic | Anthropic key |
 | `DOCKAI_LLM_PROVIDER` | No | Default: `openai` |
-| `DOCKAI_MAX_RETRIES` | No | Default: `3` |
+| `MAX_RETRIES` | No | Default: `3` |
 | `DOCKAI_ENABLE_TRACING` | No | Enable OpenTelemetry |
 
-### MCP Server Arguments
+### Running the MCP Server
+
+The MCP server is run as a Python module:
 
 ```bash
-dockai mcp-server [OPTIONS]
+python -m dockai.core.mcp_server
 ```
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--provider` | LLM provider | `openai` |
-| `--verbose` | Enable verbose logging | `false` |
+This starts the server using stdio transport, which is what MCP clients like Claude Desktop expect.
 
 ---
 
@@ -202,8 +203,8 @@ Edit or create the configuration file:
 {
   "mcpServers": {
     "dockai": {
-      "command": "dockai",
-      "args": ["mcp-server"],
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"],
       "env": {
         "OPENAI_API_KEY": "sk-your-api-key-here"
       }
@@ -212,16 +213,16 @@ Edit or create the configuration file:
 }
 ```
 
-### Step 3: With Full Path (If Needed)
+### Step 3: With Full Python Path (If Needed)
 
-If `dockai` isn't in Claude's PATH:
+If the `python` command doesn't find dockai:
 
 ```json
 {
   "mcpServers": {
     "dockai": {
-      "command": "/usr/local/bin/dockai",
-      "args": ["mcp-server"],
+      "command": "/usr/local/bin/python3",
+      "args": ["-m", "dockai.core.mcp_server"],
       "env": {
         "OPENAI_API_KEY": "sk-your-api-key-here"
       }
@@ -230,10 +231,10 @@ If `dockai` isn't in Claude's PATH:
 }
 ```
 
-Find the full path:
+Find your Python path:
 ```bash
-which dockai  # macOS/Linux
-where dockai  # Windows
+which python3  # macOS/Linux
+where python   # Windows
 ```
 
 ### Step 4: With Different Providers
@@ -243,9 +244,10 @@ where dockai  # Windows
 {
   "mcpServers": {
     "dockai": {
-      "command": "dockai",
-      "args": ["mcp-server", "--provider", "gemini"],
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"],
       "env": {
+        "DOCKAI_LLM_PROVIDER": "gemini",
         "GOOGLE_API_KEY": "your-google-api-key"
       }
     }
@@ -258,9 +260,10 @@ where dockai  # Windows
 {
   "mcpServers": {
     "dockai": {
-      "command": "dockai",
-      "args": ["mcp-server", "--provider", "azure"],
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"],
       "env": {
+        "DOCKAI_LLM_PROVIDER": "azure",
         "AZURE_OPENAI_API_KEY": "your-key",
         "AZURE_OPENAI_ENDPOINT": "https://your-resource.openai.azure.com/"
       }
@@ -274,9 +277,11 @@ where dockai  # Windows
 {
   "mcpServers": {
     "dockai": {
-      "command": "dockai",
-      "args": ["mcp-server", "--provider", "ollama"],
-      "env": {}
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"],
+      "env": {
+        "DOCKAI_LLM_PROVIDER": "ollama"
+      }
     }
   }
 }
@@ -295,7 +300,7 @@ After saving the configuration, restart Claude Desktop completely:
 Ask Claude:
 > "What tools do you have available?"
 
-Claude should mention the `generate_dockerfile` tool from DockAI.
+Claude should mention the DockAI tools: `analyze_project`, `generate_dockerfile_content`, `validate_dockerfile`, and `run_full_workflow`.
 
 ---
 
@@ -317,8 +322,8 @@ Cursor IDE also supports MCP servers for AI-assisted development.
 {
   "mcpServers": {
     "dockai": {
-      "command": "dockai",
-      "args": ["mcp-server"],
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"],
       "env": {
         "OPENAI_API_KEY": "sk-your-api-key"
       }
@@ -335,9 +340,10 @@ Create `.cursor/mcp.json` in your project:
 {
   "mcpServers": {
     "dockai": {
-      "command": "dockai",
-      "args": ["mcp-server", "--provider", "gemini"],
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"],
       "env": {
+        "DOCKAI_LLM_PROVIDER": "gemini",
         "GOOGLE_API_KEY": "${env:GOOGLE_API_KEY}"
       }
     }
@@ -351,62 +357,78 @@ The `${env:VARIABLE}` syntax references environment variables.
 
 ## Available Tools
 
-DockAI exposes the following MCP tools:
+DockAI's MCP server exposes four tools (defined in `src/dockai/core/mcp_server.py`):
 
-### `generate_dockerfile`
+### 1. `analyze_project`
 
-Generates a Dockerfile for a given project path.
+Analyzes a project directory to determine Docker requirements without generating a Dockerfile.
 
 **Parameters**:
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `project_path` | string | Yes | Absolute path to project directory |
-| `instructions` | string | No | Additional instructions for generation |
-| `max_retries` | integer | No | Maximum retry attempts (default: 3) |
-| `skip_validation` | boolean | No | Skip build validation (default: false) |
-| `skip_security_scan` | boolean | No | Skip Trivy scanning (default: false) |
+| `path` | string | Yes | Absolute path to project directory |
 
-**Returns**:
-- `dockerfile_content`: The generated Dockerfile
-- `dockerignore_content`: Generated .dockerignore (if any)
-- `validation_results`: Build/scan results
-- `warnings`: Any warnings or suggestions
+**Returns**: A summary of detected stack, build commands, and critical files.
 
-### Tool Schema (JSON-RPC)
+### 2. `generate_dockerfile_content`
+
+Generates a Dockerfile for the project. Returns content only, does NOT write to disk.
+
+**Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `path` | string | Yes | Absolute path to project directory |
+| `instructions` | string | No | Custom instructions (e.g., "Use Alpine") |
+
+**Returns**: The generated Dockerfile content.
+
+### 3. `validate_dockerfile`
+
+Validates a Dockerfile by building and running it.
+
+**Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `path` | string | Yes | Absolute path to project directory (build context) |
+| `dockerfile_content` | string | Yes | The Dockerfile content to test |
+
+**Returns**: Validation result (success/failure with message).
+
+### 4. `run_full_workflow`
+
+Executes the complete DockAI agentic workflow (same as `dockai build` CLI command).
+
+**Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `path` | string | Yes | Absolute path to project directory |
+| `instructions` | string | No | Custom instructions for agents |
+
+**Returns**: Summary including final Dockerfile content and validation status.
+
+### Tool Schema Example
 
 ```json
 {
-  "name": "generate_dockerfile",
-  "description": "Generate an optimized Dockerfile for a project using AI analysis",
+  "name": "run_full_workflow",
+  "description": "Executes the full DockAI agentic workflow (Scan -> Analyze -> Plan -> Generate -> Validate -> Fix)",
   "inputSchema": {
     "type": "object",
     "properties": {
-      "project_path": {
+      "path": {
         "type": "string",
         "description": "Absolute path to the project directory"
       },
       "instructions": {
         "type": "string",
-        "description": "Additional instructions for Dockerfile generation"
-      },
-      "max_retries": {
-        "type": "integer",
-        "description": "Maximum number of retry attempts",
-        "default": 3
-      },
-      "skip_validation": {
-        "type": "boolean",
-        "description": "Skip Docker build validation",
-        "default": false
-      },
-      "skip_security_scan": {
-        "type": "boolean",
-        "description": "Skip Trivy security scanning",
-        "default": false
+        "description": "Optional custom instructions for the agents"
       }
     },
-    "required": ["project_path"]
+    "required": ["path"]
   }
 }
 ```
@@ -415,33 +437,82 @@ Generates a Dockerfile for a given project path.
 
 ## Example Conversations
 
-### Basic Generation
+### Basic Project Analysis
 
-**You**: Generate a Dockerfile for my project at /Users/me/projects/myapp
+**You**: Analyze my project at /Users/me/projects/myapp
 
-**Claude**: I'll generate a Dockerfile for your project. Let me analyze it...
+**Claude**: I'll analyze your project to understand its Docker requirements...
 
-*[Claude calls generate_dockerfile tool]*
+*[Claude calls analyze_project tool]*
+
+Here's what I found:
+- **Stack**: Python 3.11 with FastAPI
+- **Project Type**: service
+- **Build Command**: pip install -r requirements.txt
+- **Start Command**: uvicorn main:app --host 0.0.0.0
+- **Suggested Base Image**: python:3.11-slim
+- **Critical Files**: requirements.txt, main.py
+
+Would you like me to generate a Dockerfile based on this analysis?
+
+---
+
+### Generate Dockerfile
+
+**You**: Generate a Dockerfile for /Users/me/projects/myapp. Use Alpine as the base image.
+
+**Claude**: I'll generate a Dockerfile with Alpine as the base image...
+
+*[Claude calls generate_dockerfile_content tool with instructions parameter]*
 
 Here's the generated Dockerfile:
 
 ```dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
+FROM python:3.11-alpine
 # ... generated content
 ```
 
-The Dockerfile uses multi-stage builds to keep the final image small. Would you like me to explain any part of it?
+This Dockerfile uses Alpine for a minimal footprint. Would you like me to validate it?
 
 ---
 
-### With Instructions
+### Full Workflow with Validation
 
-**You**: Generate a Dockerfile for /Users/me/projects/myapp. Make sure it uses non-root user and is optimized for production.
+**You**: Run the full DockAI workflow for /Users/me/projects/myapp
 
-**Claude**: I'll generate a production-optimized Dockerfile with a non-root user...
+**Claude**: I'll run the complete DockAI workflow which includes analysis, generation, and validation...
 
-*[Claude calls generate_dockerfile with instructions parameter]*
+*[Claude calls run_full_workflow tool]*
+
+Workflow completed in 1 attempt.
+Status: SUCCESS
+Validation Message: Image built and tested successfully.
+
+Here's the final Dockerfile:
+```dockerfile
+FROM python:3.11-slim AS builder
+# ...
+```
+
+---
+
+### Validate Existing Dockerfile
+
+**You**: Can you validate this Dockerfile for my project at /Users/me/projects/myapp?
+
+```dockerfile
+FROM python:3.11
+WORKDIR /app
+COPY . .
+RUN pip install -r requirements.txt
+CMD ["python", "main.py"]
+```
+
+**Claude**: I'll validate this Dockerfile by building and running it...
+
+*[Claude calls validate_dockerfile tool]*
+
+Validation Result: Success! The image builds and runs correctly.
 
 ---
 
@@ -449,17 +520,17 @@ The Dockerfile uses multi-stage builds to keep the final image small. Would you 
 
 **You**: That's good, but can you make the image smaller?
 
-**Claude**: I can suggest some optimizations:
+**Claude**: I can generate an optimized version with a smaller footprint:
 
-1. Using a more minimal base image
-2. Cleaning up package manager caches
-3. Removing development dependencies
+1. Using multi-stage builds
+2. Using a slim or Alpine base image
+3. Removing build dependencies from the final image
 
 Would you like me to regenerate with these optimizations?
 
 **You**: Yes, please regenerate.
 
-*[Claude calls generate_dockerfile with updated instructions]*
+*[Claude calls generate_dockerfile_content with updated instructions]*
 
 ---
 
@@ -467,20 +538,19 @@ Would you like me to regenerate with these optimizations?
 
 **You**: Why did the Dockerfile use multi-stage builds?
 
-**Claude**: Multi-stage builds offer several advantages for your Node.js application:
+**Claude**: Multi-stage builds offer several advantages for your Python application:
 
 1. **Smaller image size**: Build tools and dev dependencies stay in the builder stage
 2. **Security**: Final image only contains runtime necessities
 3. **Faster deployments**: Smaller images transfer faster
 
 In your case, the builder stage:
-- Installs all dependencies
-- Compiles TypeScript
-- Builds assets
+- Installs build dependencies (gcc, etc.)
+- Compiles Python packages with C extensions
 
 The runtime stage:
-- Copies only the built output
-- Installs production dependencies only
+- Copies only the compiled packages
+- Uses a minimal base image
 
 ---
 
@@ -494,16 +564,16 @@ Configure different DockAI instances for different project types:
 {
   "mcpServers": {
     "dockai-nodejs": {
-      "command": "dockai",
-      "args": ["mcp-server", "--provider", "openai"],
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"],
       "env": {
         "OPENAI_API_KEY": "sk-your-key",
         "DOCKAI_GENERATOR_INSTRUCTIONS": "Optimize for Node.js projects. Use Alpine base images."
       }
     },
     "dockai-python": {
-      "command": "dockai",
-      "args": ["mcp-server", "--provider", "openai"],
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"],
       "env": {
         "OPENAI_API_KEY": "sk-your-key",
         "DOCKAI_GENERATOR_INSTRUCTIONS": "Optimize for Python projects. Use slim base images."
@@ -527,7 +597,7 @@ Run DockAI MCP server in Docker:
         "-e", "OPENAI_API_KEY",
         "-v", "/Users/me/projects:/projects:ro",
         "ghcr.io/itzzjb/dockai:latest",
-        "dockai", "mcp-server"
+        "python", "-m", "dockai.core.mcp_server"
       ],
       "env": {
         "OPENAI_API_KEY": "sk-your-key"
@@ -545,8 +615,8 @@ Run DockAI MCP server in Docker:
 {
   "mcpServers": {
     "dockai": {
-      "command": "dockai",
-      "args": ["mcp-server"],
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"],
       "env": {
         "OPENAI_API_KEY": "sk-your-key",
         "DOCKAI_MODEL_ANALYZER": "gpt-4o-mini",
@@ -565,8 +635,8 @@ Enable OpenTelemetry tracing for debugging:
 {
   "mcpServers": {
     "dockai": {
-      "command": "dockai",
-      "args": ["mcp-server", "--verbose"],
+      "command": "python",
+      "args": ["-m", "dockai.core.mcp_server"],
       "env": {
         "OPENAI_API_KEY": "sk-your-key",
         "DOCKAI_ENABLE_TRACING": "true",
@@ -587,21 +657,22 @@ Enable OpenTelemetry tracing for debugging:
 
 **Solutions**:
 
-1. **Check command path**:
+1. **Check Python path**:
    ```bash
-   which dockai
+   which python3
+   python3 -c "from dockai.core.mcp_server import mcp; print('OK')"
    ```
-   Use full path in configuration if needed.
+   Use full Python path in configuration if needed.
 
 2. **Verify installation**:
    ```bash
    dockai --version
-   dockai mcp-server --help
+   python3 -m dockai.core.mcp_server  # Should wait for input
    ```
 
 3. **Test manually**:
    ```bash
-   echo '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}' | dockai mcp-server
+   echo '{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}' | python -m dockai.core.mcp_server
    ```
    Should return JSON-RPC response.
 
@@ -664,7 +735,7 @@ Enable OpenTelemetry tracing for debugging:
    ```
 
 3. **Skip validation for exploration**:
-   Ask Claude to skip validation for faster iteration.
+   Use `generate_dockerfile_content` instead of `run_full_workflow` for faster iteration without validation.
 
 ### "JSON Parse Error"
 
