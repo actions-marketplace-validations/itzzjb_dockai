@@ -8,6 +8,7 @@ This module contains utility functions and helpers:
 - Prompt templates
 - Rate limiting for API calls
 - Token usage callbacks
+- OpenTelemetry tracing
 """
 
 from .scanner import get_file_tree
@@ -27,6 +28,16 @@ from .rate_limiter import (
     RateLimitExceededError,
 )
 from .callbacks import TokenUsageCallback
+from .tracing import (
+    init_tracing,
+    shutdown_tracing,
+    create_span,
+    trace_node,
+    trace_llm_call,
+    record_workflow_start,
+    record_workflow_end,
+    is_tracing_enabled,
+)
 
 __all__ = [
     "get_file_tree",
@@ -44,4 +55,12 @@ __all__ = [
     "handle_registry_rate_limit",
     "RateLimitExceededError",
     "TokenUsageCallback",
+    "init_tracing",
+    "shutdown_tracing",
+    "create_span",
+    "trace_node",
+    "trace_llm_call",
+    "record_workflow_start",
+    "record_workflow_end",
+    "is_tracing_enabled",
 ]

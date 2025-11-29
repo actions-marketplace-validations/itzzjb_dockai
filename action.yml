@@ -204,6 +204,20 @@ inputs:
     description: 'Custom prompt - surgeon for precise corrections agent'
     required: false
     default: ''
+  
+  # Observability & Tracing
+  enable_tracing:
+    description: 'Enable OpenTelemetry tracing (true/false)'
+    required: false
+    default: 'false'
+  tracing_exporter:
+    description: 'Tracing exporter type (console, otlp)'
+    required: false
+    default: 'console'
+  otlp_endpoint:
+    description: 'OTLP endpoint URL for trace export'
+    required: false
+    default: 'http://localhost:4317'
 
 runs:
   using: "composite"
@@ -276,6 +290,10 @@ runs:
         DOCKAI_PROMPT_READINESS_DETECTOR: ${{ inputs.prompt_readiness_detector }}
         DOCKAI_PROMPT_ERROR_ANALYZER: ${{ inputs.prompt_error_analyzer }}
         DOCKAI_PROMPT_ITERATIVE_IMPROVER: ${{ inputs.prompt_iterative_improver }}
+        # Observability & Tracing
+        DOCKAI_ENABLE_TRACING: ${{ inputs.enable_tracing }}
+        DOCKAI_TRACING_EXPORTER: ${{ inputs.tracing_exporter }}
+        OTEL_EXPORTER_OTLP_ENDPOINT: ${{ inputs.otlp_endpoint }}
       run: |
         echo "🐳 Starting DockAI Framework..."
         dockai build ${{ inputs.project_path }} --no-cache

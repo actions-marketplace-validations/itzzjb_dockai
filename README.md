@@ -73,14 +73,15 @@ That's it. DockAI handles the rest.
       <h3>🔧 Fully Customizable</h3>
       <p>Override prompts, instructions, and model selection per agent. Use <code>.dockai</code> files for repo-specific configs.</p>
     </td>
+  </tr>
   <tr>
     <td width="50%">
       <h3>📦 Smart Registry Integration</h3>
       <p>Automatically validates base images against <strong>Docker Hub, GCR, Quay, and GHCR</strong>. Prioritizes small, secure variants like <code>alpine</code> and <code>slim</code>.</p>
     </td>
     <td width="50%">
-      <h3>🚀 Performance Optimized</h3>
-      <p>Intelligent caching prevents redundant network calls. Semantic version sorting ensures you always get the latest stable releases.</p>
+      <h3>📊 Full Observability</h3>
+      <p>Built-in <strong>OpenTelemetry tracing</strong> for distributed observability. Export traces to console or OTLP backends like Jaeger, Grafana Tempo, or Datadog.</p>
     </td>
   </tr>
 </table>
@@ -223,6 +224,9 @@ graph TD
 | `DOCKAI_TOKEN_LIMIT` | Token limit for auto-truncation | `100000` |
 | `DOCKAI_MAX_FILE_CHARS` | Max chars per file (when truncating) | `200000` |
 | `DOCKAI_MAX_FILE_LINES` | Max lines per file (when truncating) | `5000` |
+| `DOCKAI_ENABLE_TRACING` | Enable OpenTelemetry tracing | `false` |
+| `DOCKAI_TRACING_EXPORTER` | Tracing exporter (`console`, `otlp`) | `console` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint URL | `http://localhost:4317` |
 
 *Only one API key required for your chosen provider.
 
@@ -319,6 +323,7 @@ See [GitHub Actions Guide](./docs/github-actions.md) for all options.
 | **Rich + Typer** | Beautiful CLI interface |
 | **Trivy** | Security vulnerability scanning |
 | **Hadolint** | Dockerfile linting and best practices |
+| **OpenTelemetry** | Distributed tracing and observability |
 
 ---
 

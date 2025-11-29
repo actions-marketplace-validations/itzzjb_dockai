@@ -100,6 +100,14 @@ jobs:
 | `max_file_chars` | Max characters per file | `200000` |
 | `max_file_lines` | Max lines per file | `5000` |
 
+### Observability & Tracing
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `enable_tracing` | Enable OpenTelemetry tracing | `false` |
+| `tracing_exporter` | Tracing exporter (`console`, `otlp`) | `console` |
+| `otlp_endpoint` | OTLP endpoint URL for trace export | `http://localhost:4317` |
+
 ### Custom Instructions
 
 | Input | Description |
@@ -223,6 +231,29 @@ For complex projects that may need multiple attempts:
     max_retries: '5'
     validation_memory: '1g'
     validation_cpus: '2.0'
+```
+
+### With OpenTelemetry Tracing
+
+Enable distributed tracing for debugging and observability:
+
+```yaml
+- uses: itzzjb/dockai@v3
+  with:
+    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+    enable_tracing: 'true'
+    tracing_exporter: 'console'  # Use 'otlp' for production backends
+```
+
+For production observability (e.g., Jaeger, Grafana Tempo):
+
+```yaml
+- uses: itzzjb/dockai@v3
+  with:
+    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+    enable_tracing: 'true'
+    tracing_exporter: 'otlp'
+    otlp_endpoint: 'http://jaeger:4317'
 ```
 
 ---

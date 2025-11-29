@@ -135,6 +135,56 @@ DOCKAI_MODEL_ANALYZER=openai/gpt-4o-mini
 
 ---
 
+## Observability & Tracing
+
+DockAI supports **OpenTelemetry** for distributed tracing, providing visibility into each step of the Dockerfile generation workflow.
+
+### Tracing Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_ENABLE_TRACING` | Enable OpenTelemetry tracing | `false` |
+| `DOCKAI_TRACING_EXPORTER` | Exporter type (`console`, `otlp`) | `console` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint URL (for `otlp` exporter) | `http://localhost:4317` |
+| `OTEL_SERVICE_NAME` | Service name for traces | `dockai` |
+
+### Traced Operations
+
+When tracing is enabled, spans are created for:
+- **Workflow execution**: Overall `dockai.workflow` span
+- **Node execution**: Individual spans for each node (`node.scan`, `node.analyze`, `node.plan`, `node.generate`, `node.review`, `node.validate`, `node.reflect`)
+- **LLM calls**: Token usage, model selection, and timing
+
+### Example: Console Tracing
+
+```bash
+# Enable console tracing for debugging
+DOCKAI_ENABLE_TRACING=true
+DOCKAI_TRACING_EXPORTER=console
+```
+
+### Example: OTLP Export (Jaeger, Grafana Tempo, Datadog)
+
+```bash
+# Enable OTLP tracing for production observability
+DOCKAI_ENABLE_TRACING=true
+DOCKAI_TRACING_EXPORTER=otlp
+OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+```
+
+### Span Attributes
+
+Each node span includes relevant attributes:
+- `node.scan`: `files_found`, `path`
+- `node.analyze`: `stack`, `project_type`
+- `node.plan`: `retry_count`
+- `node.generate`: `retry_count`, `project_type`
+- `node.review`: `is_secure`, `issues_count`
+- `node.validate`: `success`, `error`, `image_size_mb`
+- `node.reflect`: `root_cause`, `confidence`, `needs_reanalysis`
+
+---
+
 ## Custom Instructions
 
 Instructions are **appended** to default prompts to guide AI reasoning:
