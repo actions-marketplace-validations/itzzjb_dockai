@@ -589,28 +589,67 @@ response = llm.invoke([HumanMessage(content="Generate a Dockerfile...")])
 
 ### `dockai.core.state`
 
-#### `GraphState` (TypedDict)
+#### `DockAIState` (TypedDict)
 
-The state object passed through the LangGraph workflow.
+The central state object passed through the LangGraph workflow. This is the shared memory for the entire agentic system.
 
 ```python
-class GraphState(TypedDict):
-    repo_path: str
-    file_tree: List[str]
-    analysis_result: Optional[AnalysisResult]
-    file_contents: str
-    health_result: Optional[HealthEndpointDetectionResult]
-    readiness_result: Optional[ReadinessPatternResult]
-    current_plan: Optional[PlanningResult]
-    dockerfile_content: str
-    thought_process: str
-    review_result: Optional[SecurityReviewResult]
-    validation_result: Optional[ValidationResult]
-    retry_count: int
-    retry_history: List[RetryAttempt]
-    reflection: Optional[ReflectionResult]
-    final_dockerfile: str
-    token_usage: Dict[str, int]
+class DockAIState(TypedDict):
+    # ==================== INPUTS ====================
+    path: str                              # Absolute path to project directory
+    config: Dict[str, Any]                 # Configuration and custom instructions
+    max_retries: int                       # Maximum allowed retry attempts
+
+    # ==================== INTERMEDIATE ARTIFACTS ====================
+    file_tree: List[str]                   # List of relative file paths in project
+    file_contents: str                     # Concatenated critical file contents
+    
+    # Analysis & Planning
+    analysis_result: Dict[str, Any]        # Initial project analysis (AnalysisResult)
+    current_plan: Optional[Dict[str, Any]] # Strategic plan before coding (PlanningResult)
+    
+    # Generation
+    dockerfile_content: str                # Current generated Dockerfile
+    previous_dockerfile: Optional[str]     # Previous attempt for diffing
+    
+    # Validation & Execution
+    validation_result: Dict[str, Any]      # Build/run validation result
+    retry_count: int                       # Current retry attempt (0-indexed)
+    
+    # Error Handling
+    error: Optional[str]                   # Raw error message
+    error_details: Optional[Dict[str, Any]]# Classified error details
+    logs: List[str]                        # Execution logs
+    
+    # ==================== ADAPTIVE INTELLIGENCE ====================
+    retry_history: List[RetryAttempt]      # Full history of attempts and learnings
+    reflection: Optional[Dict[str, Any]]   # AI analysis of most recent failure
+    
+    # Smart Detection
+    detected_health_endpoint: Optional[Dict[str, Any]]  # Health endpoint from code
+    readiness_patterns: List[str]          # Success patterns for startup detection
+    failure_patterns: List[str]            # Failure patterns for startup detection
+    
+    # Control Flow
+    needs_reanalysis: bool                 # Flag to trigger re-analysis phase
+    
+    # Observability
+    usage_stats: List[Dict[str, Any]]      # Token usage for cost tracking
+```
+
+#### `RetryAttempt` (TypedDict)
+
+Records a single retry attempt for learning purposes.
+
+```python
+class RetryAttempt(TypedDict):
+    attempt_number: int     # Which attempt this was
+    dockerfile_content: str # The Dockerfile that was tried
+    error_message: str      # The error that occurred
+    error_type: str         # Classified error type
+    what_was_tried: str     # Summary of the approach
+    why_it_failed: str      # Why it didn't work
+    lesson_learned: str     # Key lesson for future attempts
 ```
 
 ---

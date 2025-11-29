@@ -75,9 +75,21 @@ Each LLM provider requires its own API key:
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI | Azure Portal → Your OpenAI resource → Keys |
 | `AZURE_OPENAI_ENDPOINT` | Azure OpenAI | Azure Portal → Your OpenAI resource → Endpoint |
 | `AZURE_OPENAI_API_VERSION` | Azure OpenAI | Default: `2024-02-15-preview` |
+| `AZURE_OPENAI_DEPLOYMENT_*` | Azure OpenAI | Map model names to deployment names (see below) |
 | `GOOGLE_API_KEY` | Google Gemini | [ai.google.dev](https://ai.google.dev) → Get API Key |
+| `GOOGLE_CLOUD_PROJECT` | Google Gemini | Optional: GCP project ID for Vertex AI |
 | `ANTHROPIC_API_KEY` | Anthropic | [console.anthropic.com](https://console.anthropic.com) → API Keys |
 | `OLLAMA_BASE_URL` | Ollama | Default: `http://localhost:11434` |
+
+### Azure OpenAI Deployment Mapping
+
+Azure OpenAI uses deployment names instead of model names. Map model names to your deployment names:
+
+```bash
+# If your deployment is named "gpt4-deployment" for gpt-4o model
+AZURE_OPENAI_DEPLOYMENT_GPT_4O=gpt4-deployment
+AZURE_OPENAI_DEPLOYMENT_GPT_4O_MINI=gpt4mini-deployment
+```
 
 ### LLM Provider Selection
 
