@@ -1,349 +1,525 @@
 # Frequently Asked Questions
 
-Common questions about DockAI and their answers.
+This FAQ addresses common questions about DockAI, from basic usage to advanced topics. If your question isn't answered here, check the other documentation or open an issue on GitHub.
+
+---
+
+## 📋 Table of Contents
+
+1. [General Questions](#general-questions)
+2. [Costs and Pricing](#costs-and-pricing)
+3. [Security](#security)
+4. [LLM Providers](#llm-providers)
+5. [Dockerfile Quality](#dockerfile-quality)
+6. [Performance](#performance)
+7. [Customization](#customization)
+8. [CI/CD Integration](#cicd-integration)
+9. [Troubleshooting](#troubleshooting)
+10. [Contributing](#contributing)
 
 ---
 
 ## General Questions
 
-### What makes DockAI different from other Dockerfile generators?
+### What is DockAI?
 
-DockAI uses **first-principles reasoning** instead of templates. It:
+DockAI is an AI-powered tool that generates optimized Dockerfiles by analyzing your project's source code. Unlike template-based tools, DockAI uses multi-agent AI to understand your specific codebase and create Dockerfiles tailored to your exact requirements.
 
-- Analyzes file structures, dependencies, and code patterns
-- Deduces the optimal containerization strategy
-- Has a **self-correcting workflow** that learns from failures
-- Can be **fully customized** for your technology stack
+### How is DockAI different from other Dockerfile generators?
 
-### Does DockAI replace DevOps engineers?
+| Feature | Template-Based Tools | DockAI |
+|---------|---------------------|--------|
+| Analysis | Pattern matching | Deep code analysis |
+| Output | Generic templates | Project-specific |
+| Adaptation | Manual adjustment | AI-driven |
+| Learning | Static rules | Uses latest LLM knowledge |
+| Self-correction | None | Multi-iteration refinement |
 
-**No.** DockAI is designed to **augment** your team, not replace it. It provides intelligent defaults that work for many projects, but the real value comes when DevOps engineers customize it with organizational knowledge—approved base images, security policies, and lessons learned.
+### What projects does DockAI support?
 
-### Which AI models does DockAI support?
+DockAI supports **any** project type because it uses AI analysis rather than predefined templates. However, it works best with:
 
-| Provider | Models |
-|----------|--------|
-| **OpenAI** | GPT-4o, GPT-4o-mini |
-| **Azure OpenAI** | GPT-4o, GPT-4o-mini |
-| **Google Gemini** | Gemini 1.5 Pro, Gemini 1.5 Flash |
-| **Anthropic** | Claude Sonnet 4, Claude 3.5 Haiku |
+- **Well-supported**: Python, Node.js, Go, Java, Rust
+- **Supported**: Ruby, PHP, .NET, C/C++
+- **Any language**: AI will analyze and adapt
 
-Different models can be assigned to different agents for cost optimization.
+### Do I need Docker installed?
 
-### How much does it cost to run?
+Yes, DockAI requires Docker for:
+1. **Validation**: Building the generated Dockerfile to verify it works
+2. **Security scanning**: Running Trivy to check for vulnerabilities
+3. **Ollama provider**: Running local LLMs in containers
 
-Token usage varies by project complexity:
+You can skip validation with `--skip-validation`, but this is not recommended.
 
-| Project Size | Tokens Used | Estimated Cost (GPT-4o) |
-|-------------|-------------|------------------------|
-| Small | 5,000-10,000 | ~$0.05-0.10 |
-| Medium | 15,000-30,000 | ~$0.15-0.30 |
-| Complex (with retries) | 50,000+ | ~$0.50+ |
+### What are the system requirements?
 
-DockAI reports token usage after each run. Well-customized instances typically use fewer tokens due to fewer retries.
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| Python | 3.10 | 3.11+ |
+| Docker | 20.10+ | Latest |
+| RAM | 4GB | 8GB+ |
+| Network | Required | Stable connection |
 
 ---
 
-## Technical Questions
+## Costs and Pricing
 
-### Can I use DockAI with private registries?
+### Is DockAI free to use?
 
-Yes! DockAI supports:
+**DockAI itself is completely free and open source.** However, you pay for LLM API usage based on your provider:
 
-- **Docker Hub** (default)
-- **Google Container Registry** (GCR)
-- **Quay.io**
-- **AWS ECR** (limited—skips tag verification)
+| Provider | Cost Model | Typical Cost per Dockerfile |
+|----------|------------|----------------------------|
+| OpenAI | Pay-per-token | $0.01 - $0.10 |
+| Azure OpenAI | Pay-per-token | Similar to OpenAI |
+| Google Gemini | Free tier available | Free - $0.05 |
+| Anthropic | Pay-per-token | $0.01 - $0.15 |
+| Ollama | Free (local) | $0 (just compute) |
 
-Custom registries can be configured via instructions to the Planner agent.
+### How can I minimize API costs?
 
-### What if my project has unusual requirements?
+1. **Use cheaper models for simple tasks**:
+   ```bash
+   dockai build . \
+     --model-analyzer gpt-4o-mini \
+     --model-generator gpt-4o
+   ```
 
-Use custom instructions to guide the AI:
+2. **Use Gemini's free tier** for development:
+   ```bash
+   dockai build . --provider gemini
+   ```
 
-```bash
-export DOCKAI_GENERATOR_INSTRUCTIONS="This project requires libmagic and poppler-utils at runtime"
-dockai build .
-```
+3. **Use Ollama** for unlimited free usage:
+   ```bash
+   dockai build . --provider ollama
+   ```
 
-Or create a `.dockai` file with specific guidance:
+4. **Limit retries** to control iterations:
+   ```bash
+   dockai build . --max-retries 2
+   ```
 
-```ini
-[instructions_generator]
-This project requires libmagic and poppler-utils at runtime.
-The entrypoint script is in /scripts/start.sh
-```
+### What's the estimated token usage?
 
-### Does it work offline?
+| Agent | Typical Input Tokens | Output Tokens |
+|-------|---------------------|---------------|
+| Analyzer | 2,000-10,000 | 500-2,000 |
+| Planner | 1,000-3,000 | 500-1,500 |
+| Generator | 2,000-5,000 | 500-2,000 |
+| Reviewer | 1,000-3,000 | 500-1,500 |
 
-**No.** DockAI requires internet access to:
+**Total per run**: ~10,000-30,000 tokens (varies with project size)
 
-1. Call LLM APIs for AI reasoning
-2. Verify Docker image tags against registries
-3. (Optionally) Run Trivy security scans
+---
 
-### How do I skip security scanning?
+## Security
 
-```bash
-export DOCKAI_SKIP_SECURITY_SCAN=true
-dockai build .
-```
+### Is my code sent to external servers?
 
-Or in GitHub Actions:
+**Yes**, portions of your code are sent to LLM providers for analysis. Specifically:
+- File names and structure
+- Package manifests (package.json, requirements.txt)
+- Relevant source code snippets
+- Configuration files
+
+**Mitigation options**:
+1. Use **Ollama** for completely local processing
+2. Use **Azure OpenAI** with your organization's data controls
+3. Review what's sent with `--verbose` flag
+4. Add sensitive files to `.dockerignore`
+
+### What security scanning does DockAI perform?
+
+1. **Hadolint**: Dockerfile best practice linting
+2. **Trivy**: Container vulnerability scanning
+   - Scans for CVEs in base images
+   - Scans for vulnerable packages
+   - Configurable severity thresholds
+
+### How do I enforce security in CI/CD?
 
 ```yaml
 - uses: itzzjb/dockai@v3
   with:
-    skip_security_scan: 'true'
+    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+    strict_security: 'true'  # Fail on ANY vulnerability
 ```
 
-### Can I see what prompts DockAI is using?
+### Does DockAI expose secrets?
 
-Run with the `--verbose` flag:
+DockAI is designed to **never** include secrets in Dockerfiles:
+- The AI is instructed to use build args or environment variables
+- Security reviewer checks for hardcoded credentials
+- You should always review generated Dockerfiles
+
+---
+
+## LLM Providers
+
+### Which LLM provider should I choose?
+
+| Provider | Best For | Pros | Cons |
+|----------|----------|------|------|
+| **OpenAI** | General use | High quality, reliable | Costs money |
+| **Azure OpenAI** | Enterprise | Compliance, SLAs | Setup complexity |
+| **Gemini** | Budget-conscious | Free tier | Quality varies |
+| **Anthropic** | Complex projects | Great reasoning | More expensive |
+| **Ollama** | Privacy-focused | Free, local | Requires GPU |
+
+### Can I use different models for different agents?
+
+Yes! This is recommended for cost optimization:
 
 ```bash
-dockai build . --verbose
+dockai build . \
+  --model-analyzer gpt-4o-mini \    # Fast, simple analysis
+  --model-generator gpt-4o \         # Complex generation
+  --model-reviewer gpt-4o-mini       # Simple review
 ```
 
-This shows detailed logs including prompts and AI responses.
+### What Ollama models work best?
 
-### What languages/frameworks are supported?
+| Model | VRAM Required | Quality | Speed |
+|-------|--------------|---------|-------|
+| llama3.2:3b | 4GB | Good | Fast |
+| llama3.1:8b | 8GB | Better | Medium |
+| codellama:13b | 16GB | Best for code | Slow |
+| deepseek-coder:6.7b | 8GB | Good for code | Medium |
 
-DockAI uses first-principles reasoning, so it can handle any language or framework. It has been tested with:
+### How do I set up Ollama?
 
-- **Python**: Django, Flask, FastAPI, Celery
-- **Node.js**: Express, Next.js, NestJS, React
-- **Go**: Standard library, Gin, Echo
-- **Java**: Spring Boot, Maven, Gradle
-- **Ruby**: Rails, Sinatra
-- **Rust**: Cargo-based projects
-- **PHP**: Laravel, Symfony
+```bash
+# Install Ollama
+# macOS
+brew install ollama
 
-Even legacy or custom frameworks can be containerized—just provide guidance via custom instructions.
+# Linux
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Pull a model
+ollama pull llama3.1:8b
+
+# Use with DockAI
+dockai build . --provider ollama --model llama3.1:8b
+```
+
+If Ollama isn't installed, DockAI will automatically run it in Docker.
 
 ---
 
-## Customization Questions
+## Dockerfile Quality
 
-### Why should I customize DockAI?
+### How good are the generated Dockerfiles?
 
-| Scenario | Default | Customized |
-|----------|---------|------------|
-| Base images | Public defaults | Your approved images |
-| Security | Generic practices | Your compliance requirements |
-| Success rate | ~60% first attempt | ~85%+ first attempt |
+DockAI generates **production-quality** Dockerfiles that follow best practices:
 
-### How long does customization take?
+- ✅ Multi-stage builds when beneficial
+- ✅ Proper layer caching
+- ✅ Non-root users
+- ✅ Health checks
+- ✅ Security scanning
+- ✅ Optimized image size
 
-Customization is progressive:
+### Why didn't DockAI use multi-stage builds?
 
-| Timeline | Activity |
-|----------|----------|
-| **Day 1** | Add basic instructions for approved base images |
-| **Week 1** | Add common error fixes you've encountered |
-| **Month 1** | Repository-specific `.dockai` files |
-| **Ongoing** | Continuous refinement |
+Multi-stage builds aren't always necessary. DockAI decides based on:
+- Project type (compiled vs interpreted)
+- Build complexity
+- Image size considerations
 
-### Can I use DockAI with custom/proprietary frameworks?
+For simple Python scripts, single-stage is often better.
 
-Absolutely! Teach DockAI about your internal frameworks:
+To force multi-stage:
+```bash
+dockai build . --generator-instructions "Always use multi-stage builds"
+```
 
-```ini
-[instructions_analyzer]
-We use "InternalFramework v3" which requires:
-- Python 3.11 with our custom runtime
-- Environment variable INTERNAL_CONFIG_PATH
-- Connection to internal package registry
+### Why is my image still large?
 
-[instructions_generator]
-For InternalFramework projects:
-- Use our base image: company-registry.io/internal-python:3.11
-- Set INTERNAL_CONFIG_PATH=/app/config
-- Run framework init command before start
+Image size depends on:
+1. **Base image**: Alpine is smaller than Debian
+2. **Dependencies**: Some packages are large
+3. **Assets**: Static files, data, etc.
+
+Solutions:
+```bash
+dockai build . --generator-instructions "Minimize image size. Use Alpine. Remove unnecessary files."
+```
+
+### Can DockAI generate docker-compose.yml?
+
+Currently, DockAI focuses on **Dockerfile generation only**. Docker Compose support may be added in future versions.
+
+---
+
+## Performance
+
+### How long does generation take?
+
+| Step | Typical Time |
+|------|--------------|
+| Project analysis | 5-15 seconds |
+| Dockerfile generation | 10-30 seconds |
+| Build validation | 30-300 seconds |
+| Security scanning | 10-60 seconds |
+| **Total** | **1-6 minutes** |
+
+### Why is it slow?
+
+Most time is spent on:
+1. **LLM API calls**: Network latency + inference time
+2. **Docker build**: Downloading base images, building
+3. **Security scan**: Vulnerability database lookup
+
+To speed up:
+```bash
+# Skip validation (not recommended for production)
+dockai build . --skip-validation
+
+# Skip security scan
+dockai build . --skip-security-scan
+
+# Use faster models
+dockai build . --model-analyzer gpt-4o-mini
+```
+
+### Does DockAI cache anything?
+
+Currently, DockAI doesn't cache between runs. Each run:
+- Re-analyzes the project
+- Makes fresh LLM calls
+- Rebuilds the Docker image
+
+Docker itself caches layers, so rebuilds are faster.
+
+---
+
+## Customization
+
+### How do I add organization standards?
+
+Use custom instructions:
+
+```bash
+dockai build . --generator-instructions "
+ORGANIZATION REQUIREMENTS:
+- Use company-registry.io base images only
+- Run as UID 10000
+- Include standard labels
+- Follow security policy v2.1
+"
+```
+
+### Can I modify the prompts?
+
+Yes, for complete control:
+
+```bash
+# Replace the analyzer prompt entirely
+dockai build . --prompt-analyzer /path/to/custom-analyzer-prompt.txt
+```
+
+See [Customization Guide](./customization.md) for details.
+
+### How do I handle monorepos?
+
+Specify the service path:
+
+```bash
+dockai build ./services/api
+dockai build ./services/worker
+```
+
+### Can I generate Dockerfiles for multiple services?
+
+Run DockAI for each service:
+
+```bash
+for service in api worker frontend; do
+  dockai build ./services/$service
+done
 ```
 
 ---
 
-## Platform Integration
+## CI/CD Integration
 
-### Can I embed DockAI into my platform?
+### How do I use DockAI in GitHub Actions?
 
-**Yes!** DockAI is designed for platform integration. See the [Platform Integration Guide](./platform-integration.md) for:
+```yaml
+- uses: itzzjb/dockai@v3
+  with:
+    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+```
 
-- Building a DockAI API service
-- Integrating with Backstage, Port, Choreo
-- Multi-tenant configuration
-- Webhook handling
+See [GitHub Actions Guide](./github-actions.md) for detailed examples.
 
-### Is DockAI suitable for multi-tenant platforms?
+### Should I commit the generated Dockerfile?
 
-Yes! The layered configuration system supports:
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Commit** | Version control, code review, offline builds | May get stale |
+| **Generate at build** | Always fresh, no maintenance | Requires API access |
 
-- **Platform-level defaults**: Security policies, approved images
-- **Team-level overrides**: Team-specific registries or conventions
-- **Repository-level customization**: `.dockai` file per project
+Recommendation: **Commit for production**, generate in CI for validation.
 
-### How do I share customizations across teams?
+### How do I integrate with GitLab CI?
 
-1. **Version control `.dockai` files** with your code
-2. **Use organization-level GitHub Actions variables** for company-wide settings
-3. **Create `.dockai` templates** for common project types
-4. **Document learnings** in your customization instructions
+```yaml
+build:
+  image: python:3.11
+  services:
+    - docker:dind
+  script:
+    - pip install dockai-cli
+    - dockai build .
+  variables:
+    OPENAI_API_KEY: $OPENAI_API_KEY
+    DOCKER_HOST: tcp://docker:2375
+```
+
+### Can I use DockAI with Jenkins?
+
+```groovy
+pipeline {
+  agent any
+  environment {
+    OPENAI_API_KEY = credentials('openai-api-key')
+  }
+  stages {
+    stage('Generate Dockerfile') {
+      steps {
+        sh 'pip install dockai-cli'
+        sh 'dockai build .'
+      }
+    }
+  }
+}
+```
 
 ---
 
 ## Troubleshooting
 
-### "OPENAI_API_KEY not found"
+### "API key not found"
 
-Ensure your `.env` file exists and contains your API key:
+**Cause**: Environment variable not set or incorrect name.
 
+**Solution**:
 ```bash
-echo "OPENAI_API_KEY=sk-your-key" > .env
-```
+# Check if set
+echo $OPENAI_API_KEY
 
-Or set the environment variable directly:
-
-```bash
+# Set it
 export OPENAI_API_KEY=sk-your-key
+
+# Or pass directly
+dockai build . --api-key sk-your-key
 ```
 
-### "Docker not running"
+### "Docker build failed"
 
-Start Docker before running DockAI:
+**Common causes**:
+1. **Network issues**: Can't download base image
+2. **Missing dependencies**: Project needs additional packages
+3. **Permission issues**: Running as wrong user
 
+**Solutions**:
 ```bash
-# macOS/Windows
-# Open Docker Desktop
+# Check Docker is running
+docker ps
 
-# Linux
-sudo systemctl start docker
+# Try with more retries
+dockai build . --max-retries 5
+
+# Add debugging instructions
+dockai build . --generator-instructions "Add verbose output during build"
 ```
-
-### "Build failed after max retries"
-
-This usually means the project has unusual requirements. Try:
-
-1. **Increase retries**:
-   ```bash
-   export MAX_RETRIES=5
-   ```
-
-2. **Add custom instructions**:
-   ```bash
-   export DOCKAI_GENERATOR_INSTRUCTIONS="This project requires specific runtime dependencies"
-   ```
-
-3. **Check the error output** for clues and add them to reflector instructions:
-   ```ini
-   [instructions_reflector]
-   Known issue: This project requires xyz package
-   ```
 
 ### "Rate limit exceeded"
 
-DockAI has built-in rate limiting with exponential backoff. If you're hitting limits:
+**Cause**: Too many API requests in short time.
 
-1. **Use a paid API tier** with higher limits
-2. **Reduce model usage** by using faster models for simple agents
-3. **Cache results** when possible
+**Solutions**:
+1. Wait and retry
+2. Use different API key
+3. Use local provider (Ollama)
+4. Reduce `--max-retries`
 
-### "Trivy scan failed"
+### "Out of memory"
 
-If Trivy isn't installed, DockAI falls back to the Docker image:
+**Cause**: Docker build using too much memory.
 
+**Solutions**:
 ```bash
-# Pull the Trivy image
-docker pull aquasec/trivy
+# Increase validation memory limit
+dockai build . --validation-memory 2g
 
-# Or skip security scanning
-export DOCKAI_SKIP_SECURITY_SCAN=true
+# Or skip validation
+dockai build . --skip-validation
 ```
 
-### "Memory limit exceeded during validation"
+### "Hadolint/Trivy not found"
 
-Increase validation resources:
+**Cause**: Tools not installed.
 
+**Solution**: DockAI uses Docker-based versions automatically. Ensure Docker is running:
 ```bash
-export DOCKAI_VALIDATION_MEMORY=1g
-export DOCKAI_VALIDATION_CPUS=2.0
+docker ps
+```
+
+### "Permission denied" errors
+
+**Solutions**:
+```bash
+# Add user to docker group
+sudo usermod -aG docker $USER
+
+# Log out and back in, or
+newgrp docker
 ```
 
 ---
 
-## Security Questions
+## Contributing
 
-### Is my code sent to the AI?
+### How can I contribute to DockAI?
 
-Yes, portions of your code are sent to the LLM for analysis. Specifically:
+1. **Report bugs**: Open GitHub issues
+2. **Suggest features**: Discuss in issues first
+3. **Submit PRs**: Follow contribution guidelines
+4. **Improve docs**: Documentation PRs welcome
+5. **Share**: Tell others about DockAI
 
-- File paths and names
-- Contents of critical files (dependencies, configs, main entry points)
-- Build and run logs during validation
+### Where's the source code?
 
-If you have sensitive code, consider:
+GitHub: https://github.com/itzzjb/dockai
 
-- Using Azure OpenAI with data privacy agreements
-- Self-hosting an LLM (not currently supported, but planned)
-- Using `.gitignore` to exclude sensitive files from analysis
+### What's the license?
 
-### How does DockAI handle secrets?
+DockAI is licensed under the **MIT License** - use it freely in personal and commercial projects.
 
-DockAI's security reviewer explicitly checks for:
+### How do I report a security vulnerability?
 
-- Hardcoded API keys
-- Passwords in Dockerfiles
-- Credentials in environment variables
-
-It will flag these as security issues and suggest fixes.
-
-### Is DockAI SOC 2 / HIPAA compliant?
-
-DockAI itself is a tool—compliance depends on how you configure and deploy it:
-
-- **Use enterprise LLM providers** (Azure OpenAI) with compliance certifications
-- **Enable strict security mode** to fail on vulnerabilities
-- **Customize the reviewer** with your compliance requirements
+Please report security issues privately via GitHub Security Advisory, not public issues.
 
 ---
 
-## Performance Questions
+## Still Have Questions?
 
-### How long does a typical run take?
-
-| Scenario | Time |
-|----------|------|
-| Simple project, first attempt success | 30-60 seconds |
-| Medium project, 1-2 retries | 1-3 minutes |
-| Complex project, multiple retries | 3-10 minutes |
-
-### How can I speed up DockAI?
-
-1. **Use faster models** for simple agents (analyzer, reviewer)
-2. **Skip security scanning** if not needed
-3. **Add custom instructions** to reduce retries
-4. **Pre-warm Docker images** for common base images
-
-### How can I reduce costs?
-
-1. **Use `gpt-4o-mini`** or equivalent for fast agents
-2. **Add custom instructions** to reduce retries
-3. **Cache analysis results** for similar projects
-4. **Skip security scanning** in development
+- **Documentation**: Check other guides in this documentation
+- **GitHub Issues**: https://github.com/itzzjb/dockai/issues
+- **Discussions**: https://github.com/itzzjb/dockai/discussions
 
 ---
 
-## Next Steps
+## Quick Links
 
-- **[Getting Started](./getting-started.md)**: Installation and first run
-- **[Configuration](./configuration.md)**: All configuration options
-- **[Customization](./customization.md)**: Fine-tune for your stack
-
----
-
-## 📚 References
-
-- **[Getting Started](./getting-started.md)**: Installation guide
-- **[Configuration](./configuration.md)**: Full configuration reference
-- **[GitHub Actions](./github-actions.md)**: CI/CD setup
-
+- [Getting Started](./getting-started.md)
+- [Configuration Reference](./configuration.md)
+- [Architecture Deep Dive](./architecture.md)
+- [Customization Guide](./customization.md)
+- [GitHub Actions](./github-actions.md)
+- [MCP Server](./mcp-server.md)

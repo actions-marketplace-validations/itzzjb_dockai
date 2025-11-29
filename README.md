@@ -425,5 +425,5 @@ MIT License - see [LICENSE](./LICENSE) for details.
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/itzzjb">itzzjb</a></sub>
+  <sub>Built with ❤️ by <a href="https://github.com/itzzjb">Januda Bethmin</a></sub>
 </p>

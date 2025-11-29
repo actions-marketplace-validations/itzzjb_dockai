@@ -1,216 +1,397 @@
-# Release Process
+# Releases
 
-This document contains all the commands needed for releasing new versions of DockAI.
-
-## 📋 Release Checklist
-
-Before creating a new release:
-
-- [ ] All tests pass (`pytest`)
-- [ ] Documentation is updated
-- [ ] `pyproject.toml` version is bumped
-- [ ] `CHANGELOG.md` is updated (if exists)
-- [ ] All changes are committed and pushed
+This document describes DockAI's release process, versioning strategy, and how to create new releases. It also serves as a changelog for significant versions.
 
 ---
 
-## 🏷️ Creating a New Release Tag
+## 📋 Table of Contents
 
-### 1. Create a Specific Version Tag (e.g., v3.1.0)
-
-```bash
-# Create an annotated tag with a message
-git tag -a v3.1.0 -m "Release v3.1.0"
-
-# Or create a lightweight tag
-git tag v3.1.0
-```
-
-### 2. Push the Specific Version Tag
-
-```bash
-# Push the specific version tag to remote
-git push origin v3.1.0
-```
+1. [Versioning Strategy](#versioning-strategy)
+2. [Release Types](#release-types)
+3. [Creating a Release](#creating-a-release)
+4. [Release Checklist](#release-checklist)
+5. [Changelog](#changelog)
 
 ---
 
-## 🔄 Updating Major Version Alias
+## Versioning Strategy
 
-After releasing a new version, update the major version alias (e.g., `v3`) to point to the latest version.
+DockAI follows **Semantic Versioning (SemVer)** with the format `MAJOR.MINOR.PATCH`:
 
-### 1. Create/Update the Major Version Alias Tag
+| Component | When to Increment | Example |
+|-----------|-------------------|---------|
+| **MAJOR** | Breaking changes to CLI, API, or workflows | 2.0.0 → 3.0.0 |
+| **MINOR** | New features, backward-compatible | 3.0.0 → 3.1.0 |
+| **PATCH** | Bug fixes, documentation updates | 3.1.0 → 3.1.1 |
+
+### Version Tags
+
+DockAI uses two types of Git tags:
+
+| Tag Type | Example | Purpose |
+|----------|---------|---------|
+| Full version | `v3.1.0` | Point to specific release |
+| Major version | `v3` | Always points to latest 3.x |
+
+The major version tag (e.g., `v3`) is updated with each release to always point to the latest stable version in that major line. This allows GitHub Actions users to pin to `@v3` and get automatic updates.
+
+### Where Version is Stored
+
+Version must be updated in two files:
+
+1. **`pyproject.toml`**: Package version for PyPI
+   ```toml
+   [project]
+   version = "3.1.0"
+   ```
+
+2. **`src/dockai/__init__.py`**: Runtime version
+   ```python
+   __version__ = "3.1.0"
+   ```
+
+---
+
+## Release Types
+
+### Major Releases (X.0.0)
+
+**Trigger**: Breaking changes that require user action
+
+Examples of breaking changes:
+- CLI argument changes
+- Configuration file format changes
+- Removed features
+- Changed default behavior
+
+**Process**:
+1. Create migration guide in documentation
+2. Announce in release notes
+3. Update all documentation
+4. Consider deprecation period
+
+### Minor Releases (X.Y.0)
+
+**Trigger**: New features, improvements, non-breaking changes
+
+Examples:
+- New LLM provider support
+- New CLI options
+- New agents or workflow improvements
+- Performance improvements
+
+**Process**:
+1. Update documentation for new features
+2. Add to changelog
+3. Update version numbers
+
+### Patch Releases (X.Y.Z)
+
+**Trigger**: Bug fixes, security patches, documentation updates
+
+Examples:
+- Fix API compatibility issues
+- Security vulnerability patches
+- Typo corrections
+- Dependency updates
+
+**Process**:
+1. Minimal changes
+2. Focus on stability
+3. Quick turnaround
+
+---
+
+## Creating a Release
+
+### Step 1: Update Version Numbers
+
+Update version in both files:
+
+**`pyproject.toml`**:
+```toml
+[project]
+name = "dockai-cli"
+version = "3.2.0"  # Update this
+```
+
+**`src/dockai/__init__.py`**:
+```python
+__version__ = "3.2.0"  # Update this
+```
+
+### Step 2: Update Changelog
+
+Add release notes to this file (see format below).
+
+### Step 3: Commit Changes
 
 ```bash
-# Force create/update the v3 tag to point to current HEAD
+git add pyproject.toml src/dockai/__init__.py docs/releases.md
+git commit -m "chore: bump version to 3.2.0"
+```
+
+### Step 4: Create Tags
+
+```bash
+# Create full version tag
+git tag v3.2.0
+
+# Update major version tag (force move)
 git tag -f v3
-
-# Or point it to a specific tag
-git tag -f v3 v3.1.0
 ```
 
-### 2. Push the Major Version Alias Tag
+### Step 5: Push Everything
 
 ```bash
-# Force push the major version alias (overwrites existing remote tag)
-git push origin v3 -f
-```
-
----
-
-## 🚀 Complete Release Workflow
-
-### Example: Releasing v3.1.0
-
-```bash
-# 1. Ensure you're on the main branch with latest changes
-git checkout main
-git pull origin main
-
-# 2. Update version in pyproject.toml (manually or with script)
-# Edit pyproject.toml: version = "3.1.0"
-
-# 3. Commit version bump
-git add pyproject.toml
-git commit -m "Bump version to 3.1.0"
 git push origin main
+git push origin v3.2.0
+git push origin v3 --force
+```
 
-# 4. Create the specific version tag
-git tag -a v3.1.0 -m "Release v3.1.0"
+### Step 6: Create GitHub Release
 
-# 5. Push the specific version tag
-git push origin v3.1.0
+1. Go to GitHub → Releases → "Create a new release"
+2. Choose tag: `v3.2.0`
+3. Title: `v3.2.0`
+4. Copy changelog entry to description
+5. Publish release
 
-# 6. Update the major version alias
-git tag -f v3
+### Step 7: Verify PyPI Release
 
-# 7. Push the major version alias
-git push origin v3 -f
+If CI is configured to publish to PyPI:
+```bash
+pip install dockai-cli==3.2.0
+dockai --version
 ```
 
 ---
 
-## 📦 Release Types
+## Release Checklist
 
-### Patch Release (v3.0.1)
+Use this checklist for every release:
 
-Bug fixes and minor updates. No breaking changes.
+### Pre-Release
+
+- [ ] All tests passing
+- [ ] Documentation updated
+- [ ] Changelog updated
+- [ ] Version numbers updated in both files
+- [ ] Breaking changes documented (if any)
+- [ ] Migration guide written (for major releases)
+
+### Release
+
+- [ ] Changes committed
+- [ ] Full version tag created (e.g., `v3.2.0`)
+- [ ] Major version tag updated (e.g., `v3`)
+- [ ] Changes pushed to main
+- [ ] Tags pushed to origin
+- [ ] GitHub Release created
+- [ ] PyPI package updated (if applicable)
+
+### Post-Release
+
+- [ ] Verify PyPI installation works
+- [ ] Verify Docker image builds
+- [ ] Verify GitHub Action works with new tag
+- [ ] Announce release (if significant)
+
+---
+
+## Changelog
+
+### v3.1.0 (2024-XX-XX)
+
+**Features**:
+- Comprehensive documentation enhancement
+- Improved explanation of architecture and design decisions
+- Better getting started guide with detailed workflow explanation
+
+**Documentation**:
+- Complete rewrite of all documentation files
+- Added design rationale throughout
+- Added troubleshooting sections
+- Added example configurations
+
+### v3.0.0 (2024-XX-XX)
+
+**Breaking Changes**:
+- Renamed CLI entry point
+- Updated configuration file format
+- Changed default models for some agents
+
+**Features**:
+- LangGraph-based multi-agent architecture
+- 10 specialized AI agents
+- Self-correcting workflow with reflection loop
+- Support for 5 LLM providers (OpenAI, Azure, Gemini, Anthropic, Ollama)
+- MCP server for AI assistant integration
+- OpenTelemetry tracing support
+- Enhanced security scanning with Trivy
+- Dockerfile linting with Hadolint
+
+**Improvements**:
+- Better error messages
+- Improved retry logic
+- Enhanced project scanning
+- Rate limiting for API calls
+
+### v2.x.x
+
+Legacy versions. See GitHub releases for historical changelog.
+
+---
+
+## Release Notes Template
+
+Use this template for GitHub releases:
+
+```markdown
+## What's Changed
+
+### Features
+- Feature 1 description
+- Feature 2 description
+
+### Bug Fixes
+- Fix for issue #123
+- Fix for issue #456
+
+### Documentation
+- Updated getting started guide
+- Added FAQ section
+
+### Breaking Changes
+- Change 1 (migration: do X)
+- Change 2 (migration: do Y)
+
+## Upgrade Guide
+
+### From v3.0.x to v3.1.0
+
+No breaking changes. Simply update:
 
 ```bash
-# Update version to 3.0.1 in pyproject.toml
-git tag -a v3.0.1 -m "Release v3.0.1 - Bug fixes"
-git push origin v3.0.1
-git tag -f v3
-git push origin v3 -f
+pip install --upgrade dockai-cli
 ```
 
-### Minor Release (v3.1.0)
+### From v2.x to v3.0
 
-New features, no breaking changes.
+See [Migration Guide](./docs/migration.md)
 
-```bash
-# Update version to 3.1.0 in pyproject.toml
-git tag -a v3.1.0 -m "Release v3.1.0 - New features"
-git push origin v3.1.0
-git tag -f v3
-git push origin v3 -f
-```
+## Full Changelog
 
-### Major Release (v4.0.0)
-
-Breaking changes, major updates.
-
-```bash
-# Update version to 4.0.0 in pyproject.toml
-git tag -a v4.0.0 -m "Release v4.0.0 - Major update"
-git push origin v4.0.0
-
-# Create new major version alias
-git tag -f v4
-git push origin v4 -f
-
-# Keep v3 pointing to latest v3.x.x for users still on v3
+https://github.com/itzzjb/dockai/compare/v3.0.0...v3.1.0
 ```
 
 ---
 
-## 🔍 Useful Git Tag Commands
+## Git Commands Reference
 
-### List All Tags
+### View All Tags
 
 ```bash
-# List all tags
 git tag -l
+```
 
-# List tags matching a pattern
-git tag -l "v3*"
+### Delete Local Tag
+
+```bash
+git tag -d v3.1.0
+```
+
+### Delete Remote Tag
+
+```bash
+git push origin --delete v3.1.0
+```
+
+### Move Tag to Different Commit
+
+```bash
+git tag -f v3 <commit-hash>
+git push origin v3 --force
 ```
 
 ### View Tag Details
 
 ```bash
-# Show tag information
 git show v3.1.0
-
-# Show what commit a tag points to
-git rev-list -n 1 v3
 ```
 
-### Delete a Tag
+---
+
+## PyPI Publishing
+
+### Manual Publishing
 
 ```bash
-# Delete local tag
-git tag -d v3.1.0
+# Build
+python -m build
 
-# Delete remote tag
-git push origin --delete v3.1.0
+# Upload to PyPI
+twine upload dist/*
 ```
 
-### Move a Tag to a Different Commit
+### CI/CD Publishing
 
-```bash
-# Delete the old tag locally
-git tag -d v3
+Configure GitHub Actions to publish on tag push:
 
-# Create the tag at a specific commit
-git tag v3 <commit-hash>
+```yaml
+on:
+  push:
+    tags:
+      - 'v*'
 
-# Force push to update remote
-git push origin v3 -f
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
 ```
 
 ---
 
-## 🎯 Quick Reference
+## Docker Image Publishing
 
-| Action | Command |
-|--------|---------|
-| Create version tag | `git tag -a v3.1.0 -m "Release v3.1.0"` |
-| Push version tag | `git push origin v3.1.0` |
-| Update major alias | `git tag -f v3` |
-| Push major alias | `git push origin v3 -f` |
-| List all tags | `git tag -l` |
-| Delete local tag | `git tag -d v3.1.0` |
-| Delete remote tag | `git push origin --delete v3.1.0` |
+Docker images are published to GitHub Container Registry (GHCR):
+
+```yaml
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: |
+            ghcr.io/itzzjb/dockai:${{ github.ref_name }}
+            ghcr.io/itzzjb/dockai:latest
+```
 
 ---
 
-## 📝 Notes
+## Next Steps
 
-- **Lightweight vs Annotated Tags**: Use annotated tags (`-a`) for releases as they include metadata (author, date, message)
-- **Force Push**: The `-f` flag is needed when updating existing tags (like major version aliases)
-- **Semantic Versioning**: Follow [SemVer](https://semver.org/) - `MAJOR.MINOR.PATCH`
-  - **MAJOR**: Breaking changes
-  - **MINOR**: New features, backward compatible
-  - **PATCH**: Bug fixes, backward compatible
-- **GitHub Actions**: Users referencing `itzzjb/dockai@v3` will automatically get the latest v3.x.x version when you update the `v3` tag
-
----
-
-## 🔗 Related Files
-
-- `pyproject.toml` - Version number
-- `README.md` - Documentation and examples
-- `action.yml` - GitHub Action configuration
-- `.github/workflows/` - CI/CD workflows
-
+- [Getting Started](./getting-started.md)
+- [Architecture](./architecture.md)
+- [Contributing Guidelines](https://github.com/itzzjb/dockai/blob/main/CONTRIBUTING.md)
