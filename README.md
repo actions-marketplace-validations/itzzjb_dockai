@@ -209,26 +209,111 @@ graph TD
 
 ### Environment Variables
 
+#### LLM Provider Configuration
+
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `DOCKAI_LLM_PROVIDER` | Provider (`openai`, `azure`, `gemini`, `anthropic`, `ollama`) | `openai` |
 | `OPENAI_API_KEY` | OpenAI API key | Required* |
 | `GOOGLE_API_KEY` | Google Gemini API key | Required* |
 | `ANTHROPIC_API_KEY` | Anthropic Claude API key | Required* |
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | Required* |
-| `OLLAMA_BASE_URL` | Ollama Base URL | `http://localhost:11434` |
-| `DOCKAI_LLM_PROVIDER` | Provider (`openai`, `azure`, `gemini`, `anthropic`, `ollama`) | `openai` |
-| `MAX_RETRIES` | Maximum retry attempts | `3` |
-| `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy scanning | `false` |
-| `DOCKAI_SKIP_HADOLINT` | Skip Hadolint linting | `false` |
-| `DOCKAI_TRUNCATION_ENABLED` | Enable file truncation | `false` |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL | - |
+| `AZURE_OPENAI_API_VERSION` | Azure OpenAI API version | `2024-02-15-preview` |
+| `OLLAMA_BASE_URL` | Ollama base URL | `http://localhost:11434` |
+
+*Only one API key required for your chosen provider.
+
+#### Per-Agent Model Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_MODEL_ANALYZER` | Model for project analyzer | `gpt-4o-mini` |
+| `DOCKAI_MODEL_PLANNER` | Model for build planner | `gpt-4o-mini` |
+| `DOCKAI_MODEL_GENERATOR` | Model for Dockerfile generator | `gpt-4o` |
+| `DOCKAI_MODEL_GENERATOR_ITERATIVE` | Model for iterative generator | `gpt-4o` |
+| `DOCKAI_MODEL_REVIEWER` | Model for security reviewer | `gpt-4o-mini` |
+| `DOCKAI_MODEL_REFLECTOR` | Model for failure reflector | `gpt-4o` |
+| `DOCKAI_MODEL_HEALTH_DETECTOR` | Model for health detector | `gpt-4o-mini` |
+| `DOCKAI_MODEL_READINESS_DETECTOR` | Model for readiness detector | `gpt-4o-mini` |
+| `DOCKAI_MODEL_ERROR_ANALYZER` | Model for error analyzer | `gpt-4o-mini` |
+| `DOCKAI_MODEL_ITERATIVE_IMPROVER` | Model for iterative improver | `gpt-4o` |
+
+> **Tip:** Mix providers by prefixing with `provider/`, e.g., `DOCKAI_MODEL_ANALYZER=openai/gpt-4o-mini`
+
+#### Generation Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MAX_RETRIES` | Maximum retry attempts if Dockerfile validation fails | `3` |
+
+#### Validation Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_VALIDATION_MEMORY` | Memory limit for container sandbox | `512m` |
+| `DOCKAI_VALIDATION_CPUS` | CPU limit for container validation | `1.0` |
+| `DOCKAI_VALIDATION_PIDS` | Maximum processes for validation | `100` |
+| `DOCKAI_MAX_IMAGE_SIZE_MB` | Maximum image size in MB (0 to disable) | `500` |
+| `DOCKAI_SKIP_HEALTH_CHECK` | Skip health check during validation | `false` |
+
+#### File Analysis Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_TRUNCATION_ENABLED` | Enable smart truncation of large files | `false` |
 | `DOCKAI_TOKEN_LIMIT` | Token limit for auto-truncation | `100000` |
 | `DOCKAI_MAX_FILE_CHARS` | Max chars per file (when truncating) | `200000` |
 | `DOCKAI_MAX_FILE_LINES` | Max lines per file (when truncating) | `5000` |
+
+#### Security Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_SKIP_HADOLINT` | Skip Hadolint Dockerfile linting | `false` |
+| `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy security scan | `false` |
+| `DOCKAI_STRICT_SECURITY` | Fail on ANY HIGH/CRITICAL vulnerabilities | `false` |
+
+#### Observability & Tracing
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `DOCKAI_ENABLE_TRACING` | Enable OpenTelemetry tracing | `false` |
 | `DOCKAI_TRACING_EXPORTER` | Tracing exporter (`console`, `otlp`) | `console` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint URL | `http://localhost:4317` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint URL (for Jaeger/Tempo/Datadog) | `http://localhost:4317` |
+| `OTEL_SERVICE_NAME` | Service name for traces | `dockai` |
 
-*Only one API key required for your chosen provider.
+#### Custom Instructions (Per-Agent)
+
+| Variable | Description |
+|----------|-------------|
+| `DOCKAI_ANALYZER_INSTRUCTIONS` | Appended to analyzer prompt |
+| `DOCKAI_PLANNER_INSTRUCTIONS` | Appended to planner prompt |
+| `DOCKAI_GENERATOR_INSTRUCTIONS` | Appended to generator prompt |
+| `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Appended to iterative generator prompt |
+| `DOCKAI_REVIEWER_INSTRUCTIONS` | Appended to reviewer prompt |
+| `DOCKAI_REFLECTOR_INSTRUCTIONS` | Appended to reflector prompt |
+| `DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS` | Appended to health detector prompt |
+| `DOCKAI_READINESS_DETECTOR_INSTRUCTIONS` | Appended to readiness detector prompt |
+| `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Appended to error analyzer prompt |
+| `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Appended to iterative improver prompt |
+
+#### Custom Prompts (Advanced)
+
+| Variable | Description |
+|----------|-------------|
+| `DOCKAI_PROMPT_ANALYZER` | Completely replaces analyzer prompt |
+| `DOCKAI_PROMPT_PLANNER` | Completely replaces planner prompt |
+| `DOCKAI_PROMPT_GENERATOR` | Completely replaces generator prompt |
+| `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | Completely replaces iterative generator prompt |
+| `DOCKAI_PROMPT_REVIEWER` | Completely replaces reviewer prompt |
+| `DOCKAI_PROMPT_REFLECTOR` | Completely replaces reflector prompt |
+| `DOCKAI_PROMPT_HEALTH_DETECTOR` | Completely replaces health detector prompt |
+| `DOCKAI_PROMPT_READINESS_DETECTOR` | Completely replaces readiness detector prompt |
+| `DOCKAI_PROMPT_ERROR_ANALYZER` | Completely replaces error analyzer prompt |
+| `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | Completely replaces iterative improver prompt |
+
+> **Note:** Instructions are appended to defaults; prompts completely replace them. Use `.dockai` file for repo-specific configs.
 
 ### Repository-Level Configuration
 
