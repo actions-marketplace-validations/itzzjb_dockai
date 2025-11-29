@@ -394,13 +394,41 @@ def _create_anthropic_llm(model_name: str, temperature: float, **kwargs) -> Any:
 
 
 def _create_ollama_llm(model_name: str, temperature: float, config: LLMConfig, **kwargs) -> Any:
-    """Creates an Ollama LLM instance."""
+    """
+    Creates an Ollama LLM instance.
+    
+    If Ollama is not available locally, this function will automatically
+    start an Ollama Docker container and use it instead.
+    """
     from langchain_ollama import ChatOllama
+    from ..utils.ollama_docker import get_ollama_url, is_ollama_available
+    
+    # Check if Ollama is available at configured URL
+    configured_url = config.ollama_base_url
+    
+    if is_ollama_available(configured_url):
+        logger.debug(f"Using Ollama at {configured_url}")
+        base_url = configured_url
+    else:
+        # Try to get Ollama URL (may start Docker container)
+        logger.info("Ollama not available at configured URL, checking alternatives...")
+        try:
+            base_url = get_ollama_url(model_name=model_name, preferred_url=configured_url)
+            logger.info(f"Using Ollama at {base_url}")
+        except RuntimeError as e:
+            raise ValueError(
+                f"Ollama is not available and could not be started via Docker.\n"
+                f"Options:\n"
+                f"  1. Install and run Ollama locally: https://ollama.ai/download\n"
+                f"  2. Install Docker to use Ollama via container\n"
+                f"  3. Use a different LLM provider (set DOCKAI_LLM_PROVIDER)\n"
+                f"\nError: {e}"
+            ) from e
     
     return ChatOllama(
         model=model_name,
         temperature=temperature,
-        base_url=config.ollama_base_url,
+        base_url=base_url,
         **kwargs
     )
 

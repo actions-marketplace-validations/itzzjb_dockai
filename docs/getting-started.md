@@ -39,6 +39,22 @@ docker pull aquasec/trivy
 
 If Trivy isn't installed, DockAI will use the Docker image automatically.
 
+### Optional: Ollama for Local LLM
+
+For privacy-focused or offline usage, DockAI supports [Ollama](https://ollama.ai/) for local LLM inference.
+
+```bash
+# Install Ollama (optional)
+# macOS/Linux
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Docker (automatic fallback if Ollama not installed)
+# DockAI will automatically use the Docker image if needed
+docker pull ollama/ollama
+```
+
+If Ollama isn't installed locally, DockAI will automatically start an Ollama Docker container when needed.
+
 ---
 
 ## Installation

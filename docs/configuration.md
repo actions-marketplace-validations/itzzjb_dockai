@@ -88,6 +88,24 @@ DOCKAI_MODEL_ANALYZER=openai/gpt-4o-mini
 - `anthropic/`
 - `ollama/`
 
+### Ollama Docker Fallback
+
+When using Ollama, DockAI will automatically fall back to Docker if Ollama is not installed locally:
+
+1. **Local Ollama** - If Ollama is running locally (default: `http://localhost:11434`), it will be used directly.
+2. **Docker Fallback** - If Ollama is not available, DockAI will automatically:
+   - Pull the `ollama/ollama:latest` Docker image
+   - Start a container named `dockai-ollama`
+   - Pull the required model inside the container
+   - Use a persistent Docker volume (`ollama_models`) to cache models
+
+This means you can use Ollama-based models without installing Ollama, as long as Docker is available.
+
+```bash
+# No Ollama installation needed - Docker will be used automatically
+DOCKAI_LLM_PROVIDER=ollama
+```
+
 ---
 
 ## Workflow Settings
