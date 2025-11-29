@@ -1,13 +1,14 @@
 """Tests for the validator module."""
 import os
 from unittest.mock import patch, MagicMock
-from dockai.utils.validator import validate_docker_build_and_run, check_health_endpoint
+from dockai.utils.validator import validate_docker_build_and_run, check_health_endpoint, lint_dockerfile_with_hadolint
 from dockai.core.errors import ClassifiedError, ErrorType
 
+@patch("dockai.utils.validator.lint_dockerfile_with_hadolint")
 @patch("dockai.utils.validator.run_command")
 @patch("dockai.utils.validator.time.sleep")
 @patch("dockai.utils.validator.os.getenv")
-def test_validate_success_service(mock_getenv, mock_sleep, mock_run_command):
+def test_validate_success_service(mock_getenv, mock_sleep, mock_run_command, mock_hadolint):
     """Test successful service validation"""
     # Mock env vars
     mock_getenv.side_effect = lambda key, default=None: {
@@ -15,7 +16,11 @@ def test_validate_success_service(mock_getenv, mock_sleep, mock_run_command):
         "DOCKAI_VALIDATION_CPUS": "1.0",
         "DOCKAI_VALIDATION_PIDS": "100",
         "DOCKAI_SKIP_SECURITY_SCAN": "true",  # Skip Trivy for test
+        "DOCKAI_SKIP_HADOLINT": "true",  # Skip Hadolint for test
     }.get(key, default)
+    
+    # Mock hadolint to pass
+    mock_hadolint.return_value = (True, [], "")
     
     # Mock sequence: build, run, inspect running, inspect exit code, logs, inspect size, rm, rmi
     mock_run_command.side_effect = [
@@ -35,14 +40,18 @@ def test_validate_success_service(mock_getenv, mock_sleep, mock_run_command):
     assert "running successfully" in msg.lower()
     assert size == 104857600
 
+@patch("dockai.utils.validator.lint_dockerfile_with_hadolint")
 @patch("dockai.utils.validator.run_command")
 @patch("dockai.utils.validator.time.sleep")
 @patch("dockai.utils.validator.os.getenv")
-def test_validate_success_script(mock_getenv, mock_sleep, mock_run_command):
+def test_validate_success_script(mock_getenv, mock_sleep, mock_run_command, mock_hadolint):
     """Test successful script validation (exits with code 0)"""
     mock_getenv.side_effect = lambda key, default=None: {
         "DOCKAI_SKIP_SECURITY_SCAN": "true",
     }.get(key, default)
+    
+    # Mock hadolint to pass
+    mock_hadolint.return_value = (True, [], "")
     
     # Script runs and exits successfully
     mock_run_command.side_effect = [
@@ -61,10 +70,14 @@ def test_validate_success_script(mock_getenv, mock_sleep, mock_run_command):
     assert success is True
     assert "finished successfully" in msg.lower()
 
+@patch("dockai.utils.validator.lint_dockerfile_with_hadolint")
 @patch("dockai.utils.validator.classify_error")
 @patch("dockai.utils.validator.run_command")
-def test_validate_build_failure(mock_run_command, mock_classify):
+def test_validate_build_failure(mock_run_command, mock_classify, mock_hadolint):
     """Test build failure"""
+    # Mock hadolint to pass
+    mock_hadolint.return_value = (True, [], "")
+    
     mock_run_command.side_effect = [
         (1, "", "Build failed error message"),  # build fails
     ]
@@ -85,14 +98,18 @@ def test_validate_build_failure(mock_run_command, mock_classify):
     assert "Build failed error message" in msg
     assert size == 0
 
+@patch("dockai.utils.validator.lint_dockerfile_with_hadolint")
 @patch("dockai.utils.validator.run_command")
 @patch("dockai.utils.validator.time.sleep")
 @patch("dockai.utils.validator.os.getenv")
-def test_validate_with_health_check_success(mock_getenv, mock_sleep, mock_run_command):
+def test_validate_with_health_check_success(mock_getenv, mock_sleep, mock_run_command, mock_hadolint):
     """Test service with health check that passes"""
     mock_getenv.side_effect = lambda key, default=None: {
         "DOCKAI_SKIP_SECURITY_SCAN": "true",
     }.get(key, default)
+    
+    # Mock hadolint to pass
+    mock_hadolint.return_value = (True, [], "")
     
     # Mock sequence including health check
     mock_run_command.side_effect = [
@@ -117,14 +134,18 @@ def test_validate_with_health_check_success(mock_getenv, mock_sleep, mock_run_co
     assert success is True
     assert "health check passed" in msg.lower()
 
+@patch("dockai.utils.validator.lint_dockerfile_with_hadolint")
 @patch("dockai.utils.validator.run_command")
 @patch("dockai.utils.validator.time.sleep")
 @patch("dockai.utils.validator.os.getenv")
-def test_validate_with_health_check_failure_but_running(mock_getenv, mock_sleep, mock_run_command):
+def test_validate_with_health_check_failure_but_running(mock_getenv, mock_sleep, mock_run_command, mock_hadolint):
     """Test service with health check that fails but service keeps running (should pass with warning)"""
     mock_getenv.side_effect = lambda key, default=None: {
         "DOCKAI_SKIP_SECURITY_SCAN": "true",
     }.get(key, default)
+    
+    # Mock hadolint to pass
+    mock_hadolint.return_value = (True, [], "")
     
     # Health check returns non-200 multiple times
     mock_run_command.side_effect = [
@@ -156,15 +177,19 @@ def test_validate_with_health_check_failure_but_running(mock_getenv, mock_sleep,
     assert "health check" in msg.lower()
     assert "did not respond" in msg.lower()
 
+@patch("dockai.utils.validator.lint_dockerfile_with_hadolint")
 @patch("dockai.utils.validator.classify_error")
 @patch("dockai.utils.validator.run_command")
 @patch("dockai.utils.validator.time.sleep")
 @patch("dockai.utils.validator.os.getenv")
-def test_validate_service_crash(mock_getenv, mock_sleep, mock_run_command, mock_classify):
+def test_validate_service_crash(mock_getenv, mock_sleep, mock_run_command, mock_classify, mock_hadolint):
     """Test service that crashes after starting"""
     mock_getenv.side_effect = lambda key, default=None: {
         "DOCKAI_SKIP_SECURITY_SCAN": "true",
     }.get(key, default)
+    
+    # Mock hadolint to pass
+    mock_hadolint.return_value = (True, [], "")
     
     mock_run_command.side_effect = [
         (0, "Build success", ""),  # build
@@ -191,15 +216,19 @@ def test_validate_service_crash(mock_getenv, mock_sleep, mock_run_command, mock_
     assert "stopped unexpectedly" in msg.lower()
     assert "Service crashed" in msg
 
+@patch("dockai.utils.validator.lint_dockerfile_with_hadolint")
 @patch("dockai.utils.validator.classify_error")
 @patch("dockai.utils.validator.run_command")
 @patch("dockai.utils.validator.time.sleep")
 @patch("dockai.utils.validator.os.getenv")
-def test_validate_script_failure(mock_getenv, mock_sleep, mock_run_command, mock_classify):
+def test_validate_script_failure(mock_getenv, mock_sleep, mock_run_command, mock_classify, mock_hadolint):
     """Test script that exits with non-zero code"""
     mock_getenv.side_effect = lambda key, default=None: {
         "DOCKAI_SKIP_SECURITY_SCAN": "true",
     }.get(key, default)
+    
+    # Mock hadolint to pass
+    mock_hadolint.return_value = (True, [], "")
     
     mock_run_command.side_effect = [
         (0, "Build success", ""),  # build
@@ -227,10 +256,14 @@ def test_validate_script_failure(mock_getenv, mock_sleep, mock_run_command, mock
     assert "Exit Code: 1" in msg
     assert "Script failed" in msg
 
+@patch("dockai.utils.validator.lint_dockerfile_with_hadolint")
 @patch("dockai.utils.validator.classify_error")
 @patch("dockai.utils.validator.run_command")
-def test_validate_container_start_failure(mock_run_command, mock_classify):
+def test_validate_container_start_failure(mock_run_command, mock_classify, mock_hadolint):
     """Test container fails to start"""
+    # Mock hadolint to pass
+    mock_hadolint.return_value = (True, [], "")
+    
     mock_run_command.side_effect = [
         (0, "Build success", ""),      # build
         (1, "", "Cannot start container"), # run fails
@@ -254,34 +287,52 @@ def test_validate_container_start_failure(mock_run_command, mock_classify):
 
 def test_configurable_resource_limits():
     """Test that resource limits are configurable"""
-    with patch("dockai.utils.validator.run_command") as mock_run:
-        with patch("dockai.utils.validator.time.sleep"):
-            with patch("dockai.utils.validator.os.getenv") as mock_getenv:
-                # Set custom resource limits
-                mock_getenv.side_effect = lambda key, default=None: {
-                    "DOCKAI_VALIDATION_MEMORY": "2g",
-                    "DOCKAI_VALIDATION_CPUS": "2.0",
-                    "DOCKAI_VALIDATION_PIDS": "200",
-                    "DOCKAI_SKIP_SECURITY_SCAN": "true",
-                }.get(key, default)
-                
-                mock_run.side_effect = [
-                    (0, "Build success", ""),
-                    (0, "container_id", ""),
-                    (0, "true", ""),
-                    (0, "0", ""),
-                    (0, "logs", ""),
-                    (0, "104857600", ""),
-                    (0, "", ""),
-                    (0, "", "")
-                ]
-                
-                validate_docker_build_and_run(".")
-                
-                # Check that docker run was called with custom limits
-                run_call = mock_run.call_args_list[1]
-                run_command = run_call[0][0]
-                
-                assert "--memory=2g" in run_command
-                assert "--cpus=2.0" in run_command
-                assert "--pids-limit=200" in run_command
+    with patch("dockai.utils.validator.lint_dockerfile_with_hadolint") as mock_hadolint:
+        with patch("dockai.utils.validator.run_command") as mock_run:
+            with patch("dockai.utils.validator.time.sleep"):
+                with patch("dockai.utils.validator.os.getenv") as mock_getenv:
+                    # Mock hadolint to pass
+                    mock_hadolint.return_value = (True, [], "")
+                    
+                    # Set custom resource limits
+                    mock_getenv.side_effect = lambda key, default=None: {
+                        "DOCKAI_VALIDATION_MEMORY": "2g",
+                        "DOCKAI_VALIDATION_CPUS": "2.0",
+                        "DOCKAI_VALIDATION_PIDS": "200",
+                        "DOCKAI_SKIP_SECURITY_SCAN": "true",
+                    }.get(key, default)
+                    
+                    mock_run.side_effect = [
+                        (0, "Build success", ""),
+                        (0, "container_id", ""),
+                        (0, "true", ""),
+                        (0, "0", ""),
+                        (0, "logs", ""),
+                        (0, "104857600", ""),
+                        (0, "", ""),
+                        (0, "", "")
+                    ]
+                    
+                    validate_docker_build_and_run(".")
+                    
+                    # Check that docker run was called with custom limits
+                    run_call = mock_run.call_args_list[1]
+                    run_command = run_call[0][0]
+                    
+                    assert "--memory=2g" in run_command
+                    assert "--cpus=2.0" in run_command
+                    assert "--pids-limit=200" in run_command
+
+
+def test_hadolint_lint_skip():
+    """Test that Hadolint can be skipped via environment variable"""
+    with patch("dockai.utils.validator.os.getenv") as mock_getenv:
+        mock_getenv.side_effect = lambda key, default=None: {
+            "DOCKAI_SKIP_HADOLINT": "true",
+        }.get(key, default)
+        
+        passed, issues, output = lint_dockerfile_with_hadolint("/path/to/Dockerfile")
+        
+        assert passed is True
+        assert issues == []
+        assert output == "Skipped"

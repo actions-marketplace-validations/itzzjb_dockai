@@ -26,6 +26,119 @@ from ..core.errors import classify_error, ClassifiedError, ErrorType
 logger = logging.getLogger("dockai")
 
 
+def lint_dockerfile_with_hadolint(dockerfile_path: str) -> Tuple[bool, List[dict], str]:
+    """
+    Lint a Dockerfile using Hadolint for best practices and syntax errors.
+    
+    Hadolint checks for:
+    - Dockerfile syntax errors
+    - Best practice violations (DL3000 series)
+    - Shell script issues via ShellCheck (SC series)
+    
+    Args:
+        dockerfile_path (str): Path to the Dockerfile to lint.
+        
+    Returns:
+        Tuple[bool, List[dict], str]: A tuple containing:
+            - passed: True if no errors/warnings above threshold
+            - issues: List of issue dictionaries with severity, code, message, line
+            - raw_output: Raw Hadolint output for debugging
+    """
+    skip_hadolint = os.getenv("DOCKAI_SKIP_HADOLINT", "false").lower() == "true"
+    
+    if skip_hadolint:
+        logger.info("Hadolint linting skipped (DOCKAI_SKIP_HADOLINT=true)")
+        return True, [], "Skipped"
+    
+    logger.info("Running Hadolint Dockerfile linter...")
+    
+    # Check if hadolint is available locally first
+    hadolint_cmd = None
+    
+    # Try local hadolint binary
+    local_check = subprocess.run(
+        ["which", "hadolint"],
+        capture_output=True,
+        text=True
+    )
+    
+    if local_check.returncode == 0:
+        # Local hadolint available
+        hadolint_cmd = [
+            "hadolint",
+            "--format", "json",
+            dockerfile_path
+        ]
+    else:
+        # Fall back to Docker-based hadolint
+        logger.debug("Local hadolint not found, using Docker image...")
+        hadolint_cmd = [
+            "docker", "run", "--rm",
+            "-v", f"{os.path.dirname(os.path.abspath(dockerfile_path))}:/workspace:ro",
+            "hadolint/hadolint",
+            "hadolint",
+            "--format", "json",
+            f"/workspace/{os.path.basename(dockerfile_path)}"
+        ]
+    
+    try:
+        result = subprocess.run(
+            hadolint_cmd,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        raw_output = result.stdout or result.stderr
+        issues = []
+        
+        # Parse JSON output
+        if result.stdout:
+            try:
+                parsed = json.loads(result.stdout)
+                for item in parsed:
+                    issues.append({
+                        "severity": item.get("level", "warning"),
+                        "code": item.get("code", "UNKNOWN"),
+                        "message": item.get("message", ""),
+                        "line": item.get("line", 0),
+                        "column": item.get("column", 0)
+                    })
+            except json.JSONDecodeError:
+                # Hadolint might return empty output for clean Dockerfiles
+                pass
+        
+        # Determine pass/fail based on severity
+        # error = fail, warning/info/style = pass with warnings
+        has_errors = any(i["severity"] == "error" for i in issues)
+        
+        if has_errors:
+            error_count = sum(1 for i in issues if i["severity"] == "error")
+            logger.warning(f"Hadolint found {error_count} error(s) in Dockerfile")
+            for issue in issues:
+                if issue["severity"] == "error":
+                    logger.error(f"  Line {issue['line']}: [{issue['code']}] {issue['message']}")
+        elif issues:
+            warning_count = len(issues)
+            logger.info(f"Hadolint found {warning_count} warning(s) (non-blocking)")
+            for issue in issues[:5]:  # Show first 5 warnings
+                logger.debug(f"  Line {issue['line']}: [{issue['code']}] {issue['message']}")
+        else:
+            logger.info("Hadolint passed - no issues found")
+        
+        return not has_errors, issues, raw_output
+        
+    except subprocess.TimeoutExpired:
+        logger.warning("Hadolint timed out after 60s, skipping lint check")
+        return True, [], "Timeout"
+    except FileNotFoundError:
+        logger.warning("Hadolint not available (install locally or ensure Docker is running)")
+        return True, [], "Not available"
+    except Exception as e:
+        logger.warning(f"Hadolint check failed: {e}")
+        return True, [], str(e)
+
+
 def run_command(command: List[str], cwd: str = ".") -> Tuple[int, str, str]:
     """
     Run a shell command and return exit code, stdout, stderr.
@@ -158,6 +271,25 @@ def validate_docker_build_and_run(
     container_name = f"dockai-container-{uuid.uuid4().hex[:8]}"
     
     logger.info(f"Validating Dockerfile in {directory} (Type: {project_type}, Stack: {stack})...")
+    
+    # 0. Hadolint Phase (Pre-build linting)
+    dockerfile_path = os.path.join(directory, "Dockerfile")
+    hadolint_passed, hadolint_issues, _ = lint_dockerfile_with_hadolint(dockerfile_path)
+    
+    if not hadolint_passed:
+        # Hadolint found errors - return early with actionable feedback
+        error_messages = [f"Line {i['line']}: [{i['code']}] {i['message']}" 
+                         for i in hadolint_issues if i['severity'] == 'error']
+        error_summary = "; ".join(error_messages[:3])  # First 3 errors
+        
+        classified = ClassifiedError(
+            error_type=ErrorType.DOCKERFILE_ERROR,
+            message=f"Dockerfile lint errors: {error_summary}",
+            suggestion="Fix the Hadolint errors. Common fixes: use specific package versions, avoid deprecated instructions",
+            original_error="\n".join(error_messages),
+            should_retry=True
+        )
+        return False, f"Hadolint found {len(error_messages)} error(s)", 0, classified
     
     # 1. Build Phase
     logger.info("Building Docker image (with resource limits)...")

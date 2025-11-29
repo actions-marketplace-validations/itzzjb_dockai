@@ -82,6 +82,10 @@ inputs:
     description: 'Max attempts to fix a failing Dockerfile'
     required: false
     default: '3'
+  skip_hadolint:
+    description: 'Skip Hadolint Dockerfile linting (true/false)'
+    required: false
+    default: 'false'
   skip_security_scan:
     description: 'Skip Trivy security scan (true/false)'
     required: false
@@ -240,6 +244,7 @@ runs:
         MODEL_ANALYZER: ${{ inputs.model_analyzer }}
         # General Settings
         MAX_RETRIES: ${{ inputs.max_retries }}
+        DOCKAI_SKIP_HADOLINT: ${{ inputs.skip_hadolint }}
         DOCKAI_SKIP_SECURITY_SCAN: ${{ inputs.skip_security_scan }}
         DOCKAI_STRICT_SECURITY: ${{ inputs.strict_security }}
         DOCKAI_MAX_IMAGE_SIZE_MB: ${{ inputs.max_image_size_mb }}

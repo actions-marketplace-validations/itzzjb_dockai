@@ -100,10 +100,11 @@ DOCKAI_MODEL_ANALYZER=openai/gpt-4o-mini
 
 ## Security & Validation Settings
 
-### Security Scanning
+### Linting & Security Scanning
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `DOCKAI_SKIP_HADOLINT` | Skip Hadolint Dockerfile linting | `false` |
 | `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy vulnerability scan | `false` |
 | `DOCKAI_STRICT_SECURITY` | Fail on any vulnerability | `false` |
 | `DOCKAI_MAX_IMAGE_SIZE_MB` | Maximum image size (0 = disabled) | `500` |

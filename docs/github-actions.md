@@ -89,6 +89,7 @@ jobs:
 
 | Input | Description | Default |
 |-------|-------------|---------|
+| `skip_hadolint` | Skip Hadolint Dockerfile linting | `false` |
 | `skip_security_scan` | Skip Trivy scanning | `false` |
 | `strict_security` | Fail on any vulnerability | `false` |
 | `max_image_size_mb` | Max image size (0 = disabled) | `500` |

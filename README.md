@@ -57,7 +57,7 @@ That's it. DockAI handles the rest.
   <tr>
     <td width="50%">
       <h3>🛡️ Security-First</h3>
-      <p>Built-in Trivy integration scans for vulnerabilities. Enforces non-root users, minimal base images, and hardened configs.</p>
+      <p>Built-in Trivy CVE scanning and Hadolint linting. Enforces non-root users, minimal base images, and hardened configs.</p>
     </td>
     <td width="50%">
       <h3>🤖 10 Specialized Agents</h3>
@@ -218,6 +218,7 @@ graph TD
 | `DOCKAI_LLM_PROVIDER` | Provider (`openai`, `azure`, `gemini`, `anthropic`, `ollama`) | `openai` |
 | `MAX_RETRIES` | Maximum retry attempts | `3` |
 | `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy scanning | `false` |
+| `DOCKAI_SKIP_HADOLINT` | Skip Hadolint linting | `false` |
 | `DOCKAI_TRUNCATION_ENABLED` | Enable file truncation | `false` |
 | `DOCKAI_TOKEN_LIMIT` | Token limit for auto-truncation | `100000` |
 | `DOCKAI_MAX_FILE_CHARS` | Max chars per file (when truncating) | `200000` |
@@ -310,13 +311,14 @@ See [GitHub Actions Guide](./docs/github-actions.md) for all options.
 ## 🛠️ Tech Stack
 
 | Technology | Purpose |
-|------------|---------|
+|------------|----------|
 | **Python 3.10+** | Core runtime |
 | **LangGraph** | Stateful agent workflow orchestration |
 | **LangChain** | LLM provider integration |
 | **Pydantic** | Structured output validation |
 | **Rich + Typer** | Beautiful CLI interface |
 | **Trivy** | Security vulnerability scanning |
+| **Hadolint** | Dockerfile linting and best practices |
 
 ---
 

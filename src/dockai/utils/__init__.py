@@ -12,7 +12,7 @@ This module contains utility functions and helpers:
 
 from .scanner import get_file_tree
 from .registry import get_docker_tags
-from .validator import validate_docker_build_and_run, check_container_readiness
+from .validator import validate_docker_build_and_run, check_container_readiness, lint_dockerfile_with_hadolint
 from .prompts import (
     get_prompt,
     get_prompt_config,
@@ -33,6 +33,7 @@ __all__ = [
     "get_docker_tags",
     "validate_docker_build_and_run",
     "check_container_readiness",
+    "lint_dockerfile_with_hadolint",
     "get_prompt",
     "get_prompt_config",
     "set_prompt_config",
