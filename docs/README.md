@@ -189,27 +189,37 @@ Then you can talk to your AI assistant naturally:
 
 DockAI uses a **multi-agent architecture** powered by LangGraph. Each agent specializes in a specific task:
 
-```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                            DockAI Workflow                               │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│   📂 Scanner ──► 🧠 Analyzer ──► 📖 Reader ──► 🏥 Health Detector       │
-│                                                                │         │
-│                                                                ▼         │
-│                                                                          │
-│   📝 Planner ◄─────────────────────────────────────────────────┘         │
-│        │                                                                 │
-│        ▼                                                                 │
-│                                                                          │
-│   ⚙️ Generator ──► 🔒 Reviewer ──► ✅ Validator                          │
-│        ▲                                │                                │
-│        │                                ▼                                │
-│        │                          (on failure)                           │
-│        │                                │                                │
-│        └─────────── 🤔 Reflector ◄──────┘                                │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Discovery["📊 Discovery Phase"]
+        scan["📂 Scanner"]
+        analyze["🧠 Analyzer"]
+        read["📖 Reader"]
+        health["🏥 Health Detector"]
+        ready["⏱️ Readiness Detector"]
+    end
+    
+    subgraph Generation["⚙️ Generation Phase"]
+        plan["📝 Planner"]
+        generate["⚙️ Generator"]
+    end
+    
+    subgraph Validation["✅ Validation Phase"]
+        review["🔒 Reviewer"]
+        validate["✅ Validator"]
+    end
+    
+    subgraph Feedback["🔄 Feedback Loop"]
+        reflect["🤔 Reflector"]
+    end
+    
+    scan --> analyze --> read --> health --> ready --> plan
+    plan --> generate --> review --> validate
+    
+    validate -->|"❌ Failed"| reflect
+    reflect -->|"Retry"| plan
+    reflect -->|"Major Change"| analyze
+    validate -->|"✅ Success"| done["📦 Done"]
 ```
 
 **Key innovation**: The self-correcting loop. When validation fails, the Reflector agent analyzes what went wrong, identifies the root cause, and provides guidance for the next attempt. This means DockAI can handle projects that don't work on the first try.

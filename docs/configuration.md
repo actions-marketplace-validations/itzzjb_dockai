@@ -580,26 +580,25 @@ Understanding precedence helps avoid confusion when settings seem to not apply.
 
 ### Full Precedence Chain
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Priority 1: Environment Variables                                │
-│ (Set in shell, CI/CD, or .env file)                             │
-│                                                                  │
-│ DOCKAI_GENERATOR_INSTRUCTIONS="Use Debian"                      │
-├─────────────────────────────────────────────────────────────────┤
-│ Priority 2: .dockai File                                         │
-│ (In repository root)                                             │
-│                                                                  │
-│ [instructions_generator]                                         │
-│ Use Alpine base images                                           │
-├─────────────────────────────────────────────────────────────────┤
-│ Priority 3: Built-in Defaults                                    │
-│ (In DockAI source code)                                          │
-│                                                                  │
-│ Default prompt templates                                         │
-└─────────────────────────────────────────────────────────────────┘
-
-Result: "Use Debian" is used (env var has highest priority)
+```mermaid
+flowchart TB
+    subgraph Priority1["🥇 Priority 1: Environment Variables"]
+        env["DOCKAI_GENERATOR_INSTRUCTIONS='Use Debian'<br/>(Set in shell, CI/CD, or .env file)"]
+    end
+    
+    subgraph Priority2["🥈 Priority 2: .dockai File"]
+        file["[instructions_generator]<br/>Use Alpine base images<br/>(In repository root)"]
+    end
+    
+    subgraph Priority3["🥉 Priority 3: Built-in Defaults"]
+        defaults["Default prompt templates<br/>(In DockAI source code)"]
+    end
+    
+    Priority1 --> Priority2 --> Priority3
+    
+    result["✅ Result: 'Use Debian' is used<br/>(env var has highest priority)"]
+    
+    Priority1 -.->|"Winner"| result
 ```
 
 ### Combining Instructions

@@ -24,11 +24,22 @@ DockAI includes a Model Context Protocol (MCP) server that exposes Dockerfile ge
 
 The **Model Context Protocol (MCP)** is an open standard developed by Anthropic that allows AI assistants to interact with external tools and data sources. Think of it as a plugin system for AI:
 
-```
-┌─────────────────┐         ┌─────────────────┐         ┌──────────────────┐
-│   AI Assistant  │  MCP    │   MCP Server    │  API    │   DockAI Engine  │
-│ (Claude/Cursor) │◀───────▶│ (JSON-RPC/STDIO)│◀───────▶│   (LangGraph)    │
-└─────────────────┘         └─────────────────┘         └──────────────────┘
+```mermaid
+flowchart LR
+    subgraph Client["AI Assistant"]
+        claude["Claude Desktop\nCursor\nOther MCP Clients"]
+    end
+    
+    subgraph Server["MCP Server"]
+        mcp["JSON-RPC\nover STDIO"]
+    end
+    
+    subgraph Engine["DockAI Engine"]
+        workflow["LangGraph\nWorkflow"]
+    end
+    
+    claude <-->|"MCP Protocol"| mcp
+    mcp <-->|"Python API"| workflow
 ```
 
 ### Key Benefits

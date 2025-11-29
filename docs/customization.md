@@ -59,28 +59,27 @@ Ongoing: + Continuous refinement from lessons learned
 
 DockAI uses a four-layer system that allows customization at every level:
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    LAYER 3: Per-Run Overrides                       │
-│         (CLI flags, environment variables at runtime)               │
-│                                                                     │
-│  Example: DOCKAI_GENERATOR_INSTRUCTIONS="Force Alpine" dockai build │
-├─────────────────────────────────────────────────────────────────────┤
-│                  LAYER 2: Repository Configuration                  │
-│            (.dockai file in the repository root)                    │
-│                                                                     │
-│  Example: Project-specific frameworks, dependencies, conventions    │
-├─────────────────────────────────────────────────────────────────────┤
-│                  LAYER 1: Organization Defaults                     │
-│          (Environment variables, CI/CD secrets)                     │
-│                                                                     │
-│  Example: Approved base images, compliance requirements             │
-├─────────────────────────────────────────────────────────────────────┤
-│                     LAYER 0: Built-in Defaults                      │
-│              (DockAI's intelligent base behavior)                   │
-│                                                                     │
-│  Example: Security best practices, multi-stage build patterns       │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Layer3["🔧 LAYER 3: Per-Run Overrides"]
+        l3["CLI flags, environment variables at runtime<br/><br/><i>Example: DOCKAI_GENERATOR_INSTRUCTIONS='Force Alpine' dockai build</i>"]
+    end
+    
+    subgraph Layer2["📁 LAYER 2: Repository Configuration"]
+        l2[".dockai file in the repository root<br/><br/><i>Example: Project-specific frameworks, dependencies, conventions</i>"]
+    end
+    
+    subgraph Layer1["🏢 LAYER 1: Organization Defaults"]
+        l1["Environment variables, CI/CD secrets<br/><br/><i>Example: Approved base images, compliance requirements</i>"]
+    end
+    
+    subgraph Layer0["⚙️ LAYER 0: Built-in Defaults"]
+        l0["DockAI's intelligent base behavior<br/><br/><i>Example: Security best practices, multi-stage build patterns</i>"]
+    end
+    
+    Layer3 --> Layer2 --> Layer1 --> Layer0
+    
+    note["Higher layers override lower layers"]
 ```
 
 ### How Layers Interact
@@ -108,14 +107,14 @@ Understanding the difference is crucial for effective customization.
 
 Instructions are **appended** to the default prompt:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Default Prompt                               │
-│  (DockAI's carefully crafted base prompt)                       │
-├─────────────────────────────────────────────────────────────────┤
-│                   Your Instructions                              │
-│  (Added at the end, provides additional context)                │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Combined["Final Prompt Sent to AI"]
+        default["📋 Default Prompt<br/>(DockAI's carefully crafted base prompt)"]
+        custom["➕ Your Instructions<br/>(Added at the end, provides additional context)"]
+    end
+    
+    default --> custom
 ```
 
 **Benefits**:
@@ -138,13 +137,11 @@ Our standard practices:
 
 Prompts **completely replace** the default:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Your Prompt                                  │
-│  (Entirely replaces DockAI's default)                           │
-│                                                                  │
-│  You are responsible for ALL behavior                           │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Replaced["Final Prompt Sent to AI"]
+        custom["📋 Your Prompt<br/>(Entirely replaces DockAI's default)<br/><br/>⚠️ You are responsible for ALL behavior"]
+    end
 ```
 
 **Drawbacks**:
