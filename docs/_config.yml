@@ -6,3 +6,9 @@ plugins:
 
 # Optional: Add navigation
 show_downloads: false
+
+# Markdown processing
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
