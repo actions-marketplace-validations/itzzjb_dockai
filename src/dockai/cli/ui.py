@@ -127,7 +127,7 @@ def display_summary(final_state: dict, output_path: str):
         
     console.print(Panel(
         summary_content,
-        title="📊 Usage Summary",
+        title="Usage Summary",
         border_style="blue"
     ))
 

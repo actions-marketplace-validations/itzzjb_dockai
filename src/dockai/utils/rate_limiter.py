@@ -113,7 +113,7 @@ def with_rate_limit_handling(
                     
                     # Reset retry count on success
                     if attempt > 0:
-                        logger.info(f"✓ Retry succeeded after {attempt} attempts")
+                        logger.info(f"Retry succeeded after {attempt} attempts")
                     
                     return result
                 
@@ -141,7 +141,7 @@ def with_rate_limit_handling(
                         last_exception = e
                         
                         if attempt >= max_retries:
-                            logger.error(f"✗ Max retries ({max_retries}) exceeded for rate limit")
+                            logger.error(f"Max retries ({max_retries}) exceeded for rate limit")
                             raise RateLimitExceededError(
                                 f"Rate limit exceeded after {max_retries} retries. "
                                 f"Please wait a few minutes and try again, or upgrade your API tier."
@@ -161,7 +161,7 @@ def with_rate_limit_handling(
                         delay = handler.calculate_delay(attempt, retry_after)
                         
                         logger.warning(
-                            f"⚠ Rate limit hit (attempt {attempt + 1}/{max_retries}). "
+                            f"Rate limit hit (attempt {attempt + 1}/{max_retries}). "
                             f"Waiting {delay:.1f}s before retry..."
                         )
                         
@@ -220,7 +220,7 @@ def handle_registry_rate_limit(func: Callable) -> Callable:
                     
                     if attempt >= max_retries:
                         logger.warning(
-                            "⚠ Registry rate limit exceeded. "
+                            "Registry rate limit exceeded. "
                             "This won't prevent Dockerfile generation, but image tag verification may be skipped."
                         )
                         # Return None (or empty list depending on usage) to indicate failure without crashing
@@ -232,7 +232,7 @@ def handle_registry_rate_limit(func: Callable) -> Callable:
                     
                     delay = base_delay * (2 ** attempt)
                     logger.warning(
-                        f"⚠ Registry API rate limit (attempt {attempt + 1}/{max_retries}). "
+                        f"Registry API rate limit (attempt {attempt + 1}/{max_retries}). "
                         f"Waiting {delay:.0f}s..."
                     )
                     time.sleep(delay)

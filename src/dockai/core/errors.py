@@ -15,8 +15,12 @@ import os
 import logging
 from enum import Enum
 from dataclasses import dataclass
-from typing import Optional, Literal
+from typing import Optional, Literal, TYPE_CHECKING
 from pydantic import BaseModel, Field
+
+# Type checking imports (avoid circular imports)
+if TYPE_CHECKING:
+    from .agent_context import AgentContext
 
 # Initialize logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
