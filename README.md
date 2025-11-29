@@ -161,29 +161,45 @@ dockai build /path/to/project --verbose
 ## 🏗️ How It Works
 
 ```mermaid
-graph TD
-    Start([▶ Start]) --> Scan[📂 Scanner]
-    Scan --> Analyze[🧠 Analyzer]
-    Analyze --> Read[📖 Reader]
-    Read --> Health[🏥 Health Detector]
-    Health --> Ready[⏱️ Readiness Detector]
-    Ready --> Plan[📝 Planner]
-    Plan --> Generate[⚙️ Generator]
-    Generate --> Review[🔒 Security Reviewer]
+flowchart TB
+    subgraph Discovery["📊 Discovery Phase"]
+        Scan["📂 Scanner<br/>Find all files"]
+        Analyze["🧠 Analyzer<br/>Detect tech stack"]
+        Read["📖 Reader<br/>Read critical files"]
+        Health["🏥 Health Detector<br/>Find health endpoints"]
+        Ready["⏱️ Readiness Detector<br/>Find startup patterns"]
+    end
     
-    Review -- Secure --> Validate[✅ Validator]
-    Review -- Issues & Can Retry --> Reflect[🤔 Reflector]
-    Review -- Critical & Max Retries --> Fail([❌ Fail])
+    subgraph Generation["⚙️ Generation Phase"]
+        Plan["📝 Planner<br/>Create build strategy"]
+        Generate["⚙️ Generator<br/>Write Dockerfile"]
+    end
     
-    Validate -- Success --> End([🏁 Finish])
-    Validate -- Failure --> Reflect
+    subgraph Validation["✅ Validation Phase"]
+        Review["🔒 Security Reviewer<br/>Audit & harden"]
+        Validate["✅ Validator<br/>Build & test"]
+    end
     
-    Reflect --> Increment[🔄 Increment Retry]
+    subgraph Feedback["🔄 Feedback Loop"]
+        Reflect["🤔 Reflector<br/>Analyze failure"]
+        Increment["🔄 Increment Retry"]
+    end
     
-    Increment -- Fix Code --> Generate
-    Increment -- New Strategy --> Plan
-    Increment -- Re-Analyze --> Analyze
-    Increment -- Max Retries --> Fail
+    Start([▶ Start]) --> Scan
+    Scan --> Analyze --> Read --> Health --> Ready --> Plan
+    Plan --> Generate --> Review
+    
+    Review -->|"✅ Secure"| Validate
+    Review -->|"❌ Critical Issues"| Reflect
+    
+    Validate -->|"✅ Success"| End([🏁 Done])
+    Validate -->|"❌ Failed"| Reflect
+    
+    Reflect --> Increment
+    Increment -->|"Fix Code"| Generate
+    Increment -->|"New Strategy"| Plan
+    Increment -->|"Re-Analyze"| Analyze
+    Increment -->|"Max Retries"| Fail([❌ Fail])
 ```
 
 ---
