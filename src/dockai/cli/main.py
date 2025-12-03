@@ -91,6 +91,10 @@ def build(
     # Initialize OpenTelemetry tracing (if enabled via DOCKAI_ENABLE_TRACING)
     init_tracing(service_name="dockai")
     
+    # Check for LangSmith tracing
+    if os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true":
+        logger.info("LangSmith tracing enabled")
+    
     # Note: no_cache flag is accepted for compatibility but not yet implemented
     # Docker build caching behavior is handled at the Docker daemon level
     
@@ -194,7 +198,16 @@ def build(
     try:
         # Execute the workflow with a visual spinner
         with ui.get_status_spinner("[bold green]Running DockAI Framework...[/bold green]"):
-            final_state = workflow.invoke(initial_state)
+            # Prepare configuration for LangGraph/LangSmith
+            invoke_config = {
+                "metadata": {
+                    "project_path": path,
+                    "verbose": verbose,
+                    "no_cache": no_cache,
+                    "max_retries": initial_state["max_retries"]
+                }
+            }
+            final_state = workflow.invoke(initial_state, config=invoke_config)
     except Exception as e:
         # Handle unexpected errors gracefully
         error_msg = str(e)

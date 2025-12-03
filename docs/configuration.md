@@ -327,6 +327,17 @@ DockAI supports **OpenTelemetry** for distributed tracing. This is invaluable fo
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint URL | `http://localhost:4317` | Your collector |
 | `OTEL_SERVICE_NAME` | Service name in traces | `dockai` | Custom name |
 
+### LangSmith Observability
+
+LangSmith provides specialized observability for LLM applications.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LANGCHAIN_TRACING_V2` | Enable LangSmith tracing | `false` |
+| `LANGCHAIN_API_KEY` | LangSmith API Key | - |
+| `LANGCHAIN_PROJECT` | LangSmith Project Name | `dockai` |
+| `LANGCHAIN_ENDPOINT` | LangSmith Endpoint | `https://api.smith.langchain.com` |
+
 ### What Gets Traced
 
 When tracing is enabled, spans are created for:

@@ -81,7 +81,7 @@ That's it. DockAI handles the rest.
     </td>
     <td width="50%">
       <h3>📊 Full Observability</h3>
-      <p>Built-in <strong>OpenTelemetry tracing</strong> for distributed observability. Export traces to console or OTLP backends like Jaeger, Grafana Tempo, or Datadog.</p>
+      <p>Built-in <strong>OpenTelemetry tracing</strong> and <strong>LangSmith</strong> support for distributed observability and LLM debugging. Export traces to console, OTLP backends, or LangSmith.</p>
     </td>
   </tr>
 </table>
@@ -297,6 +297,9 @@ flowchart TB
 | `DOCKAI_TRACING_EXPORTER` | Tracing exporter (`console`, `otlp`) | `console` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint URL (for Jaeger/Tempo/Datadog) | `http://localhost:4317` |
 | `OTEL_SERVICE_NAME` | Service name for traces | `dockai` |
+| `LANGCHAIN_TRACING_V2` | Enable LangSmith tracing | `false` |
+| `LANGCHAIN_API_KEY` | LangSmith API Key | - |
+| `LANGCHAIN_PROJECT` | LangSmith Project Name | `dockai` |
 
 #### Custom Instructions (Per-Agent)
 
