@@ -108,13 +108,11 @@ Assign different models to different agents for cost optimization:
 | Input | Agent | Default |
 |-------|-------|---------|
 | `model_analyzer` | Project analyzer | Provider default (fast) |
-| `model_planner` | Strategic planner | Provider default (fast) |
+| `model_blueprint` | Blueprint (Chief Architect) | Provider default (powerful) |
 | `model_generator` | Dockerfile generator | Provider default (powerful) |
 | `model_generator_iterative` | Iterative fixes | Provider default (powerful) |
 | `model_reviewer` | Security reviewer | Provider default (fast) |
 | `model_reflector` | Failure analyzer | Provider default (powerful) |
-| `model_health_detector` | Health endpoint finder | Provider default (fast) |
-| `model_readiness_detector` | Startup pattern finder | Provider default (fast) |
 | `model_error_analyzer` | Error classifier | Provider default (fast) |
 | `model_iterative_improver` | Fix applier | Provider default (powerful) |
 
@@ -151,35 +149,31 @@ Assign different models to different agents for cost optimization:
 
 Add guidance for specific agents (appended to default prompts):
 
-| Input | Agent |
-|-------|-------|
-| `analyzer_instructions` | Guide project analysis |
-| `planner_instructions` | Guide build strategy |
-| `generator_instructions` | Guide Dockerfile creation |
-| `generator_iterative_instructions` | Guide iterative fixes |
-| `reviewer_instructions` | Guide security review |
-| `reflector_instructions` | Guide failure analysis |
-| `health_detector_instructions` | Guide health detection |
-| `readiness_detector_instructions` | Guide readiness detection |
-| `error_analyzer_instructions` | Guide error classification |
-| `iterative_improver_instructions` | Guide fix application |
+| Input | Environment Variable | Purpose |
+|-------|----------------------|---------|
+| `analyzer_instructions` | `DOCKAI_ANALYZER_INSTRUCTIONS` | Guide project discovery |
+| `blueprint_instructions` | `DOCKAI_BLUEPRINT_INSTRUCTIONS` | Guide build strategy |
+| `generator_instructions` | `DOCKAI_GENERATOR_INSTRUCTIONS` | Guide Dockerfile creation |
+| `generator_iterative_instructions` | `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Guide debugging |
+| `reviewer_instructions` | `DOCKAI_REVIEWER_INSTRUCTIONS` | Guide security audit |
+| `reflector_instructions` | `DOCKAI_REFLECTOR_INSTRUCTIONS` | Guide failure analysis |
+| `error_analyzer_instructions` | `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Guide error classification |
+| `iterative_improver_instructions` | `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Guide fix application |
 
 ### Custom Prompts (Advanced)
 
 Completely replace default prompts (use with caution):
 
-| Input | Agent |
-|-------|-------|
-| `prompt_analyzer` | Replace analyzer prompt |
-| `prompt_planner` | Replace planner prompt |
-| `prompt_generator` | Replace generator prompt |
-| `prompt_generator_iterative` | Replace iterative generator |
-| `prompt_reviewer` | Replace reviewer prompt |
-| `prompt_reflector` | Replace reflector prompt |
-| `prompt_health_detector` | Replace health detector |
-| `prompt_readiness_detector` | Replace readiness detector |
-| `prompt_error_analyzer` | Replace error analyzer |
-| `prompt_iterative_improver` | Replace iterative improver |
+| Input | Environment Variable | Purpose |
+|-------|----------------------|---------|
+| `prompt_analyzer` | `DOCKAI_PROMPT_ANALYZER` | Replace analyzer prompt |
+| `prompt_blueprint` | `DOCKAI_PROMPT_BLUEPRINT` | Replace blueprint prompt |
+| `prompt_generator` | `DOCKAI_PROMPT_GENERATOR` | Replace generator prompt |
+| `prompt_generator_iterative` | `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | Replace iterative generator |
+| `prompt_reviewer` | `DOCKAI_PROMPT_REVIEWER` | Replace reviewer prompt |
+| `prompt_reflector` | `DOCKAI_PROMPT_REFLECTOR` | Replace reflector prompt |
+| `prompt_error_analyzer` | `DOCKAI_PROMPT_ERROR_ANALYZER` | Replace error analyzer |
+| `prompt_iterative_improver` | `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | Replace iterative improver |
 
 ---
 
@@ -241,10 +235,8 @@ Use cheaper/faster models for simple tasks:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
     # Fast models for simple tasks
     model_analyzer: gpt-4o-mini
-    model_planner: gpt-4o-mini
+    model_blueprint: gpt-4o-mini
     model_reviewer: gpt-4o-mini
-    model_health_detector: gpt-4o-mini
-    model_readiness_detector: gpt-4o-mini
     model_error_analyzer: gpt-4o-mini
     # Powerful models where it matters
     model_generator: gpt-4o

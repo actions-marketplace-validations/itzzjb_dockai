@@ -211,7 +211,7 @@ When you see pytest.ini or conftest.py, this is a test project - don't container
 
 ---
 
-### 2. Planner Agent
+### 2. Blueprint Agent
 
 **Purpose**: Decide build strategy before generation
 
@@ -221,7 +221,7 @@ When you see pytest.ini or conftest.py, this is a test project - don't container
 - Size and security tradeoffs
 
 ```ini
-[instructions_planner]
+[instructions_blueprint]
 APPROVED BASE IMAGES (use ONLY these):
 - company-registry.io/python:3.11-slim
 - company-registry.io/python:3.11-alpine (only if slim fails)
@@ -403,90 +403,25 @@ KNOWN ISSUES AND SOLUTIONS:
 
 ---
 
-### 6. Health Detector Agent
+### 6. Error Analyzer Agent
 
-**Purpose**: Find health check endpoints in code
-
-**Good customizations**:
-- Your health endpoint conventions
-- Framework-specific patterns
-- Port conventions
-
-```ini
-[instructions_health_detector]
-Our health endpoint conventions:
-
-STANDARD PATHS:
-- Primary: /health (GET, returns 200 with JSON body)
-- Kubernetes liveness: /health/live
-- Kubernetes readiness: /health/ready
-- Legacy apps: /api/v1/health or /ping
-
-PORT CONVENTIONS:
-- HTTP services: 8080
-- gRPC services: 9090 (no HTTP health)
-- Admin/metrics: 9091
-
-FRAMEWORK PATTERNS:
-- Django: Uses django-health-check, endpoint at /health/
-- FastAPI: Custom endpoint at /health
-- Express.js: /health or /healthz
-- Go: /health or /healthz, often on separate port
-
-RESPONSE FORMAT:
-Expected: {"status": "healthy", "version": "..."} 
-Or: {"status": "ok"}
-
-If no health endpoint found, suggest adding one - it's required for production.
-```
-
-**Why this works**: Health detection is pattern matching. Your specific patterns help avoid false negatives.
-
----
-
-### 7. Readiness Detector Agent
-
-**Purpose**: Identify when the application is ready
+**Purpose**: Classify and diagnose errors
 
 **Good customizations**:
-- Startup log patterns
-- Typical startup times
-- Failure indicators
+- Error classification rules
+- Severity definitions
+- Common error patterns
 
 ```ini
-[instructions_readiness_detector]
-Startup patterns by framework:
-
-PYTHON:
-- Django/Gunicorn: "Booting worker with pid" or "Listening at: http://0.0.0.0:8000"
-- FastAPI/Uvicorn: "Uvicorn running on http://0.0.0.0:8000"
-- Celery: "celery@hostname ready"
-
-NODE.JS:
-- Express: "Server listening on port" or "App started"
-- Next.js: "Ready on http://localhost:3000"
-- NestJS: "Nest application successfully started"
-
-GO:
-- Standard: "Starting server" or "Listening on :8080"
-- Our internal framework: "Service ready"
-
-FAILURE PATTERNS (immediate failure):
-- "Error:" at start of line
-- "FATAL:" 
-- "panic:"
-- "ModuleNotFoundError"
-- "Cannot find module"
-- "Connection refused" (to required services)
-
-STARTUP TIMES:
-- Simple services: 3-5 seconds
-- Services with DB migrations: 10-15 seconds
-- Services with heavy initialization: 30+ seconds
-- JVM services: 45-60 seconds
+[instructions_error_analyzer]
+Error classification rules:
+- "Connection refused" -> Network Error (Retryable)
+- "Module not found" -> Build Error (Fixable)
+- "Permission denied" -> Security Error (Fixable)
+- "OOM Killed" -> Resource Error (Needs config change)
 ```
 
-**Why this works**: Readiness detection needs your specific patterns. Generic patterns miss custom logging.
+**Why this works**: Correct classification drives the right fix strategy.
 
 ---
 
@@ -592,7 +527,7 @@ PROTO FILES:
 - If proto/ directory exists, assume generated code is committed
 - Do not try to regenerate protos in Docker
 
-[instructions_planner]
+[instructions_blueprint]
 Go services should:
 - Final image under 50MB
 - Use distroless or scratch base
@@ -698,7 +633,7 @@ Store organization-wide settings as secrets:
 ```yaml
 # GitHub Actions
 env:
-  DOCKAI_PLANNER_INSTRUCTIONS: ${{ secrets.DOCKAI_PLANNER_INSTRUCTIONS }}
+  DOCKAI_BLUEPRINT_INSTRUCTIONS: ${{ secrets.DOCKAI_BLUEPRINT_INSTRUCTIONS }}
   DOCKAI_REVIEWER_INSTRUCTIONS: ${{ secrets.DOCKAI_REVIEWER_INSTRUCTIONS }}
 ```
 
@@ -756,7 +691,7 @@ grep "retry_count" metrics.log | awk '{sum+=$2} END {print sum/NR}'
 Restrict which base images can be used:
 
 ```ini
-[instructions_planner]
+[instructions_blueprint]
 ONLY use these base images:
 - company-registry.io/python:3.11-slim
 - company-registry.io/node:20-alpine

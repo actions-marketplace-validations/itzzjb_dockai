@@ -11,25 +11,21 @@ Each prompt/instruction can be customized via:
 
 Available prompts (complete replacement):
 - DOCKAI_PROMPT_ANALYZER: The Build Engineer that analyzes project structure
-- DOCKAI_PROMPT_PLANNER: The DevOps Architect that plans build strategy
+- DOCKAI_PROMPT_BLUEPRINT: The Chief Architect that plans build strategy and runtime config
 - DOCKAI_PROMPT_GENERATOR: The Docker Architect that generates Dockerfiles
 - DOCKAI_PROMPT_GENERATOR_ITERATIVE: The Docker Engineer that iterates on failed Dockerfiles
 - DOCKAI_PROMPT_REVIEWER: The Security Engineer that reviews for vulnerabilities
 - DOCKAI_PROMPT_REFLECTOR: The Principal DevOps Engineer that analyzes failures
-- DOCKAI_PROMPT_HEALTH_DETECTOR: The Code Analyst that detects health endpoints
-- DOCKAI_PROMPT_READINESS_DETECTOR: The Startup Expert that detects readiness patterns
 - DOCKAI_PROMPT_ERROR_ANALYZER: The DevOps Engineer that classifies errors
 - DOCKAI_PROMPT_ITERATIVE_IMPROVER: The Senior Docker Engineer that applies fixes
 
 Available instructions (appended to default prompts):
 - DOCKAI_ANALYZER_INSTRUCTIONS: Extra instructions for the analyzer
-- DOCKAI_PLANNER_INSTRUCTIONS: Extra instructions for the planner
+- DOCKAI_BLUEPRINT_INSTRUCTIONS: Extra instructions for the blueprint architect
 - DOCKAI_GENERATOR_INSTRUCTIONS: Extra instructions for the generator
 - DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS: Extra instructions for iterative generation
 - DOCKAI_REVIEWER_INSTRUCTIONS: Extra instructions for security review
 - DOCKAI_REFLECTOR_INSTRUCTIONS: Extra instructions for failure reflection
-- DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS: Extra instructions for health detection
-- DOCKAI_READINESS_DETECTOR_INSTRUCTIONS: Extra instructions for readiness detection
 - DOCKAI_ERROR_ANALYZER_INSTRUCTIONS: Extra instructions for error analysis
 - DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS: Extra instructions for iterative improvement
 """
@@ -59,9 +55,9 @@ class PromptConfig:
     analyzer: Optional[str] = None
     analyzer_instructions: Optional[str] = None
     
-    # Stage 2: Planner - The DevOps Architect  
-    planner: Optional[str] = None
-    planner_instructions: Optional[str] = None
+    # Stage 2: Blueprint - The Chief Architect
+    blueprint: Optional[str] = None
+    blueprint_instructions: Optional[str] = None
     
     # Stage 3: Generator - The Docker Architect (fresh generation)
     generator: Optional[str] = None
@@ -78,14 +74,6 @@ class PromptConfig:
     # Stage 5: Reflector - The Principal DevOps Engineer (failure analysis)
     reflector: Optional[str] = None
     reflector_instructions: Optional[str] = None
-    
-    # Health Detector - The Code Analyst
-    health_detector: Optional[str] = None
-    health_detector_instructions: Optional[str] = None
-    
-    # Readiness Detector - The Startup Expert
-    readiness_detector: Optional[str] = None
-    readiness_detector_instructions: Optional[str] = None
     
     # Error Analyzer - The DevOps Engineer (error classification)
     error_analyzer: Optional[str] = None
@@ -140,24 +128,20 @@ def load_prompts_from_env() -> PromptConfig:
     return PromptConfig(
         # Full prompt replacements
         analyzer=os.getenv(f"{PROMPT_ENV_PREFIX}ANALYZER"),
-        planner=os.getenv(f"{PROMPT_ENV_PREFIX}PLANNER"),
+        blueprint=os.getenv(f"{PROMPT_ENV_PREFIX}BLUEPRINT"),
         generator=os.getenv(f"{PROMPT_ENV_PREFIX}GENERATOR"),
         generator_iterative=os.getenv(f"{PROMPT_ENV_PREFIX}GENERATOR_ITERATIVE"),
         reviewer=os.getenv(f"{PROMPT_ENV_PREFIX}REVIEWER"),
         reflector=os.getenv(f"{PROMPT_ENV_PREFIX}REFLECTOR"),
-        health_detector=os.getenv(f"{PROMPT_ENV_PREFIX}HEALTH_DETECTOR"),
-        readiness_detector=os.getenv(f"{PROMPT_ENV_PREFIX}READINESS_DETECTOR"),
         error_analyzer=os.getenv(f"{PROMPT_ENV_PREFIX}ERROR_ANALYZER"),
         iterative_improver=os.getenv(f"{PROMPT_ENV_PREFIX}ITERATIVE_IMPROVER"),
         # Instructions (appended to defaults)
         analyzer_instructions=os.getenv("DOCKAI_ANALYZER_INSTRUCTIONS"),
-        planner_instructions=os.getenv("DOCKAI_PLANNER_INSTRUCTIONS"),
+        blueprint_instructions=os.getenv("DOCKAI_BLUEPRINT_INSTRUCTIONS"),
         generator_instructions=os.getenv("DOCKAI_GENERATOR_INSTRUCTIONS"),
         generator_iterative_instructions=os.getenv("DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS"),
         reviewer_instructions=os.getenv("DOCKAI_REVIEWER_INSTRUCTIONS"),
         reflector_instructions=os.getenv("DOCKAI_REFLECTOR_INSTRUCTIONS"),
-        health_detector_instructions=os.getenv("DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS"),
-        readiness_detector_instructions=os.getenv("DOCKAI_READINESS_DETECTOR_INSTRUCTIONS"),
         error_analyzer_instructions=os.getenv("DOCKAI_ERROR_ANALYZER_INSTRUCTIONS"),
         iterative_improver_instructions=os.getenv("DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS"),
     )
@@ -197,24 +181,20 @@ def load_prompts_from_file(path: str) -> Dict[str, str]:
         section_map = {
             # Full prompt replacements
             "[prompt_analyzer]": "analyzer",
-            "[prompt_planner]": "planner",
+            "[prompt_blueprint]": "blueprint",
             "[prompt_generator]": "generator",
             "[prompt_generator_iterative]": "generator_iterative",
             "[prompt_reviewer]": "reviewer",
             "[prompt_reflector]": "reflector",
-            "[prompt_health_detector]": "health_detector",
-            "[prompt_readiness_detector]": "readiness_detector",
             "[prompt_error_analyzer]": "error_analyzer",
             "[prompt_iterative_improver]": "iterative_improver",
             # Instructions (appended to defaults)
             "[instructions_analyzer]": "analyzer_instructions",
-            "[instructions_planner]": "planner_instructions",
+            "[instructions_blueprint]": "blueprint_instructions",
             "[instructions_generator]": "generator_instructions",
             "[instructions_generator_iterative]": "generator_iterative_instructions",
             "[instructions_reviewer]": "reviewer_instructions",
             "[instructions_reflector]": "reflector_instructions",
-            "[instructions_health_detector]": "health_detector_instructions",
-            "[instructions_readiness_detector]": "readiness_detector_instructions",
             "[instructions_error_analyzer]": "error_analyzer_instructions",
             "[instructions_iterative_improver]": "iterative_improver_instructions",
             # Legacy section names (backward compatibility)
@@ -274,8 +254,8 @@ def load_prompts(path: str) -> PromptConfig:
     # Merge prompts - env vars take precedence, but file prompts fill in gaps
     if file_prompts.get("analyzer") and not config.analyzer:
         config.analyzer = file_prompts["analyzer"]
-    if file_prompts.get("planner") and not config.planner:
-        config.planner = file_prompts["planner"]
+    if file_prompts.get("blueprint") and not config.blueprint:
+        config.blueprint = file_prompts["blueprint"]
     if file_prompts.get("generator") and not config.generator:
         config.generator = file_prompts["generator"]
     if file_prompts.get("generator_iterative") and not config.generator_iterative:
@@ -284,10 +264,6 @@ def load_prompts(path: str) -> PromptConfig:
         config.reviewer = file_prompts["reviewer"]
     if file_prompts.get("reflector") and not config.reflector:
         config.reflector = file_prompts["reflector"]
-    if file_prompts.get("health_detector") and not config.health_detector:
-        config.health_detector = file_prompts["health_detector"]
-    if file_prompts.get("readiness_detector") and not config.readiness_detector:
-        config.readiness_detector = file_prompts["readiness_detector"]
     if file_prompts.get("error_analyzer") and not config.error_analyzer:
         config.error_analyzer = file_prompts["error_analyzer"]
     if file_prompts.get("iterative_improver") and not config.iterative_improver:
@@ -296,8 +272,8 @@ def load_prompts(path: str) -> PromptConfig:
     # Merge instructions - env vars take precedence, but file instructions fill in gaps
     if file_prompts.get("analyzer_instructions") and not config.analyzer_instructions:
         config.analyzer_instructions = file_prompts["analyzer_instructions"]
-    if file_prompts.get("planner_instructions") and not config.planner_instructions:
-        config.planner_instructions = file_prompts["planner_instructions"]
+    if file_prompts.get("blueprint_instructions") and not config.blueprint_instructions:
+        config.blueprint_instructions = file_prompts["blueprint_instructions"]
     if file_prompts.get("generator_instructions") and not config.generator_instructions:
         config.generator_instructions = file_prompts["generator_instructions"]
     if file_prompts.get("generator_iterative_instructions") and not config.generator_iterative_instructions:
@@ -306,10 +282,6 @@ def load_prompts(path: str) -> PromptConfig:
         config.reviewer_instructions = file_prompts["reviewer_instructions"]
     if file_prompts.get("reflector_instructions") and not config.reflector_instructions:
         config.reflector_instructions = file_prompts["reflector_instructions"]
-    if file_prompts.get("health_detector_instructions") and not config.health_detector_instructions:
-        config.health_detector_instructions = file_prompts["health_detector_instructions"]
-    if file_prompts.get("readiness_detector_instructions") and not config.readiness_detector_instructions:
-        config.readiness_detector_instructions = file_prompts["readiness_detector_instructions"]
     if file_prompts.get("error_analyzer_instructions") and not config.error_analyzer_instructions:
         config.error_analyzer_instructions = file_prompts["error_analyzer_instructions"]
     if file_prompts.get("iterative_improver_instructions") and not config.iterative_improver_instructions:
@@ -339,26 +311,22 @@ def get_prompt(prompt_name: str, default: str) -> str:
     
     prompt_map = {
         "analyzer": config.analyzer,
-        "planner": config.planner,
+        "blueprint": config.blueprint,
         "generator": config.generator,
         "generator_iterative": config.generator_iterative,
         "reviewer": config.reviewer,
         "reflector": config.reflector,
-        "health_detector": config.health_detector,
-        "readiness_detector": config.readiness_detector,
         "error_analyzer": config.error_analyzer,
         "iterative_improver": config.iterative_improver,
     }
     
     instructions_map = {
         "analyzer": config.analyzer_instructions,
-        "planner": config.planner_instructions,
+        "blueprint": config.blueprint_instructions,
         "generator": config.generator_instructions,
         "generator_iterative": config.generator_iterative_instructions,
         "reviewer": config.reviewer_instructions,
         "reflector": config.reflector_instructions,
-        "health_detector": config.health_detector_instructions,
-        "readiness_detector": config.readiness_detector_instructions,
         "error_analyzer": config.error_analyzer_instructions,
         "iterative_improver": config.iterative_improver_instructions,
     }
@@ -394,13 +362,11 @@ def get_instructions(prompt_name: str) -> Optional[str]:
     
     instructions_map = {
         "analyzer": config.analyzer_instructions,
-        "planner": config.planner_instructions,
+        "blueprint": config.blueprint_instructions,
         "generator": config.generator_instructions,
         "generator_iterative": config.generator_iterative_instructions,
         "reviewer": config.reviewer_instructions,
         "reflector": config.reflector_instructions,
-        "health_detector": config.health_detector_instructions,
-        "readiness_detector": config.readiness_detector_instructions,
         "error_analyzer": config.error_analyzer_instructions,
         "iterative_improver": config.iterative_improver_instructions,
     }
@@ -412,8 +378,8 @@ def get_instructions(prompt_name: str) -> Optional[str]:
 AVAILABLE_PROMPTS = [
     ("analyzer", "DOCKAI_PROMPT_ANALYZER", "[prompt_analyzer]", 
      "The Build Engineer that analyzes project structure and technology stack"),
-    ("planner", "DOCKAI_PROMPT_PLANNER", "[prompt_planner]",
-     "The DevOps Architect that plans the Dockerfile generation strategy"),
+    ("blueprint", "DOCKAI_PROMPT_BLUEPRINT", "[prompt_blueprint]",
+     "The Chief Architect that plans build strategy and runtime configuration"),
     ("generator", "DOCKAI_PROMPT_GENERATOR", "[prompt_generator]",
      "The Docker Architect that generates fresh Dockerfiles"),
     ("generator_iterative", "DOCKAI_PROMPT_GENERATOR_ITERATIVE", "[prompt_generator_iterative]",
@@ -422,10 +388,6 @@ AVAILABLE_PROMPTS = [
      "The Security Engineer that reviews Dockerfiles for vulnerabilities"),
     ("reflector", "DOCKAI_PROMPT_REFLECTOR", "[prompt_reflector]",
      "The Principal DevOps Engineer that performs post-mortem failure analysis"),
-    ("health_detector", "DOCKAI_PROMPT_HEALTH_DETECTOR", "[prompt_health_detector]",
-     "The Code Analyst that detects health check endpoints in source code"),
-    ("readiness_detector", "DOCKAI_PROMPT_READINESS_DETECTOR", "[prompt_readiness_detector]",
-     "The Startup Expert that detects application readiness patterns"),
     ("error_analyzer", "DOCKAI_PROMPT_ERROR_ANALYZER", "[prompt_error_analyzer]",
      "The DevOps Engineer that classifies Docker build/runtime errors"),
     ("iterative_improver", "DOCKAI_PROMPT_ITERATIVE_IMPROVER", "[prompt_iterative_improver]",
@@ -436,8 +398,8 @@ AVAILABLE_PROMPTS = [
 AVAILABLE_INSTRUCTIONS = [
     ("analyzer", "DOCKAI_ANALYZER_INSTRUCTIONS", "[instructions_analyzer]", 
      "Extra instructions for the Build Engineer"),
-    ("planner", "DOCKAI_PLANNER_INSTRUCTIONS", "[instructions_planner]",
-     "Extra instructions for the DevOps Architect"),
+    ("blueprint", "DOCKAI_BLUEPRINT_INSTRUCTIONS", "[instructions_blueprint]",
+     "Extra instructions for the Chief Architect"),
     ("generator", "DOCKAI_GENERATOR_INSTRUCTIONS", "[instructions_generator]",
      "Extra instructions for the Docker Architect"),
     ("generator_iterative", "DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS", "[instructions_generator_iterative]",
@@ -446,10 +408,6 @@ AVAILABLE_INSTRUCTIONS = [
      "Extra instructions for the Security Engineer"),
     ("reflector", "DOCKAI_REFLECTOR_INSTRUCTIONS", "[instructions_reflector]",
      "Extra instructions for failure analysis"),
-    ("health_detector", "DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS", "[instructions_health_detector]",
-     "Extra instructions for health endpoint detection"),
-    ("readiness_detector", "DOCKAI_READINESS_DETECTOR_INSTRUCTIONS", "[instructions_readiness_detector]",
-     "Extra instructions for readiness pattern detection"),
     ("error_analyzer", "DOCKAI_ERROR_ANALYZER_INSTRUCTIONS", "[instructions_error_analyzer]",
      "Extra instructions for error classification"),
     ("iterative_improver", "DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS", "[instructions_iterative_improver]",

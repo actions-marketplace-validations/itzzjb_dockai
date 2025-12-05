@@ -21,9 +21,8 @@ from ..utils.validator import validate_docker_build_and_run, check_container_rea
 from ..core.errors import classify_error, ClassifiedError, ErrorType, format_error_for_display
 from ..utils.registry import get_docker_tags
 from ..agents.agent_functions import (
-    create_plan,
     reflect_on_failure,
-    detect_runtime_config,
+    create_blueprint,
     generate_iterative_dockerfile
 )
 from ..core.llm_providers import get_model_for_agent
@@ -178,132 +177,70 @@ def read_files_node(state: DockAIState) -> DockAIState:
     return {"file_contents": file_contents_str}
 
 
-def detect_runtime_config_node(state: DockAIState) -> DockAIState:
+def blueprint_node(state: DockAIState) -> DockAIState:
     """
-    Combined AI-powered detection of health endpoints and startup patterns.
+    AI-powered architectural blueprinting (Plan + Runtime Config).
     
-    This node replaces the separate health and readiness detection steps to improve
-    efficiency by making a single LLM call.
+    This node acts as the 'Chief Architect', analyzing the code to determine
+    BOTH the build strategy and the runtime configuration in a single pass.
     
     Args:
         state (DockAIState): The current state with file contents.
         
     Returns:
-        DockAIState: Updated state with health endpoints, readiness patterns, and usage stats.
+        DockAIState: Updated state with 'current_plan', 'detected_health_endpoint',
+                     'readiness_patterns', and usage stats.
     """
     file_contents = state.get("file_contents", "")
     analysis_result = state.get("analysis_result", {})
+    retry_history = state.get("retry_history", [])
     
-    logger.info("Detecting runtime configuration (health & readiness)...")
+    logger.info("Creating architectural blueprint (Plan + Runtime Config)...")
     
     try:
         from ..core.agent_context import AgentContext
         context = AgentContext(
             file_tree=state.get("file_tree", []),
             file_contents=file_contents,
-            analysis_result=analysis_result
+            analysis_result=analysis_result,
+            retry_history=retry_history
         )
         
-        result, usage = detect_runtime_config(context=context)
+        blueprint, usage = create_blueprint(context=context)
         
         usage_dict = {
-            "stage": "runtime_detector",
+            "stage": "blueprint_architect",
             "prompt_tokens": usage.get("prompt_tokens", 0),
             "completion_tokens": usage.get("completion_tokens", 0),
             "total_tokens": usage.get("total_tokens", 0),
-            "model": get_model_for_agent("health_detector")
+            "model": get_model_for_agent("blueprint")
         }
         
         current_stats = state.get("usage_stats", [])
         
-        # Process Health Endpoint
+        # Process Plan
+        logger.info(f"Build Strategy: {blueprint.plan.build_strategy}")
+        if blueprint.plan.use_multi_stage:
+            logger.info("Using multi-stage build strategy")
+            
+        # Process Runtime Config
         detected_endpoint = None
-        if result.primary_health_endpoint:
-            detected_endpoint = result.primary_health_endpoint.model_dump() if hasattr(result.primary_health_endpoint, 'model_dump') else result.primary_health_endpoint
+        if blueprint.runtime_config.primary_health_endpoint:
+            detected_endpoint = blueprint.runtime_config.primary_health_endpoint.model_dump() if hasattr(blueprint.runtime_config.primary_health_endpoint, 'model_dump') else blueprint.runtime_config.primary_health_endpoint
             logger.info(f"Detected health endpoint: {detected_endpoint}")
             
-        # Process Readiness Patterns
-        logger.info(f"Detected {len(result.startup_success_patterns)} success patterns")
+        logger.info(f"Detected {len(blueprint.runtime_config.startup_success_patterns)} success patterns")
         
         return {
+            "current_plan": blueprint.plan.model_dump() if hasattr(blueprint.plan, 'model_dump') else blueprint.plan,
             "detected_health_endpoint": detected_endpoint,
-            "readiness_patterns": result.startup_success_patterns,
-            "failure_patterns": result.startup_failure_patterns,
+            "readiness_patterns": blueprint.runtime_config.startup_success_patterns,
+            "failure_patterns": blueprint.runtime_config.startup_failure_patterns,
             "usage_stats": current_stats + [usage_dict]
         }
     except Exception as e:
-        logger.warning(f"Runtime configuration detection failed: {e}")
-        return {"readiness_patterns": [], "failure_patterns": []}
-
-
-def plan_node(state: DockAIState) -> DockAIState:
-    """
-    AI-powered planning before Dockerfile generation.
-    
-    This node creates a strategic plan ("The Architect" phase). It considers:
-    - The specific technology stack.
-    - Previous retry history (to learn from mistakes).
-    - Potential challenges and mitigations.
-    - Optimal build strategy (e.g., multi-stage, static linking).
-    
-    This planning step ensures the generator has a solid blueprint to follow.
-
-    Args:
-        state (DockAIState): The current state with analysis and history.
-
-    Returns:
-        DockAIState: Updated state with 'current_plan' and usage stats.
-    """
-    analysis_result = state.get("analysis_result", {})
-    file_contents = state.get("file_contents", "")
-    retry_history = state.get("retry_history", [])
-    config = state.get("config", {})
-    instructions = config.get("generator_instructions", "")
-    
-    with create_span("node.plan", {
-        "stack": analysis_result.get("stack", ""),
-        "retry_history_count": len(retry_history)
-    }) as span:
-        logger.info("Creating generation plan...")
-        
-        # Create unified context for the planner
-        from ..core.agent_context import AgentContext
-        planner_context = AgentContext(
-            file_tree=state.get("file_tree", []),
-            file_contents=file_contents,
-            analysis_result=analysis_result,
-            retry_history=retry_history,
-            custom_instructions=instructions
-        )
-        
-        plan_result, usage = create_plan(context=planner_context)
-        
-        if span:
-            span.set_attribute("build_strategy", plan_result.build_strategy)
-            span.set_attribute("llm.total_tokens", usage.get("total_tokens", 0))
-        
-        usage_dict = {
-            "stage": "planner",
-            "prompt_tokens": usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "total_tokens": usage.get("total_tokens", 0),
-            "model": get_model_for_agent("planner")
-        }
-        
-        current_stats = state.get("usage_stats", [])
-        
-        # Convert plan to dict for state storage
-        plan_dict = plan_result.model_dump()
-        
-        logger.info(f"Plan Strategy: {plan_result.base_image_strategy}")
-        logger.info(f"Anticipated Challenges: {', '.join(plan_result.potential_challenges[:3])}")
-        if plan_result.lessons_applied:
-            logger.info(f"Lessons Applied: {', '.join(plan_result.lessons_applied)}")
-        
-        return {
-            "current_plan": plan_dict,
-            "usage_stats": current_stats + [usage_dict]
-        }
+        logger.warning(f"Blueprint creation failed: {e}")
+        return {}
 
 
 def generate_node(state: DockAIState) -> DockAIState:

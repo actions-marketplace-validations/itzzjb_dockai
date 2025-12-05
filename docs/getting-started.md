@@ -370,8 +370,7 @@ INFO     Found 42 files to analyze
 INFO     Analyzing repository needs...
 INFO     Detected stack: Python 3.11 with FastAPI
 INFO     Reading 5 critical files...
-INFO     Detecting health endpoints...
-INFO     Creating strategic plan...
+INFO     Creating blueprint (plan & runtime config)...
 INFO     Generating Dockerfile...
 INFO     Reviewing for security issues...
 INFO     Running Hadolint linting...
@@ -387,10 +386,10 @@ Final Dockerfile saved to /path/to/project/Dockerfile
 │                                                         │
 │ Breakdown by Stage:                                     │
 │   • analyzer: 892 tokens                                │
-│   • planner: 756 tokens                                 │
+│   • blueprint: 950 tokens                               │
 │   • generator: 1,234 tokens                             │
 │   • reviewer: 645 tokens                                │
-│   • validator: 996 tokens                               │
+│   • validator: 802 tokens                               │
 ╰─────────────────────────────────────────────────────────╯
 ```
 
@@ -491,10 +490,10 @@ DockAI reports token usage after each run. Understanding this helps you:
 │                                                         │
 │ Breakdown by Stage:                                     │
 │   • analyzer: 892 tokens    ← Project analysis          │
-│   • planner: 756 tokens     ← Build strategy            │
+│   • blueprint: 950 tokens   ← Plan & Runtime Config     │
 │   • generator: 1,234 tokens ← Dockerfile creation       │
 │   • reviewer: 645 tokens    ← Security review           │
-│   • validator: 996 tokens   ← Error analysis (if any)   │
+│   • validator: 802 tokens   ← Error analysis (if any)   │
 ╰─────────────────────────────────────────────────────────╯
 ```
 
@@ -592,13 +591,11 @@ flowchart TB
         D[📖 Reader<br/>Read critical files]
     end
     
-    subgraph "Stage 2: Understanding"
-        E[🏥 Health Detector<br/>Find health endpoints]
-        F[⏱️ Readiness Detector<br/>Find startup patterns]
+    subgraph "Stage 2: Blueprint"
+        E[🏗️ Blueprint<br/>Plan & Config]
     end
     
     subgraph "Stage 3: Generation"
-        G[📝 Planner<br/>Create build strategy]
         H[⚙️ Generator<br/>Write Dockerfile]
     end
     
@@ -611,9 +608,9 @@ flowchart TB
         K[🤔 Reflector<br/>Analyze failure]
     end
     
-    A --> B --> C --> D --> E --> F --> G --> H --> I --> J
+    A --> B --> C --> D --> E --> H --> I --> J
     J -->|Success| L[🏁 Done]
-    J -->|Failure| K --> G
+    J -->|Failure| K --> E
     
     style L fill:#90EE90
     style K fill:#FFB6C1
@@ -636,37 +633,27 @@ flowchart TB
 **How**: Reads files identified by Analyzer (dependency files, entry points, configs)
 **Output**: Concatenated file contents for further analysis
 
-#### 4. Health Detector (🏥)
-**What**: Finds health check endpoints in your code
-**How**: Searches for patterns like `/health`, `/healthz`, `/ready`
-**Output**: Health endpoint path and port for HEALTHCHECK instruction
+#### 4. Blueprint (🏗️)
+**What**: Creates strategic plan and detects runtime config
+**How**: Considers stack, requirements, health endpoints, and startup patterns
+**Output**: Build strategy, health check config, readiness patterns
 
-#### 5. Readiness Detector (⏱️)
-**What**: Identifies startup patterns
-**How**: Looks for log messages indicating successful startup
-**Output**: Expected startup time, success/failure patterns
-
-#### 6. Planner (📝)
-**What**: Creates a strategic plan for Dockerfile generation
-**How**: Considers stack, requirements, and any retry history
-**Output**: Base image strategy, build approach, optimization priorities
-
-#### 7. Generator (⚙️)
+#### 5. Generator (⚙️)
 **What**: Writes the actual Dockerfile
-**How**: Uses all gathered context plus planning output
+**How**: Uses all gathered context plus blueprint
 **Output**: Complete Dockerfile content
 
-#### 8. Reviewer (🔒)
+#### 6. Reviewer (🔒)
 **What**: Security audit of the generated Dockerfile
 **How**: Checks for common security issues (root user, exposed secrets, etc.)
 **Output**: Security issues found, optionally a fixed Dockerfile
 
-#### 9. Validator (✅)
+#### 7. Validator (✅)
 **What**: Builds and tests the Dockerfile
 **How**: Runs `docker build`, starts container, checks health endpoint
 **Output**: Success/failure, build logs, container logs
 
-#### 10. Reflector (🤔)
+#### 8. Reflector (🤔)
 **What**: Analyzes failures to improve next attempt
 **How**: Reads error messages and logs, identifies root cause
 **Output**: Root cause analysis, recommended fixes, lessons learned

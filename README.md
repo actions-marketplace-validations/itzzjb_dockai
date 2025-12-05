@@ -166,12 +166,13 @@ flowchart TB
         scan["📂 scan_node<br/>Scan directory tree"]
         analyze["🧠 analyze_node<br/>AI: Detect stack & requirements"]
         read["📖 read_files_node<br/>Read critical files"]
-        health["🏥 detect_health_node<br/>AI: Find health endpoints"]
-        ready["⏱️ detect_readiness_node<br/>AI: Find startup patterns"]
+    end
+    
+    subgraph Blueprint["🏗️ Blueprint Phase"]
+        blueprint["📝 blueprint_node<br/>AI: Architect build plan & runtime config"]
     end
     
     subgraph Generation["⚙️ Generation Phase"]
-        plan["📝 plan_node<br/>AI: Create build strategy"]
         generate["⚙️ generate_node<br/>AI: Write Dockerfile"]
     end
     
@@ -186,8 +187,8 @@ flowchart TB
     end
     
     Start([▶ Start]) --> scan
-    scan --> analyze --> read --> health --> ready --> plan
-    plan --> generate --> review
+    scan --> analyze --> read --> blueprint
+    blueprint --> generate --> review
     
     review -->|"check_security: pass"| validate
     review -->|"check_security: fail"| reflect
@@ -197,24 +198,22 @@ flowchart TB
     
     reflect --> increment
     increment -->|"check_reanalysis: generate"| generate
-    increment -->|"check_reanalysis: plan"| plan
+    increment -->|"check_reanalysis: blueprint"| blueprint
     increment -->|"check_reanalysis: analyze"| analyze
 ```
 
 ---
 
-## 🤖 The 10 AI Agents
+## 🤖 The 8 AI Agents
 
 | Agent | Role | Model Type |
 |-------|------|------------|
 | **Analyzer** | Project discovery & stack detection | Fast |
-| **Planner** | Strategic build planning | Fast |
+| **Architect (Blueprint)** | Strategic build planning & runtime config | Powerful |
 | **Generator** | Dockerfile creation | Powerful |
 | **Generator (Iterative)** | Debugging failed Dockerfiles | Powerful |
 | **Reviewer** | Security audit & hardening | Fast |
 | **Reflector** | Failure analysis & learning | Powerful |
-| **Health Detector** | Health endpoint discovery | Fast |
-| **Readiness Detector** | Startup pattern analysis | Fast |
 | **Error Analyzer** | Error classification | Fast |
 | **Iterative Improver** | Targeted fix application | Powerful |
 
@@ -244,13 +243,11 @@ flowchart TB
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DOCKAI_MODEL_ANALYZER` | Model for project analyzer | `gpt-4o-mini` |
-| `DOCKAI_MODEL_PLANNER` | Model for build planner | `gpt-4o-mini` |
+| `DOCKAI_MODEL_BLUEPRINT` | Model for build architect (blueprint) | `gpt-4o-mini` |
 | `DOCKAI_MODEL_GENERATOR` | Model for Dockerfile generator | `gpt-4o` |
 | `DOCKAI_MODEL_GENERATOR_ITERATIVE` | Model for iterative generator | `gpt-4o` |
 | `DOCKAI_MODEL_REVIEWER` | Model for security reviewer | `gpt-4o-mini` |
 | `DOCKAI_MODEL_REFLECTOR` | Model for failure reflector | `gpt-4o` |
-| `DOCKAI_MODEL_HEALTH_DETECTOR` | Model for health detector | `gpt-4o-mini` |
-| `DOCKAI_MODEL_READINESS_DETECTOR` | Model for readiness detector | `gpt-4o-mini` |
 | `DOCKAI_MODEL_ERROR_ANALYZER` | Model for error analyzer | `gpt-4o-mini` |
 | `DOCKAI_MODEL_ITERATIVE_IMPROVER` | Model for iterative improver | `gpt-4o` |
 
@@ -306,13 +303,11 @@ flowchart TB
 | Variable | Description |
 |----------|-------------|
 | `DOCKAI_ANALYZER_INSTRUCTIONS` | Appended to analyzer prompt |
-| `DOCKAI_PLANNER_INSTRUCTIONS` | Appended to planner prompt |
+| `DOCKAI_BLUEPRINT_INSTRUCTIONS` | Appended to blueprint prompt |
 | `DOCKAI_GENERATOR_INSTRUCTIONS` | Appended to generator prompt |
 | `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Appended to iterative generator prompt |
 | `DOCKAI_REVIEWER_INSTRUCTIONS` | Appended to reviewer prompt |
 | `DOCKAI_REFLECTOR_INSTRUCTIONS` | Appended to reflector prompt |
-| `DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS` | Appended to health detector prompt |
-| `DOCKAI_READINESS_DETECTOR_INSTRUCTIONS` | Appended to readiness detector prompt |
 | `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Appended to error analyzer prompt |
 | `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Appended to iterative improver prompt |
 
@@ -321,13 +316,11 @@ flowchart TB
 | Variable | Description |
 |----------|-------------|
 | `DOCKAI_PROMPT_ANALYZER` | Completely replaces analyzer prompt |
-| `DOCKAI_PROMPT_PLANNER` | Completely replaces planner prompt |
+| `DOCKAI_PROMPT_BLUEPRINT` | Completely replaces blueprint prompt |
 | `DOCKAI_PROMPT_GENERATOR` | Completely replaces generator prompt |
 | `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | Completely replaces iterative generator prompt |
 | `DOCKAI_PROMPT_REVIEWER` | Completely replaces reviewer prompt |
 | `DOCKAI_PROMPT_REFLECTOR` | Completely replaces reflector prompt |
-| `DOCKAI_PROMPT_HEALTH_DETECTOR` | Completely replaces health detector prompt |
-| `DOCKAI_PROMPT_READINESS_DETECTOR` | Completely replaces readiness detector prompt |
 | `DOCKAI_PROMPT_ERROR_ANALYZER` | Completely replaces error analyzer prompt |
 | `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | Completely replaces iterative improver prompt |
 

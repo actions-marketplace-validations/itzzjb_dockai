@@ -327,3 +327,19 @@ class RuntimeConfigResult(BaseModel):
         ge=5,
         le=600
     )
+
+
+class BlueprintResult(BaseModel):
+    """
+    Combined result for the 'Blueprint' phase.
+    
+    This merges Planning and Runtime Configuration into a single artifact,
+    representing the complete architectural blueprint before code generation.
+    """
+    thought_process: str = Field(description="Comprehensive reasoning about build strategy and runtime configuration")
+    
+    # Plan Section
+    plan: PlanningResult = Field(description="The strategic build plan")
+    
+    # Runtime Config Section
+    runtime_config: RuntimeConfigResult = Field(description="The detected runtime configuration (health + readiness)")

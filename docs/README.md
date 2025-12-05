@@ -104,7 +104,7 @@ OPENAI_API_KEY=sk-your-api-key-here
 
 # Cost optimization: use faster models for simple tasks
 DOCKAI_MODEL_ANALYZER=gpt-4o-mini
-DOCKAI_MODEL_PLANNER=gpt-4o-mini
+DOCKAI_MODEL_BLUEPRINT=gpt-4o-mini
 DOCKAI_MODEL_GENERATOR=gpt-4o
 DOCKAI_MODEL_REVIEWER=gpt-4o-mini
 
@@ -131,7 +131,7 @@ If you're embedding DockAI into Internal Developer Platforms, self-service porta
 ```bash
 # 1. Create organization-wide configuration
 cat > .dockai << EOF
-[instructions_planner]
+[instructions_blueprint]
 APPROVED BASE IMAGES (use only these):
 - company-registry.io/python:3.11-slim
 - company-registry.io/node:20-alpine
@@ -187,7 +187,7 @@ Then you can talk to your AI assistant naturally:
 
 ## 🏗️ How DockAI Works (Overview)
 
-DockAI uses a **multi-agent architecture** powered by [LangGraph](https://langchain-ai.github.io/langgraph/). The workflow is defined in `src/dockai/workflow/graph.py` with 11 nodes:
+DockAI uses a **multi-agent architecture** powered by [LangGraph](https://langchain-ai.github.io/langgraph/). The workflow is defined in `src/dockai/workflow/graph.py` with 9 nodes:
 
 ```mermaid
 flowchart TB
@@ -195,12 +195,13 @@ flowchart TB
         scan["📂 scan_node"]
         analyze["🧠 analyze_node"]
         read["📖 read_files_node"]
-        health["🏥 detect_health_node"]
-        ready["⏱️ detect_readiness_node"]
+    end
+    
+    subgraph Blueprint["🏗️ Blueprint Phase"]
+        blueprint["📝 blueprint_node"]
     end
     
     subgraph Generation["⚙️ Generation Phase"]
-        plan["📝 plan_node"]
         generate["⚙️ generate_node"]
     end
     
@@ -214,8 +215,8 @@ flowchart TB
         increment["🔄 increment_retry"]
     end
     
-    scan --> analyze --> read --> health --> ready --> plan
-    plan --> generate --> review
+    scan --> analyze --> read --> blueprint
+    blueprint --> generate --> review
     
     review -->|"check_security"| validate
     review -->|"error"| reflect
@@ -225,7 +226,7 @@ flowchart TB
     
     reflect --> increment
     increment -->|"generate"| generate
-    increment -->|"plan"| plan  
+    increment -->|"blueprint"| blueprint  
     increment -->|"analyze"| analyze
 ```
 

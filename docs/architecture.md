@@ -69,13 +69,12 @@ flowchart TB
     
     subgraph Workflow["⚙️ LangGraph Workflow (graph.py)"]
         scan["scan_node"] --> analyze["analyze_node"] --> read["read_files_node"]
-        read --> health["detect_health_node"] --> ready["detect_readiness_node"]
-        ready --> plan["plan_node"] --> generate["generate_node"]
+        read --> blueprint["blueprint_node"] --> generate["generate_node"]
         generate --> review["review_node"] --> validate["validate_node"]
         
         validate -->|"should_retry"| reflect["reflect_node"]
         reflect --> increment["increment_retry"]
-        increment -->|"check_reanalysis"| plan
+        increment -->|"check_reanalysis"| blueprint
         increment -->|"check_reanalysis"| analyze
         validate -->|"end"| done["END"]
     end
@@ -148,13 +147,11 @@ def create_graph() -> CompiledStateGraph:
     
     workflow = StateGraph(GraphState)
     
-    # Add all 11 nodes
+    # Add all nodes
     workflow.add_node("scan", scan_node)
     workflow.add_node("analyze", analyze_node)
     workflow.add_node("read_files", read_files_node)
-    workflow.add_node("detect_health", detect_health_node)
-    workflow.add_node("detect_readiness", detect_readiness_node)
-    workflow.add_node("plan", plan_node)
+    workflow.add_node("blueprint", blueprint_node)
     workflow.add_node("generate", generate_node)
     workflow.add_node("review", review_node)
     workflow.add_node("validate", validate_node)
@@ -165,10 +162,8 @@ def create_graph() -> CompiledStateGraph:
     workflow.add_edge(START, "scan")
     workflow.add_edge("scan", "analyze")
     workflow.add_edge("analyze", "read_files")
-    workflow.add_edge("read_files", "detect_health")
-    workflow.add_edge("detect_health", "detect_readiness")
-    workflow.add_edge("detect_readiness", "plan")
-    workflow.add_edge("plan", "generate")
+    workflow.add_edge("read_files", "blueprint")
+    workflow.add_edge("blueprint", "generate")
     workflow.add_edge("generate", "review")
     
     # Conditional edge after security review
@@ -192,7 +187,7 @@ def create_graph() -> CompiledStateGraph:
     workflow.add_conditional_edges(
         "increment_retry",
         check_reanalysis,
-        {"plan": "plan", "generate": "generate", "analyze": "analyze"}
+        {"blueprint": "blueprint", "generate": "generate", "analyze": "analyze"}
     )
     
     return workflow.compile()
@@ -212,12 +207,12 @@ class GraphState(TypedDict):
     analysis_result: Optional[AnalysisResult]
     file_contents: str
     
-    # Detection results
+    # Blueprint results (Plan + Runtime Config)
+    current_plan: Optional[PlanningResult]
     health_result: Optional[HealthEndpointDetectionResult]
     readiness_result: Optional[ReadinessPatternResult]
     
     # Generation state
-    current_plan: Optional[PlanningResult]
     dockerfile_content: str
     thought_process: str
     
@@ -237,7 +232,7 @@ class GraphState(TypedDict):
 
 ---
 
-## The 10 AI Agents
+## The 8 AI Agents
 
 DockAI uses specialized agents instead of one general-purpose agent. This design provides:
 
@@ -251,13 +246,11 @@ DockAI uses specialized agents instead of one general-purpose agent. This design
 | Agent | Purpose | Model Type | Why This Split? |
 |-------|---------|------------|-----------------|
 | **Analyzer** | Detect tech stack | Fast | Simple pattern matching, doesn't need reasoning power |
-| **Planner** | Create build strategy | Fast | Planning is quick once context is gathered |
+| **Architect (Blueprint)** | Create build strategy & runtime config | Powerful | Strategic planning requires deep reasoning and context |
 | **Generator** | Write Dockerfile | Powerful | Needs to synthesize complex information |
 | **Generator (Iterative)** | Fix failed Dockerfile | Powerful | Debugging requires deep reasoning |
 | **Reviewer** | Security audit | Fast | Rule-based checks with AI enhancement |
 | **Reflector** | Analyze failures | Powerful | Root cause analysis is complex |
-| **Health Detector** | Find health endpoints | Fast | Pattern matching in source code |
-| **Readiness Detector** | Find startup patterns | Fast | Pattern matching for log messages |
 | **Error Analyzer** | Classify errors | Fast | Error categorization is straightforward |
 | **Iterative Improver** | Apply specific fixes | Powerful | Code modification needs precision |
 
@@ -294,30 +287,27 @@ File tree:
 ...
 ```
 
-#### 2. Planner Agent
+#### 2. Architect Agent (Blueprint)
 
 **Location**: `src/dockai/agents/agent_functions.py`
 
 **Input**: Analysis results, file contents, retry history
 
-**Output**: `PlanningResult` with:
-- Base image strategy and rationale
-- Build strategy (single vs multi-stage)
-- Optimization priorities
-- Potential challenges
+**Output**: `BlueprintResult` with:
+- `PlanningResult`: Build strategy, base image, multi-stage decision
+- `RuntimeConfigResult`: Health endpoints, readiness patterns, ports
 
-**Why it exists**: Good Dockerfiles require strategic decisions that depend on context. Should we use multi-stage builds? What's more important—image size or build speed? The Planner makes these decisions before generation.
+**Why it exists**: This agent combines strategic planning ("How do we build this?") with runtime configuration detection ("How do we run this?"). By combining these steps, we reduce token usage and latency while ensuring the build strategy aligns with runtime requirements.
 
 **Example considerations**:
-- "This is a Go project with CGO_ENABLED=0, so we can use a scratch base"
-- "Previous attempt failed with missing headers, so use a more complete base image"
-- "Project has both Python and Node.js, need multi-stage build"
+- "This is a Go project, so we use multi-stage build (Plan) and look for `http.ListenAndServe` (Runtime Config)"
+- "Detected `/health` endpoint in `app.py`, so we'll add a HEALTHCHECK instruction"
 
 #### 3. Generator Agent
 
 **Location**: `src/dockai/agents/generator.py`
 
-**Input**: Analysis, file contents, plan, retry history, verified tags
+**Input**: Analysis, file contents, blueprint, retry history, verified tags
 
 **Output**: Complete Dockerfile content
 
@@ -491,19 +481,9 @@ flowchart TB
         read_out["file_contents = '=== app.py ===<br/>from fastapi import FastAPI...'"]
     end
     
-    subgraph Health["🏥 HEALTH DETECTION (AI)"]
-        health_desc["• Searches for /health, /healthz endpoints"]
-        health_out["health_result = {<br/>  endpoint: '/health',<br/>  port: 8000<br/>}"]
-    end
-    
-    subgraph Ready["⏱️ READINESS DETECTION (AI)"]
-        ready_desc["• Identifies startup log patterns"]
-        ready_out["readiness_result = {<br/>  success_patterns: ['Uvicorn running']<br/>}"]
-    end
-    
-    subgraph Plan["📝 PLAN NODE (AI)"]
-        plan_desc["• Creates strategic build plan<br/>• Considers retry history"]
-        plan_out["current_plan = {<br/>  build_strategy: 'Multi-stage',<br/>  base_image: 'python:3.11-slim'<br/>}"]
+    subgraph Blueprint["🏗️ BLUEPRINT NODE (AI)"]
+        blueprint_desc["• Creates strategic build plan<br/>• Detects health endpoints<br/>• Identifies startup patterns"]
+        blueprint_out["current_plan = {...}<br/>health_result = {...}<br/>readiness_result = {...}"]
     end
     
     subgraph Generate["⚙️ GENERATE NODE (AI)"]
@@ -525,7 +505,7 @@ flowchart TB
         final["Dockerfile written to project"]
     end
     
-    Input --> Scan --> Analyze --> Read --> Health --> Ready --> Plan --> Generate --> Review --> Validate --> Output
+    Input --> Scan --> Analyze --> Read --> Blueprint --> Generate --> Review --> Validate --> Output
 ```
 
 ---
@@ -713,7 +693,7 @@ src/dockai/
 │   ├── analyzer.py       # Project analysis agent
 │   ├── generator.py      # Dockerfile generation agent
 │   ├── reviewer.py       # Security review agent
-│   └── agent_functions.py# Other agents (planner, reflector, etc.)
+│   └── agent_functions.py# Other agents (blueprint architect, reflector, etc.)
 │
 ├── cli/                  # Command-line interface
 │   ├── __init__.py

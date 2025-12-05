@@ -19,13 +19,11 @@ Configuration is done via environment variables:
 
 Per-Agent Model Configuration:
 - DOCKAI_MODEL_ANALYZER: Model for the analyzer agent
-- DOCKAI_MODEL_PLANNER: Model for the planner agent
+- DOCKAI_MODEL_BLUEPRINT: Model for the blueprint agent
 - DOCKAI_MODEL_GENERATOR: Model for the generator agent
 - DOCKAI_MODEL_GENERATOR_ITERATIVE: Model for iterative generation
 - DOCKAI_MODEL_REVIEWER: Model for the security reviewer
 - DOCKAI_MODEL_REFLECTOR: Model for failure reflection
-- DOCKAI_MODEL_HEALTH_DETECTOR: Model for health endpoint detection
-- DOCKAI_MODEL_READINESS_DETECTOR: Model for readiness pattern detection
 - DOCKAI_MODEL_ERROR_ANALYZER: Model for error classification
 - DOCKAI_MODEL_ITERATIVE_IMPROVER: Model for iterative improvement
 """
@@ -76,13 +74,11 @@ DEFAULT_MODELS = {
 # Agent to model type mapping (which agents need fast vs powerful models)
 AGENT_MODEL_TYPE = {
     "analyzer": "fast",
-    "planner": "fast",
+    "blueprint": "powerful", # Blueprint needs powerful model for planning
     "generator": "powerful",
     "generator_iterative": "powerful",
     "reviewer": "fast",
     "reflector": "powerful",
-    "health_detector": "fast",
-    "readiness_detector": "fast",
     "error_analyzer": "fast",
     "iterative_improver": "powerful",
 }
@@ -195,13 +191,11 @@ def load_llm_config_from_env() -> LLMConfig:
     # Map of agent names to their environment variable names
     agent_env_map = {
         "analyzer": "DOCKAI_MODEL_ANALYZER",
-        "planner": "DOCKAI_MODEL_PLANNER", 
+        "blueprint": "DOCKAI_MODEL_BLUEPRINT", 
         "generator": "DOCKAI_MODEL_GENERATOR",
         "generator_iterative": "DOCKAI_MODEL_GENERATOR_ITERATIVE",
         "reviewer": "DOCKAI_MODEL_REVIEWER",
         "reflector": "DOCKAI_MODEL_REFLECTOR",
-        "health_detector": "DOCKAI_MODEL_HEALTH_DETECTOR",
-        "readiness_detector": "DOCKAI_MODEL_READINESS_DETECTOR",
         "error_analyzer": "DOCKAI_MODEL_ERROR_ANALYZER",
         "iterative_improver": "DOCKAI_MODEL_ITERATIVE_IMPROVER",
     }

@@ -140,13 +140,11 @@ DockAI has 10 specialized agents. You can assign different models to each for co
 | Variable | Agent | Default (OpenAI) | Purpose |
 |----------|-------|------------------|---------|
 | `DOCKAI_MODEL_ANALYZER` | Analyzer | `gpt-4o-mini` | Detect technology stack |
-| `DOCKAI_MODEL_PLANNER` | Planner | `gpt-4o-mini` | Create build strategy |
+| `DOCKAI_MODEL_BLUEPRINT` | Blueprint | `gpt-4o` | Create build strategy & runtime config |
 | `DOCKAI_MODEL_GENERATOR` | Generator | `gpt-4o` | Write Dockerfile |
 | `DOCKAI_MODEL_GENERATOR_ITERATIVE` | Iterative Generator | `gpt-4o` | Fix failed Dockerfile |
 | `DOCKAI_MODEL_REVIEWER` | Reviewer | `gpt-4o-mini` | Security audit |
 | `DOCKAI_MODEL_REFLECTOR` | Reflector | `gpt-4o` | Analyze failures |
-| `DOCKAI_MODEL_HEALTH_DETECTOR` | Health Detector | `gpt-4o-mini` | Find health endpoints |
-| `DOCKAI_MODEL_READINESS_DETECTOR` | Readiness Detector | `gpt-4o-mini` | Find startup patterns |
 | `DOCKAI_MODEL_ERROR_ANALYZER` | Error Analyzer | `gpt-4o-mini` | Classify errors |
 | `DOCKAI_MODEL_ITERATIVE_IMPROVER` | Iterative Improver | `gpt-4o` | Apply specific fixes |
 
@@ -174,13 +172,11 @@ Use powerful models only where needed:
 ```bash
 # Recommended cost-optimized configuration
 DOCKAI_MODEL_ANALYZER=gpt-4o-mini        # Pattern matching
-DOCKAI_MODEL_PLANNER=gpt-4o-mini         # Quick planning
+DOCKAI_MODEL_BLUEPRINT=gpt-4o-mini         # Quick planning
 DOCKAI_MODEL_GENERATOR=gpt-4o            # Complex code gen (worth it)
 DOCKAI_MODEL_GENERATOR_ITERATIVE=gpt-4o  # Debugging (worth it)
 DOCKAI_MODEL_REVIEWER=gpt-4o-mini        # Rule checking
 DOCKAI_MODEL_REFLECTOR=gpt-4o            # Root cause analysis (worth it)
-DOCKAI_MODEL_HEALTH_DETECTOR=gpt-4o-mini # Pattern matching
-DOCKAI_MODEL_READINESS_DETECTOR=gpt-4o-mini
 DOCKAI_MODEL_ERROR_ANALYZER=gpt-4o-mini
 DOCKAI_MODEL_ITERATIVE_IMPROVER=gpt-4o   # Code modification (worth it)
 ```
@@ -398,13 +394,11 @@ Instructions are **appended** to default prompts. This is the recommended way to
 | Variable | Agent | What to Include |
 |----------|-------|-----------------|
 | `DOCKAI_ANALYZER_INSTRUCTIONS` | Analyzer | Internal frameworks, project conventions |
-| `DOCKAI_PLANNER_INSTRUCTIONS` | Planner | Approved base images, build strategies |
+| `DOCKAI_BLUEPRINT_INSTRUCTIONS` | Blueprint | Approved base images, build strategies |
 | `DOCKAI_GENERATOR_INSTRUCTIONS` | Generator | Required labels, ENV vars, conventions |
 | `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Iterative Generator | Debug strategies |
 | `DOCKAI_REVIEWER_INSTRUCTIONS` | Reviewer | Compliance requirements, policies |
 | `DOCKAI_REFLECTOR_INSTRUCTIONS` | Reflector | Known issues and fixes |
-| `DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS` | Health Detector | Health endpoint conventions |
-| `DOCKAI_READINESS_DETECTOR_INSTRUCTIONS` | Readiness Detector | Startup patterns |
 | `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Error Analyzer | Common error patterns |
 | `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Iterative Improver | Fix strategies |
 
@@ -449,16 +443,14 @@ Custom prompts:
 
 | Variable | Agent |
 |----------|-------|
-| `DOCKAI_PROMPT_ANALYZER` | Replace analyzer prompt |
-| `DOCKAI_PROMPT_PLANNER` | Replace planner prompt |
-| `DOCKAI_PROMPT_GENERATOR` | Replace generator prompt |
-| `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | Replace iterative generator |
-| `DOCKAI_PROMPT_REVIEWER` | Replace reviewer prompt |
-| `DOCKAI_PROMPT_REFLECTOR` | Replace reflector prompt |
-| `DOCKAI_PROMPT_HEALTH_DETECTOR` | Replace health detector |
-| `DOCKAI_PROMPT_READINESS_DETECTOR` | Replace readiness detector |
-| `DOCKAI_PROMPT_ERROR_ANALYZER` | Replace error analyzer |
-| `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | Replace iterative improver |
+| `DOCKAI_PROMPT_ANALYZER` | Analyzer |
+| `DOCKAI_PROMPT_BLUEPRINT` | Blueprint |
+| `DOCKAI_PROMPT_GENERATOR` | Generator |
+| `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | Generator Iterative |
+| `DOCKAI_PROMPT_REVIEWER` | Reviewer |
+| `DOCKAI_PROMPT_REFLECTOR` | Reflector |
+| `DOCKAI_PROMPT_ERROR_ANALYZER` | Error Analyzer |
+| `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | Iterative Improver |
 
 ### When Custom Prompts Make Sense
 
@@ -521,7 +513,7 @@ Project structure:
 - /config contains configuration files
 
 # Guide the strategic planning
-[instructions_planner]
+[instructions_blueprint]
 REQUIREMENTS:
 - Use our approved base image: company-registry.io/python:3.11-slim
 - Multi-stage build is mandatory for production
@@ -577,22 +569,8 @@ KNOWN ISSUES AND SOLUTIONS:
    Cause: Migration running before DB is ready
    Solution: Use wait-for-it.sh or similar in entrypoint
 
-# Our health endpoint convention
-[instructions_health_detector]
-Our services expose:
-- Health: /api/health/ (GET, returns 200 with {"status": "healthy"})
-- Readiness: /api/ready/ (GET, returns 200 when DB connected)
-- Port: Always 8000 for HTTP
-
-Django health check uses django-health-check package.
-
-# Startup patterns for our Django apps
-[instructions_readiness_detector]
-Gunicorn startup patterns:
-- Success: "Booting worker with pid" or "Listening at: http://0.0.0.0:8000"
-- Failure: "Error:" or "ModuleNotFoundError"
-
-Typical startup time: 10-15 seconds (includes migration check)
+   Cause: Migration running before DB is ready
+   Solution: Use wait-for-it.sh or similar in entrypoint
 ```
 
 ---
@@ -663,10 +641,8 @@ OPENAI_API_KEY=sk-your-api-key
 
 # Use fast models for simple tasks
 DOCKAI_MODEL_ANALYZER=gpt-4o-mini
-DOCKAI_MODEL_PLANNER=gpt-4o-mini
+DOCKAI_MODEL_BLUEPRINT=gpt-4o-mini
 DOCKAI_MODEL_REVIEWER=gpt-4o-mini
-DOCKAI_MODEL_HEALTH_DETECTOR=gpt-4o-mini
-DOCKAI_MODEL_READINESS_DETECTOR=gpt-4o-mini
 DOCKAI_MODEL_ERROR_ANALYZER=gpt-4o-mini
 
 # Use powerful models where it matters

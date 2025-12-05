@@ -176,7 +176,13 @@ def build(
         "usage_stats": [],
         "config": {
             "analyzer_instructions": prompt_config.analyzer_instructions or "",
+            "blueprint_instructions": prompt_config.blueprint_instructions or "",
             "generator_instructions": prompt_config.generator_instructions or "",
+            "generator_iterative_instructions": prompt_config.generator_iterative_instructions or "",
+            "reviewer_instructions": prompt_config.reviewer_instructions or "",
+            "reflector_instructions": prompt_config.reflector_instructions or "",
+            "error_analyzer_instructions": prompt_config.error_analyzer_instructions or "",
+            "iterative_improver_instructions": prompt_config.iterative_improver_instructions or "",
             "no_cache": no_cache
         },
         # Adaptive agent fields for learning and planning

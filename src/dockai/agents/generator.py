@@ -134,14 +134,14 @@ STRATEGIC PLAN (Follow this guidance):
 
 ## Your Role in the Pipeline
 ```
-Analyzer → Planner → [YOU: Generator] → Reviewer → Validator
+Analyzer → Blueprint → [YOU: Generator] → Reviewer → Validator
                 ↓                            ↓
          Strategic Plan               Your Dockerfile
 ```
 
 ## Your Mission
 Generate a production-ready Dockerfile that:
-1. Follows the Planner's strategic guidance
+1. Follows the Blueprint's strategic guidance
 2. Builds successfully on first attempt
 3. Passes security review
 4. Runs the application correctly
@@ -149,7 +149,7 @@ Generate a production-ready Dockerfile that:
 ## Chain-of-Thought Generation Process
 
 ### PHASE 1: INTERNALIZE THE PLAN
-The Planner has provided strategic guidance:
+The Blueprint Architect has provided strategic guidance:
 {plan_context}
 
 **Checklist before writing ANY code:**

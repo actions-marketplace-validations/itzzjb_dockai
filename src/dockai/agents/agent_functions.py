@@ -31,7 +31,8 @@ from ..core.schemas import (
     HealthEndpointDetectionResult,
     ReadinessPatternResult,
     IterativeDockerfileResult,
-    RuntimeConfigResult
+    RuntimeConfigResult,
+    BlueprintResult
 )
 from ..utils.callbacks import TokenUsageCallback
 from ..utils.rate_limiter import with_rate_limit_handling
@@ -64,204 +65,6 @@ def safe_invoke_chain(chain, input_data: Dict[str, Any], callbacks: list) -> Any
     return chain.invoke(input_data, config={"callbacks": callbacks})
 
 
-def create_plan(context: 'AgentContext') -> Tuple[PlanningResult, Dict[str, int]]:
-    """
-    Generates a strategic plan for Dockerfile creation using AI analysis.
-
-    This function acts as the "architect" phase of the process. Before writing any code,
-    it analyzes the project structure, requirements, and any previous failures to
-    formulate a robust build strategy.
-
-    Args:
-        context (AgentContext): Unified context containing all project information,
-            file tree, analysis results, retry history, and custom instructions.
-
-    Returns:
-        Tuple[PlanningResult, Dict[str, int]]: A tuple containing:
-            - The structured planning result (PlanningResult object).
-            - A dictionary tracking token usage for cost monitoring.
-    """
-    from ..core.agent_context import AgentContext
-    
-    # Create LLM using the provider factory for the planner agent
-    llm = create_llm(agent_name="planner", temperature=0.2)
-    
-    # Configure the LLM to return a structured output matching the PlanningResult schema
-    structured_llm = llm.with_structured_output(PlanningResult)
-    
-    # Construct the context from previous retry attempts to facilitate learning
-    retry_context = ""
-    if context.retry_history and len(context.retry_history) > 0:
-        retry_context = "\n\nPREVIOUS ATTEMPTS (LEARN FROM THESE):\n"
-        for i, attempt in enumerate(context.retry_history, 1):
-            retry_context += f"""
---- Attempt {i} ---
-What was tried: {attempt.get('what_was_tried', 'Unknown')}
-Why it failed: {attempt.get('why_it_failed', 'Unknown')}
-Lesson learned: {attempt.get('lesson_learned', 'Unknown')}
-Error type: {attempt.get('error_type', 'Unknown')}
-"""
-        retry_context += "\nDO NOT repeat the same mistakes. Apply the lessons learned."
-    
-    # Define the default system prompt for the DevOps Architect persona
-    default_prompt = """You are the PLANNER agent in a multi-agent Dockerfile generation pipeline. You are AGENT 2 of 10 - the strategic architect that guides all downstream generation.
-
-## Your Role in the Pipeline
-```
-Analyzer → [YOU: Planner] → Generator → Reviewer → Validator → (Reflector if failed)
-         ↑                         ↓
-    Analysis Result          Strategic Plan (your output)
-```
-
-## Your Mission
-Create a battle-tested strategic plan BEFORE any Dockerfile code is written. You are the chess grandmaster - think 5 moves ahead.
-
-## Chain-of-Thought Strategic Planning
-
-### PHASE 1: DIGEST UPSTREAM ANALYSIS
-The Analyzer has provided:
-- Stack: {stack}
-- Project Type: {project_type}
-- Build/Start Commands: Your execution blueprint
-
-**Ask yourself:**
-- Does this analysis make sense? Any red flags?
-- What implicit requirements weren't stated?
-- What could the Analyzer have missed?
-
-### PHASE 2: ARCHITECTURE DECISION TREE
-
-```
-Is it COMPILED? (Go, Rust, C++, Java)
-├─ YES → Multi-stage build essential
-│       ├─ Builder stage: Full toolchain
-│       └─ Runtime stage: Minimal (scratch, distroless, alpine)
-│
-└─ NO → Single or multi-stage based on complexity
-        ├─ Node/Python/Ruby: Consider multi-stage for smaller images
-        └─ Simple scripts: Single stage may suffice
-```
-
-```
-Runtime linking strategy:
-├─ Static binary (Go, Rust with musl) → Can use scratch/distroless
-├─ Dynamic binary (C++, most compiled) → Match libc (glibc vs musl)
-└─ Interpreted (Python, Node) → Include interpreter in runtime
-```
-
-### PHASE 3: BASE IMAGE STRATEGY
-
-**Decision Matrix:**
-| Requirement | Recommended Base |
-|-------------|------------------|
-| Smallest possible | scratch (static binaries only) |
-| Minimal + shell | distroless or alpine |
-| Compatibility | debian-slim, ubuntu |
-| Specific runtime | Official language images (node:20-alpine) |
-| Security scanning | Use official, tagged images |
-
-**Anti-patterns:**
-- `latest` tag (non-reproducible)
-- Full OS images (ubuntu, debian) when slim/alpine works
-- Alpine for glibc-dependent apps
-- Mixing distro families between stages
-
-### PHASE 4: ANTICIPATE FAILURE MODES
-
-**Common failure patterns to plan against:**
-```
-1. Missing source files in runtime stage
-   → Plan explicit COPY instructions
-   
-2. Binary compatibility (built on glibc, running on musl)
-   → Plan matching base images or static linking
-   
-3. Missing native dependencies at runtime
-   → Plan to identify runtime vs build-time deps
-   
-4. Permission issues (root vs non-root)
-   → Plan USER instruction and directory ownership
-   
-5. Missing environment variables
-   → Plan ENV or document required runtime vars
-```
-
-### PHASE 5: LEARNING FROM HISTORY
-{retry_context}
-
-**If retrying, you MUST:**
-1. Acknowledge what failed before
-2. Explain WHY that approach was wrong
-3. Describe how your new plan avoids that mistake
-4. Consider if a fundamentally different approach is needed
-
-## Output Contract for Generator Agent
-
-Your plan MUST clearly specify:
-1. **base_image_strategy**: Exact image:tag recommendations with rationale
-2. **build_strategy**: Step-by-step build approach
-3. **use_multi_stage**: true/false with justification
-4. **use_minimal_runtime**: true/false based on requirements
-5. **use_static_linking**: true/false for compiled languages
-6. **potential_challenges**: What could go wrong
-7. **mitigation_strategies**: How to prevent/handle each challenge
-8. **thought_process**: Your complete reasoning chain
-
-## Strategic Principles
-- **Separation of Concerns**: Build tools ≠ Runtime tools
-- **Minimal Attack Surface**: Every extra binary is a potential CVE
-- **Reproducibility**: Pinned versions, locked dependencies
-- **Fail Fast**: Catch issues in build, not production
-- **Security by Default**: Non-root, no secrets baked in
-
-{custom_instructions}
-"""
-
-    # Get custom prompt if configured, otherwise use default
-    system_prompt = get_prompt("planner", default_prompt)
-
-    # Create the chat prompt template combining system instructions and user input
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("user", """Create a strategic plan for generating a Dockerfile.
-
-PROJECT ANALYSIS:
-Stack: {stack}
-Project Type: {project_type}
-Suggested Base Image: {suggested_base_image}
-Build Command: {build_command}
-Start Command: {start_command}
-
-KEY FILE CONTENTS:
-{file_contents}
-
-Generate a comprehensive plan that will guide the Dockerfile generation.
-Start by explaining your thought process in detail.""")
-    ])
-    
-    # Create the execution chain: Prompt -> LLM -> Structured Output
-    chain = prompt | structured_llm
-    
-    # Initialize callback to track token usage
-    callback = TokenUsageCallback()
-    
-    # Execute the chain with the provided context (with rate limit handling)
-    result = safe_invoke_chain(
-        chain,
-        {
-            "stack": context.analysis_result.get("stack", "Unknown"),
-            "project_type": context.analysis_result.get("project_type", "service"),
-            "suggested_base_image": context.analysis_result.get("suggested_base_image", ""),
-            "build_command": context.analysis_result.get("build_command", "None detected"),
-            "start_command": context.analysis_result.get("start_command", "None detected"),
-            "file_contents": context.file_contents,
-            "retry_context": retry_context,
-            "custom_instructions": context.custom_instructions
-        },
-        [callback]
-    )
-    
-    return result, callback.get_usage()
 
 
 
@@ -478,403 +281,6 @@ Start by explaining your root cause analysis in the thought process.""")
     return result, callback.get_usage()
 
 
-def detect_health_endpoints(context: 'AgentContext') -> Tuple[HealthEndpointDetectionResult, Dict[str, int]]:
-    """
-    Scans source code to identify potential health check endpoints and port configurations.
-
-    This function uses AI to "read" the code, looking for common patterns that indicate
-    where the application exposes its health status (e.g., /health, /ready). It also
-    looks for port configurations to ensure the Dockerfile exposes the correct port.
-
-    Args:
-        file_contents (str): The raw content of the source files to be analyzed.
-        analysis_result (Dict[str, Any]): The results from the initial project analysis.
-
-    Returns:
-        Tuple[HealthEndpointDetectionResult, Dict[str, int]]: A tuple containing:
-            - The detection result (HealthEndpointDetectionResult object) with found endpoints.
-            - A dictionary tracking token usage.
-    """
-    from ..core.agent_context import AgentContext
-    
-    # Create LLM using the provider factory for the health detector agent
-    llm = create_llm(agent_name="health_detector", temperature=0)
-    
-    # Configure the LLM to return a structured output matching the HealthEndpointDetectionResult schema
-    structured_llm = llm.with_structured_output(HealthEndpointDetectionResult)
-    
-    # Define the default system prompt for the "Code Analyst" persona
-    default_prompt = """You are the HEALTH DETECTOR agent in a multi-agent Dockerfile generation pipeline. Your analysis enables proper HEALTHCHECK instructions.
-
-## Your Role in the Pipeline
-```
-Analyzer → [YOU: Health Detector] → Planner → Generator
-                   ↓
-         Health endpoint info for HEALTHCHECK instruction
-```
-
-## Your Mission
-Analyze source code to discover:
-1. Health check endpoints (URLs the container can hit to verify it's healthy)
-2. Port configurations (what port the app listens on)
-3. Protocol information (HTTP, TCP, gRPC)
-
-## Chain-of-Thought Discovery Process
-
-### PHASE 1: IDENTIFY APPLICATION TYPE
-
-```
-Type              | Health Check Approach
-──────────────────┼─────────────────────────────────────
-Web Server/API    | HTTP endpoint (GET /health, /healthz, /ready)
-gRPC Service      | gRPC health check protocol
-TCP Service       | TCP port check
-Worker/Consumer   | Custom health file or no health check
-CLI/Script        | No health check needed (exit code)
-```
-
-### PHASE 2: FRAMEWORK-SPECIFIC PATTERNS
-
-**Node.js / Express:**
-```javascript
-// Look for patterns like:
-app.get('/health', (req, res) => res.send('OK'))
-app.get('/api/health', healthController.check)
-router.get('/healthz', ...)
-// Port patterns:
-app.listen(3000)
-const PORT = process.env.PORT || 3000
-```
-
-**Python / Flask / Django / FastAPI:**
-```python
-# Flask:
-@app.route('/health')
-# Django:
-path('health/', health_check_view)
-# FastAPI:
-@app.get("/health")
-# Port patterns:
-app.run(port=8000)
-uvicorn.run(app, port=8000)
-```
-
-**Go:**
-```go
-// Look for patterns like:
-http.HandleFunc("/health", healthHandler)
-http.HandleFunc("/healthz", ...)
-mux.HandleFunc("/ready", ...)
-// Port patterns:
-http.ListenAndServe(":8080", ...)
-```
-
-**Java / Spring:**
-```java
-// Spring Boot Actuator:
-@GetMapping("/actuator/health")
-// Custom:
-@GetMapping("/health")
-// Port: server.port=8080
-```
-
-### PHASE 3: COMMON HEALTH ENDPOINT NAMES
-
-**Priority order (most to least common):**
-```
-1. /health         - Most universal
-2. /healthz        - Kubernetes convention
-3. /ready          - Readiness check
-4. /readiness      - Alternative readiness
-5. /live           - Liveness check
-6. /liveness       - Alternative liveness
-7. /ping           - Simple availability
-8. /status         - Status endpoint
-9. /api/health     - API-prefixed
-10. /actuator/health - Spring Boot
-```
-
-### PHASE 4: PORT DETECTION
-
-**Search patterns by framework:**
-```
-Environment Variables:
-  PORT, APP_PORT, SERVER_PORT, HTTP_PORT
-
-Config Files:
-  - package.json: "start": "... --port 3000"
-  - config.json/yaml: port: 8080
-  - .env: PORT=3000
-  
-Code Patterns:
-  - .listen(3000)
-  - :8080
-  - port=8000
-  - server.port=
-```
-
-### PHASE 5: CONFIDENCE ASSESSMENT
-
-```
-Confidence Level | Evidence Required
-─────────────────┼────────────────────────────────────
-HIGH             | Explicit health endpoint in code
-MEDIUM           | Framework default or config file
-LOW              | Inferred from framework conventions
-NONE             | No evidence found
-```
-
-## Output Requirements
-1. **health_endpoint**: The URL path (e.g., "/health")
-2. **port**: The port number (e.g., 8080)
-3. **protocol**: HTTP, TCP, or gRPC
-4. **confidence**: HIGH, MEDIUM, LOW, NONE
-5. **thought_process**: How you found this information
-
-## Anti-Patterns to Avoid
-- Guessing standard ports without evidence
-- Assuming /health exists without seeing it in code
-- Missing framework-specific conventions
-- Ignoring environment variable port configurations
-"""
-
-    # Get custom prompt if configured, otherwise use default
-    system_prompt = get_prompt("health_detector", default_prompt)
-
-    # Create the chat prompt template
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("user", """Analyze these files to detect health check endpoints.
-
-STACK: {stack}
-
-FILE CONTENTS:
-{file_contents}
-
-Find any health check endpoints and their port configurations.
-Explain your reasoning in the thought process.""")
-    ])
-    
-    # Create the execution chain: Prompt -> LLM -> Structured Output
-    chain = prompt | structured_llm
-    
-    # Initialize callback to track token usage
-    callback = TokenUsageCallback()
-    
-    # Execute the chain (with rate limit handling)
-    result = safe_invoke_chain(
-        chain,
-        {
-            "stack": context.analysis_result.get("stack", "Unknown"),
-            "file_contents": context.file_contents
-        },
-        [callback]
-    )
-    
-    return result, callback.get_usage()
-
-
-def detect_readiness_patterns(context: 'AgentContext') -> Tuple[ReadinessPatternResult, Dict[str, int]]:
-    """
-    Analyzes application logs and code to determine how to detect when the app is ready.
-
-    Instead of relying on arbitrary sleep times, this function identifies the specific
-    log messages or output patterns that signify a successful startup (e.g., "Server
-    running on port 8080"). It also identifies failure patterns to fail fast.
-
-    Args:
-        file_contents (str): The content of the source files.
-        analysis_result (Dict[str, Any]): The results from the initial project analysis.
-
-    Returns:
-        Tuple[ReadinessPatternResult, Dict[str, int]]: A tuple containing:
-            - The readiness pattern result (ReadinessPatternResult object) with regex patterns.
-            - A dictionary tracking token usage.
-    """
-    from ..core.agent_context import AgentContext
-    
-    # Create LLM using the provider factory for the readiness detector agent
-    llm = create_llm(agent_name="readiness_detector", temperature=0)
-    
-    # Configure the LLM to return a structured output matching the ReadinessPatternResult schema
-    structured_llm = llm.with_structured_output(ReadinessPatternResult)
-    
-    # Define the default system prompt for the "Startup Pattern Expert" persona
-    default_prompt = """You are the READINESS DETECTOR agent in a multi-agent Dockerfile generation pipeline. Your patterns enable the Validator to know when the app is ready.
-
-## Your Role in the Pipeline
-```
-Analyzer → [YOU: Readiness Detector] → Validator
-                    ↓
-         Log patterns to detect "app is ready" vs "app failed"
-```
-
-## Your Mission
-Analyze source code to discover:
-1. **Success patterns**: Log messages that mean "application started successfully"
-2. **Failure patterns**: Log messages that mean "startup failed"
-3. **Timing estimates**: How long startup typically takes
-
-## Chain-of-Thought Pattern Discovery
-
-### PHASE 1: UNDERSTAND STARTUP SEQUENCE
-
-**What happens when this app starts?**
-```
-1. Load configuration
-2. Initialize dependencies (DB connections, caches)
-3. Start server/bind to port
-4. Log "ready" message
-```
-
-### PHASE 2: FRAMEWORK-SPECIFIC SUCCESS PATTERNS
-
-**Node.js / Express:**
-```javascript
-// Common success patterns:
-console.log('Server listening on port 3000')
-console.log('App started successfully')
-app.listen(PORT, () => console.log(`Running on ${{PORT}}`))
-// Regex: /listening on port \\d+/i, /server (started|running)/i
-```
-
-**Python / Flask / Django / FastAPI:**
-```python
-# Flask:
-print(" * Running on http://127.0.0.1:5000")
-# Django:
-"Starting development server at http://..."
-# FastAPI/Uvicorn:
-"Uvicorn running on http://0.0.0.0:8000"
-"Application startup complete"
-# Regex: /running on|started at|startup complete/i
-```
-
-**Go:**
-```go
-// Common patterns:
-log.Println("Server started on :8080")
-fmt.Println("Listening on port 8080")
-// Regex: /listening|started|ready/i
-```
-
-**Java / Spring:**
-```java
-// Spring Boot:
-"Started Application in X.XXX seconds"
-"Tomcat started on port(s): 8080"
-// Regex: /Started .* in \\d+.*seconds|Tomcat started/i
-```
-
-### PHASE 3: COMMON FAILURE PATTERNS
-
-```
-Pattern Type          | Regex Pattern
-──────────────────────┼────────────────────────────────────
-Fatal errors          | /fatal|panic|exception|error:/i
-Connection failures   | /connection refused|cannot connect|ECONNREFUSED/i
-Missing dependencies  | /module not found|import error|no such file/i
-Port conflicts        | /address already in use|EADDRINUSE/i
-Permission issues     | /permission denied|EACCES/i
-Configuration errors  | /invalid config|missing required/i
-```
-
-### PHASE 4: TIMING ESTIMATION
-
-```
-Application Type      | Typical Startup Time
-──────────────────────┼─────────────────────
-Simple Node.js        | 1-3 seconds
-Python Flask/FastAPI  | 1-3 seconds
-Java/Spring Boot      | 10-30 seconds
-Go application        | <1 second
-Apps with DB init     | 5-15 seconds
-Apps with migrations  | 15-60 seconds
-```
-
-**Factors that increase startup time:**
-- Database connections/migrations
-- Cache warming
-- Large dependency initialization
-- External service health checks
-- JIT compilation (Java, .NET)
-
-### PHASE 5: REGEX PATTERN CONSTRUCTION
-
-**Good regex patterns are:**
-1. **Specific enough** to avoid false positives
-2. **Flexible enough** to handle variations
-3. **Case insensitive** when appropriate
-
-**Examples:**
-```regex
-# Success (good)
-/listening on (port )?\\d+/i
-/server (is )?(started|running|ready)/i
-/application startup complete/i
-
-# Success (too generic - avoid)
-/started/i  # Too many false positives
-
-# Failure (good)
-/error:|fatal:|panic:|exception/i
-/ECONNREFUSED|EADDRINUSE|EACCES/i
-
-# Failure (too generic - avoid)
-/error/i  # Would match "error handling code"
-```
-
-## Output Requirements
-1. **success_patterns**: List of regex patterns for "app ready"
-2. **failure_patterns**: List of regex patterns for "startup failed"
-3. **estimated_startup_time**: Seconds to wait before checking
-4. **confidence**: HIGH, MEDIUM, LOW
-5. **thought_process**: How you derived these patterns
-
-## Anti-Patterns to Avoid
-- Overly generic patterns (just "started")
-- Forgetting case sensitivity issues
-- Missing framework-specific patterns
-- Underestimating startup time for complex apps
-- Regex that would match normal log lines
-"""
-
-    # Get custom prompt if configured, otherwise use default
-    system_prompt = get_prompt("readiness_detector", default_prompt)
-
-    # Create the chat prompt template
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("user", """Analyze these files to determine startup patterns.
-
-STACK: {stack}
-PROJECT TYPE: {project_type}
-
-FILE CONTENTS:
-{file_contents}
-
-Identify log patterns that indicate successful startup or failure.
-Explain your reasoning in the thought process.""")
-    ])
-    
-    # Create the execution chain: Prompt -> LLM -> Structured Output
-    chain = prompt | structured_llm
-    
-    # Initialize callback to track token usage
-    callback = TokenUsageCallback()
-    
-    # Execute the chain (with rate limit handling)
-    result = safe_invoke_chain(
-        chain,
-        {
-            "stack": context.analysis_result.get("stack", "Unknown"),
-            "project_type": context.analysis_result.get("project_type", "service"),
-            "file_contents": context.file_contents
-        },
-        [callback]
-    )
-    
-    return result, callback.get_usage()
 
 
 def generate_iterative_dockerfile(context: 'AgentContext') -> Tuple[IterativeDockerfileResult, Dict[str, int]]:
@@ -1064,96 +470,221 @@ Explain your changes in the thought process.""")
     return result, callback.get_usage()
 
 
-def detect_runtime_config(context: 'AgentContext') -> Tuple[RuntimeConfigResult, Dict[str, int]]:
+def create_blueprint(context: 'AgentContext') -> Tuple[BlueprintResult, Dict[str, int]]:
     """
-    Combined analysis of runtime configuration: health endpoints and readiness patterns.
+    Generates a complete architectural blueprint (Plan + Runtime Config) in one pass.
     
-    This function replaces the separate health and readiness detection steps to improve
-    efficiency by making a single LLM call.
+    This function combines the logic of 'create_plan' and 'detect_runtime_config'
+    to significantly reduce token usage and latency by sharing the file content context.
     
     Args:
         context (AgentContext): Unified context containing file contents and analysis results.
         
     Returns:
-        Tuple[RuntimeConfigResult, Dict[str, int]]: A tuple containing:
-            - The combined runtime configuration result.
+        Tuple[BlueprintResult, Dict[str, int]]: A tuple containing:
+            - The combined blueprint result.
             - A dictionary tracking token usage.
     """
     from ..core.agent_context import AgentContext
     
-    # Create LLM using the provider factory for the runtime detector agent
-    # We use the same model as the other detectors (usually a fast one)
-    llm = create_llm(agent_name="health_detector", temperature=0)
+    # Create LLM using the provider factory for the blueprint agent (it's the primary persona)
+    llm = create_llm(agent_name="blueprint", temperature=0.2)
     
-    # Configure the LLM to return a structured output matching the RuntimeConfigResult schema
-    structured_llm = llm.with_structured_output(RuntimeConfigResult)
+    # Configure the LLM to return a structured output matching the BlueprintResult schema
+    structured_llm = llm.with_structured_output(BlueprintResult)
     
-    # Define the default system prompt combining Health and Readiness detection
-    default_prompt = """You are the RUNTIME CONFIG DETECTOR agent in a multi-agent Dockerfile generation pipeline.
+    # Construct retry context if available
+    retry_context = ""
+    if context.retry_history and len(context.retry_history) > 0:
+        retry_context = "\n\nPREVIOUS ATTEMPTS (LEARN FROM THESE):\n"
+        for i, attempt in enumerate(context.retry_history, 1):
+            retry_context += f"""
+--- Attempt {i} ---
+What was tried: {attempt.get('what_was_tried', 'Unknown')}
+Why it failed: {attempt.get('why_it_failed', 'Unknown')}
+Lesson learned: {attempt.get('lesson_learned', 'Unknown')}
+"""
     
+    # Define the default system prompt for the "Chief Architect" persona
+    default_prompt = """You are the BLUEPRINT agent in a multi-agent Dockerfile generation pipeline. You are AGENT 2 of 10 - the Chief Architect who creates the strategic blueprint that guides all downstream agents.
+
 ## Your Role in the Pipeline
 ```
-Analyzer → [YOU: Runtime Detector] → Planner → Generator
-                   ↓
-         Health endpoints + Readiness patterns
+Analyzer → [YOU: Blueprint Architect] → Generator → Reviewer → Validator
+                    ↓
+     Strategic Plan + Runtime Configuration
 ```
 
+Your blueprint DIRECTLY guides the Generator. A poor plan = a poor Dockerfile. Be thorough and strategic.
+
 ## Your Mission
-Analyze source code to discover TWO key things in a single pass:
-1. **Health Check Endpoints**: URLs the container can hit to verify it's healthy.
-2. **Readiness Patterns**: Log messages that indicate the app has started successfully.
+Analyze the source code to produce a COMPLETE BLUEPRINT containing:
+1. **Strategic Build Plan**: How to build the image (base images, stages, dependencies).
+2. **Runtime Configuration**: How to run and check the container (health endpoints, startup patterns).
 
-## Part 1: Health Detection Strategy
+## Chain-of-Thought Blueprint Process
 
-### Identify Application Type & Health Approach
-- **Web Server/API**: Look for HTTP endpoints (GET /health, /healthz, /ready)
-- **gRPC Service**: Look for gRPC health check protocol
-- **TCP Service**: TCP port check
-- **Worker/Consumer**: Custom health file or no health check
+### PHASE 1: BASE IMAGE STRATEGY
+Determine the optimal base image(s):
+```
+Decision Tree:
+├── Compiled Language (Go, Rust, C++)
+│   ├── Build Stage: Full SDK (golang:1.21, rust:latest)
+│   └── Runtime: Minimal (scratch, distroless, alpine)
+│
+├── Interpreted Language (Python, Node, Ruby)
+│   ├── Build Stage: Full image with build tools
+│   └── Runtime: Slim variant (python:3.11-slim, node:20-slim)
+│
+├── JVM Language (Java, Kotlin, Scala)
+│   ├── Build Stage: Maven/Gradle with JDK
+│   └── Runtime: JRE only (eclipse-temurin:21-jre-alpine)
+│
+└── Static Site (HTML, JS, CSS)
+    ├── Build Stage: Node for building
+    └── Runtime: nginx:alpine or caddy:alpine
+```
 
-### Framework-Specific Patterns
-- **Node/Express**: `app.get('/health', ...)`
-- **Python/Flask**: `@app.route('/health')`
-- **Go**: `http.HandleFunc("/health", ...)`
-- **Java/Spring**: `@GetMapping("/health")` or Actuator
+**Base Image Selection Criteria:**
+1. Security: Fewer packages = smaller attack surface
+2. Size: Smaller = faster pulls, less storage
+3. Compatibility: glibc vs musl (alpine)
+4. Updates: Official images with active maintenance
 
-### Port Detection
-- Look for `listen(3000)`, `port=8080`, `PORT` env var.
+### PHASE 2: BUILD STRATEGY
+Decide the build approach:
+```
+Multi-Stage (RECOMMENDED for production):
+├── Pros: Smaller images, no build tools in runtime
+├── Use when: Any compiled language, bundled JS apps
+└── Pattern: builder → runtime
 
-## Part 2: Readiness Pattern Strategy
+Single-Stage (Simpler but larger):
+├── Pros: Simpler Dockerfile, faster builds
+├── Use when: Simple interpreted apps, development
+└── Pattern: install deps → copy code → run
+```
 
-### Success Patterns (Log messages)
-- **Node**: `console.log('Server listening...')`
-- **Python**: `print(" * Running on http://...")`
-- **Go**: `log.Println("Server started...")`
-- **Java**: `Started Application in X seconds`
+**Dependency Analysis:**
+```
+Build-time only:          Runtime required:
+├── Compilers (gcc)       ├── Interpreters (python, node)
+├── Build tools (make)    ├── Native libraries (libpq)
+├── Dev headers (*-dev)   ├── Application code
+└── Test frameworks       └── Configuration files
+```
 
-### Failure Patterns
-- Fatal errors, panics, connection refused, missing dependencies.
+### PHASE 3: HEALTH & READINESS DETECTION
+Analyze the codebase for runtime signals:
 
-### Timing Estimation
-- Estimate startup time based on stack (Node/Go is fast, Java/DB-heavy is slower).
+**Health Endpoint Detection:**
+```python
+# Look for patterns like:
+@app.get("/health")      # FastAPI/Flask
+app.get('/health', ...)  # Express
+http.HandleFunc("/health", ...) # Go
+@GetMapping("/health")   # Spring Boot
+```
 
-## Output Requirements
-You must provide a structured result containing BOTH health detection and readiness patterns.
+**Startup Pattern Detection:**
+```
+Log patterns that indicate "ready":
+├── "Server listening on port"
+├── "Application started"
+├── "Ready to accept connections"
+├── "Listening on 0.0.0.0:"
+└── Framework-specific patterns
+```
+
+**Timing Estimates:**
+```
+Language/Framework    Typical Startup
+──────────────────────────────────────
+Go/Rust              < 1 second
+Node.js              1-3 seconds
+Python/Flask         1-5 seconds
+Java/Spring Boot     10-60 seconds
+```
+
+### PHASE 4: SECURITY CONSIDERATIONS
+Plan security hardening:
+```
+1. Non-root user: Create appuser with minimal permissions
+2. Read-only filesystem: Where possible
+3. No secrets in image: Use runtime environment
+4. Minimal packages: Only what's needed
+5. Specific versions: Pin base images, no :latest
+```
+
+### PHASE 5: LAYER OPTIMIZATION
+Plan for efficient caching:
+```
+Layer Order (rarely changes → frequently changes):
+1. Base image selection
+2. System package installation  
+3. Language dependency installation (package.json, requirements.txt)
+4. Source code copy
+5. Build commands
+6. Runtime configuration
+```
+
+## Previous Attempts (Learn from history)
+{retry_context}
+
+## Critical Outputs for Downstream Agents
+
+Your Blueprint MUST provide clear answers for:
+
+**Build Plan:**
+1. **base_image_strategy**: Specific images with versions (e.g., "python:3.11-slim for both")
+2. **build_strategy**: Detailed approach (e.g., "Multi-stage: poetry install → gunicorn runtime")
+3. **use_multi_stage**: Boolean decision with reasoning
+4. **dependency_install_strategy**: How to install deps efficiently
+5. **security_hardening**: Specific measures to implement
+6. **layer_optimization**: Caching strategy
+7. **potential_challenges**: What might go wrong
+8. **mitigation_strategies**: How to prevent issues
+
+**Runtime Config:**
+1. **primary_health_endpoint**: Path, port, method, expected response
+2. **startup_success_patterns**: Log patterns indicating readiness
+3. **startup_failure_patterns**: Log patterns indicating problems
+4. **estimated_startup_time**: How long to wait before checking
+
+## Anti-Patterns to Avoid
+- Choosing `alpine` for glibc-dependent apps
+- Using `:latest` tags (not reproducible)
+- Recommending single-stage for compiled languages
+- Ignoring build vs runtime dependency separation
+- Missing health endpoints that clearly exist in code
+- Underestimating startup times for JVM apps
+- Not considering CI/CD cache implications
+
+{custom_instructions}
 """
 
     # Get custom prompt if configured, otherwise use default
-    system_prompt = get_prompt("runtime_detector", default_prompt)
+    system_prompt = get_prompt("blueprint", default_prompt)
 
     # Create the chat prompt template
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
-        ("user", """Analyze these files to detect runtime configuration (Health + Readiness).
+        ("user", """Create a complete Dockerfile Blueprint.
 
-STACK: {stack}
+PROJECT CONTEXT:
+Stack: {stack}
+Project Type: {project_type}
+Suggested Base Image: {suggested_base_image}
+Build Command: {build_command}
+Start Command: {start_command}
 
 FILE CONTENTS:
 {file_contents}
 
-Find health endpoints, ports, and startup log patterns.
-Explain your reasoning in the thought process.""")
+Generate the Strategic Plan and Runtime Configuration.
+Explain your complete reasoning in the thought process.""")
     ])
+
     
     # Create the execution chain
     chain = prompt | structured_llm
@@ -1166,12 +697,16 @@ Explain your reasoning in the thought process.""")
         chain,
         {
             "stack": context.analysis_result.get("stack", "Unknown"),
-            "file_contents": context.file_contents
+            "project_type": context.analysis_result.get("project_type", "service"),
+            "suggested_base_image": context.analysis_result.get("suggested_base_image", ""),
+            "build_command": context.analysis_result.get("build_command", "None detected"),
+            "start_command": context.analysis_result.get("start_command", "None detected"),
+            "file_contents": context.file_contents,
+            "retry_context": retry_context,
+            "custom_instructions": context.custom_instructions or ""
         },
         [callback]
     )
+
     
     return result, callback.get_usage()
-
-
-

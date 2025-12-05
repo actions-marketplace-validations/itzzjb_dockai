@@ -106,7 +106,7 @@ You can skip validation with `--skip-validation`, but this is not recommended.
 | Agent | Typical Input Tokens | Output Tokens |
 |-------|---------------------|---------------|
 | Analyzer | 2,000-10,000 | 500-2,000 |
-| Planner | 1,000-3,000 | 500-1,500 |
+| Blueprint | 1,000-3,000 | 500-1,500 |
 | Generator | 2,000-5,000 | 500-2,000 |
 | Reviewer | 1,000-3,000 | 500-1,500 |
 

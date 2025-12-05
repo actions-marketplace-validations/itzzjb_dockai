@@ -29,7 +29,7 @@ dockai/
 │   ├── analyzer.py       # Project analysis and stack detection
 │   ├── generator.py      # Dockerfile generation
 │   ├── reviewer.py       # Security review
-│   └── agent_functions.py# Planner, reflector, and other agents
+│   └── agent_functions.py# Blueprint architect, reflector, and other agents
 ├── cli/                  # Command-line interface
 │   ├── main.py           # Typer CLI commands
 │   └── ui.py             # Rich console output helpers
@@ -254,11 +254,11 @@ if result.fixed_dockerfile:
 
 This module contains additional agents that don't have their own files.
 
-#### `create_plan(context: AgentContext) -> Tuple[PlanningResult, Dict[str, int]]`
+#### `create_blueprint(context: AgentContext) -> Tuple[BlueprintResult, Dict[str, int]]`
 
-Creates a strategic plan for Dockerfile generation.
+Creates a comprehensive blueprint for the Dockerfile generation process. This combines strategic planning and runtime configuration detection into a single step.
 
-**Purpose**: Make high-level decisions before generation. Planning separates "what to do" from "how to do it."
+**Purpose**: The "Architect" phase. It decides *how* to build the image and *how* to run it, before any code is written.
 
 **Parameters**:
 
@@ -267,34 +267,29 @@ Creates a strategic plan for Dockerfile generation.
 | `context` | `AgentContext` | Context with analysis, file contents, and retry history |
 
 **Returns**: A tuple of:
-- `PlanningResult`: Strategic plan
+- `BlueprintResult`: Combined plan and runtime config
 - `Dict[str, int]`: Token usage
 
 **Example**:
 
 ```python
-from dockai.agents.agent_functions import create_plan
+from dockai.agents.agent_functions import create_blueprint
 from dockai.core.agent_context import AgentContext
 
-context = AgentContext(
-    analysis_result={"stack": "Go 1.21", "project_type": "service"},
-    file_contents="module example.com/myapp\ngo 1.21\n",
-    retry_history=[]  # First attempt
-)
+context = AgentContext(...)
+result, usage = create_blueprint(context=context)
 
-plan, usage = create_plan(context=context)
+# Access Plan
+print(f"Build Strategy: {result.plan.build_strategy}")
+# "Multi-stage build with CGO_ENABLED=0"
 
-print(f"Base image strategy: {plan.base_image_strategy}")
-# "Use golang:1.21-alpine for build, distroless for runtime"
+# Access Runtime Config
+if result.runtime_config.primary_health_endpoint:
+    print(f"Health: {result.runtime_config.primary_health_endpoint.path}")
+    # "/health"
 
-print(f"Build strategy: {plan.build_strategy}")
-# "Multi-stage build with CGO_ENABLED=0 for static binary"
-
-print(f"Priorities: {plan.optimization_priorities}")
-# ["security", "size", "build_speed"]
-
-print(f"Challenges: {plan.potential_challenges}")
-# ["May need CA certificates for HTTPS calls"]
+print(f"Success Patterns: {result.runtime_config.startup_success_patterns}")
+# ["Server listening on port 8080"]
 ```
 
 ---
@@ -350,75 +345,6 @@ print(f"Lessons: {result.lessons_learned}")
 
 ---
 
-#### `detect_health_endpoints(context: AgentContext) -> Tuple[HealthEndpointDetectionResult, Dict[str, int]]`
-
-Searches source code to find health check endpoints.
-
-**Purpose**: Discover health endpoints for HEALTHCHECK instructions.
-
-**Example**:
-
-```python
-from dockai.agents.agent_functions import detect_health_endpoints
-from dockai.core.agent_context import AgentContext
-
-context = AgentContext(
-    file_contents="""
-@app.get("/health")
-def health():
-    return {"status": "healthy"}
-
-@app.get("/api/users")
-def get_users():
-    ...
-    """,
-    analysis_result={"stack": "FastAPI"}
-)
-
-result, usage = detect_health_endpoints(context=context)
-
-print(f"Detected: {result.detected}")  # True
-print(f"Endpoint: {result.endpoint}")   # {"path": "/health", "port": 8000, "method": "GET"}
-print(f"Confidence: {result.confidence}")  # 0.95
-print(f"Evidence: {result.evidence}")  # ["Found /health endpoint returning status"]
-```
-
----
-
-#### `detect_readiness_patterns(context: AgentContext) -> Tuple[ReadinessPatternResult, Dict[str, int]]`
-
-Analyzes code to find patterns indicating successful startup.
-
-**Purpose**: Know when the container is ready for traffic.
-
-**Example**:
-
-```python
-from dockai.agents.agent_functions import detect_readiness_patterns
-from dockai.core.agent_context import AgentContext
-
-context = AgentContext(
-    file_contents="""
-if __name__ == "__main__":
-    print("Starting server...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-    """,
-    analysis_result={"stack": "FastAPI with Uvicorn"}
-)
-
-result, usage = detect_readiness_patterns(context=context)
-
-print(f"Success patterns: {result.success_patterns}")
-# ["Uvicorn running on", "Started server process"]
-
-print(f"Failure patterns: {result.failure_patterns}")
-# ["Error:", "ModuleNotFoundError"]
-
-print(f"Startup time: {result.estimated_startup_time}")  # 5 seconds
-```
-
----
-
 ## Core Module
 
 The core module contains fundamental data structures and services.
@@ -448,8 +374,6 @@ A dataclass that provides unified context to all AI agents. This ensures all age
 | `custom_instructions` | `str` | User-provided guidance |
 | `verified_tags` | `str` | Docker image tags verified to exist |
 | `retry_count` | `int` | Current retry number |
-| `health_result` | `Optional[Dict]` | Health endpoint detection results |
-| `readiness_result` | `Optional[Dict]` | Readiness pattern results |
 
 **Example**:
 
@@ -802,8 +726,8 @@ Configuration for custom prompts and instructions.
 class PromptConfig:
     analyzer: Optional[str] = None
     analyzer_instructions: Optional[str] = None
-    planner: Optional[str] = None
-    planner_instructions: Optional[str] = None
+    blueprint: Optional[str] = None
+    blueprint_instructions: Optional[str] = None
     generator: Optional[str] = None
     generator_instructions: Optional[str] = None
     # ... more agents

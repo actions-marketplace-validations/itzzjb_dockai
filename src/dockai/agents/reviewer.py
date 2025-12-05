@@ -58,9 +58,9 @@ def review_dockerfile(context: 'AgentContext') -> Tuple[SecurityReviewResult, An
 
 ## Your Role in the Pipeline
 ```
-Analyzer → Planner → Generator → [YOU: Reviewer] → Validator
-                          ↓              ↓
-                     Dockerfile    Pass/Fail + Fixed Version
+Analyzer → Blueprint → Generator → [YOU: Reviewer] → Validator
+                           ↓              ↓
+                      Dockerfile    Pass/Fail + Fixed Version
 ```
 
 ## Your Mission

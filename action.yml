@@ -40,8 +40,8 @@ inputs:
     description: 'Model for analyzer agent (default: gpt-4o-mini for openai, gemini-1.5-flash for gemini)'
     required: false
     default: ''
-  model_planner:
-    description: 'Model for planner agent'
+  model_blueprint:
+    description: 'Model for blueprint agent (Chief Architect)'
     required: false
     default: ''
   model_generator:
@@ -58,14 +58,6 @@ inputs:
     default: ''
   model_reflector:
     description: 'Model for failure reflection agent'
-    required: false
-    default: ''
-  model_health_detector:
-    description: 'Model for health endpoint detection agent'
-    required: false
-    default: ''
-  model_readiness_detector:
-    description: 'Model for readiness pattern detection agent'
     required: false
     default: ''
   model_error_analyzer:
@@ -131,8 +123,8 @@ inputs:
     required: false
     default: ''
   # Additional Custom Instructions (all agents)
-  planner_instructions:
-    description: 'Custom instructions for the planner (strategic thinking agent)'
+  blueprint_instructions:
+    description: 'Custom instructions for the blueprint agent (Chief Architect)'
     required: false
     default: ''
   generator_iterative_instructions:
@@ -145,14 +137,6 @@ inputs:
     default: ''
   reflector_instructions:
     description: 'Custom instructions for failure analysis (detective agent)'
-    required: false
-    default: ''
-  health_detector_instructions:
-    description: 'Custom instructions for health endpoint discovery agent'
-    required: false
-    default: ''
-  readiness_detector_instructions:
-    description: 'Custom instructions for readiness pattern analysis agent'
     required: false
     default: ''
   error_analyzer_instructions:
@@ -168,8 +152,8 @@ inputs:
     description: 'Custom prompt - project discovery and deduction agent'
     required: false
     default: ''
-  prompt_planner:
-    description: 'Custom prompt - strategic planning agent (chess grandmaster)'
+  prompt_blueprint:
+    description: 'Custom prompt - blueprint agent (Chief Architect)'
     required: false
     default: ''
   prompt_generator:
@@ -186,14 +170,6 @@ inputs:
     default: ''
   prompt_reflector:
     description: 'Custom prompt - detective and post-mortem analysis agent'
-    required: false
-    default: ''
-  prompt_health_detector:
-    description: 'Custom prompt - evidence-based health endpoint discovery agent'
-    required: false
-    default: ''
-  prompt_readiness_detector:
-    description: 'Custom prompt - behavioral startup pattern analysis agent'
     required: false
     default: ''
   prompt_error_analyzer:
@@ -244,13 +220,11 @@ runs:
         ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
         # Per-Agent Model Configuration
         DOCKAI_MODEL_ANALYZER: ${{ inputs.model_analyzer }}
-        DOCKAI_MODEL_PLANNER: ${{ inputs.model_planner }}
+        DOCKAI_MODEL_BLUEPRINT: ${{ inputs.model_blueprint }}
         DOCKAI_MODEL_GENERATOR: ${{ inputs.model_generator }}
         DOCKAI_MODEL_GENERATOR_ITERATIVE: ${{ inputs.model_generator_iterative }}
         DOCKAI_MODEL_REVIEWER: ${{ inputs.model_reviewer }}
         DOCKAI_MODEL_REFLECTOR: ${{ inputs.model_reflector }}
-        DOCKAI_MODEL_HEALTH_DETECTOR: ${{ inputs.model_health_detector }}
-        DOCKAI_MODEL_READINESS_DETECTOR: ${{ inputs.model_readiness_detector }}
         DOCKAI_MODEL_ERROR_ANALYZER: ${{ inputs.model_error_analyzer }}
         DOCKAI_MODEL_ITERATIVE_IMPROVER: ${{ inputs.model_iterative_improver }}
         # Legacy model env vars (for backward compatibility)
@@ -271,23 +245,19 @@ runs:
         # Custom Instructions
         DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
         DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
-        DOCKAI_PLANNER_INSTRUCTIONS: ${{ inputs.planner_instructions }}
+        DOCKAI_BLUEPRINT_INSTRUCTIONS: ${{ inputs.blueprint_instructions }}
         DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS: ${{ inputs.generator_iterative_instructions }}
         DOCKAI_REVIEWER_INSTRUCTIONS: ${{ inputs.reviewer_instructions }}
         DOCKAI_REFLECTOR_INSTRUCTIONS: ${{ inputs.reflector_instructions }}
-        DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS: ${{ inputs.health_detector_instructions }}
-        DOCKAI_READINESS_DETECTOR_INSTRUCTIONS: ${{ inputs.readiness_detector_instructions }}
         DOCKAI_ERROR_ANALYZER_INSTRUCTIONS: ${{ inputs.error_analyzer_instructions }}
         DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS: ${{ inputs.iterative_improver_instructions }}
         # Custom Prompts
         DOCKAI_PROMPT_ANALYZER: ${{ inputs.prompt_analyzer }}
-        DOCKAI_PROMPT_PLANNER: ${{ inputs.prompt_planner }}
+        DOCKAI_PROMPT_BLUEPRINT: ${{ inputs.prompt_blueprint }}
         DOCKAI_PROMPT_GENERATOR: ${{ inputs.prompt_generator }}
         DOCKAI_PROMPT_GENERATOR_ITERATIVE: ${{ inputs.prompt_generator_iterative }}
         DOCKAI_PROMPT_REVIEWER: ${{ inputs.prompt_reviewer }}
         DOCKAI_PROMPT_REFLECTOR: ${{ inputs.prompt_reflector }}
-        DOCKAI_PROMPT_HEALTH_DETECTOR: ${{ inputs.prompt_health_detector }}
-        DOCKAI_PROMPT_READINESS_DETECTOR: ${{ inputs.prompt_readiness_detector }}
         DOCKAI_PROMPT_ERROR_ANALYZER: ${{ inputs.prompt_error_analyzer }}
         DOCKAI_PROMPT_ITERATIVE_IMPROVER: ${{ inputs.prompt_iterative_improver }}
         # Observability & Tracing

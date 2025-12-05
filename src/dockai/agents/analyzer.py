@@ -59,9 +59,9 @@ def analyze_repo_needs(context: 'AgentContext') -> Tuple[AnalysisResult, Dict[st
 
 ## Your Role in the Pipeline
 ```
-[YOU: Analyzer] → Planner → Generator → Reviewer → Validator → (Reflector if failed)
+[YOU: Analyzer] → Blueprint → Generator → Reviewer → Validator → (Reflector if failed)
 ```
-Your output directly feeds the Planner and Generator. Poor analysis = poor Dockerfile. Be thorough.
+Your output directly feeds the Blueprint Architect and Generator. Poor analysis = poor Dockerfile. Be thorough.
 
 ## Your Mission
 Analyze this software project from FIRST PRINCIPLES. You have NO assumptions - discover everything from evidence.
