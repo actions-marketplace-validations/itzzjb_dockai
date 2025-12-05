@@ -389,7 +389,7 @@ Final Dockerfile saved to /path/to/project/Dockerfile
 │   • blueprint: 950 tokens                               │
 │   • generator: 1,234 tokens                             │
 │   • reviewer: 645 tokens                                │
-│   • validator: 802 tokens                               │
+│   • reflector: 802 tokens (if retry needed)             │
 ╰─────────────────────────────────────────────────────────╯
 ```
 
@@ -493,7 +493,7 @@ DockAI reports token usage after each run. Understanding this helps you:
 │   • blueprint: 950 tokens   ← Plan & Runtime Config     │
 │   • generator: 1,234 tokens ← Dockerfile creation       │
 │   • reviewer: 645 tokens    ← Security review           │
-│   • validator: 802 tokens   ← Error analysis (if any)   │
+│   • reflector: 802 tokens   ← Error analysis (if retry) │
 ╰─────────────────────────────────────────────────────────╯
 ```
 
