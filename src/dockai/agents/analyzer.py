@@ -55,7 +55,7 @@ def analyze_repo_needs(context: 'AgentContext') -> Tuple[AnalysisResult, Dict[st
     structured_llm = llm.with_structured_output(AnalysisResult)
     
     # Default system prompt for the Build Engineer persona
-    default_prompt = """You are the ANALYZER agent in a multi-agent Dockerfile generation pipeline. You are AGENT 1 of 10 - your analysis is the foundation that all downstream agents depend on.
+    default_prompt = """You are the ANALYZER agent in a multi-agent Dockerfile generation pipeline. You are AGENT 1 of 8 - your analysis is the foundation that all downstream agents depend on.
 
 ## Your Role in the Pipeline
 ```

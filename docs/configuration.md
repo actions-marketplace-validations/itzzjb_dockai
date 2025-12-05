@@ -133,7 +133,7 @@ dockai build .
 
 ## Per-Agent Model Configuration
 
-DockAI has 10 specialized agents. You can assign different models to each for cost optimization.
+DockAI has 8 specialized agents. You can assign different models to each for cost optimization.
 
 ### The Model Variables
 

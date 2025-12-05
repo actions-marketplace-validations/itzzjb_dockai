@@ -9,7 +9,7 @@ This document provides a deep dive into DockAI's architecture, explaining not ju
 1. [Design Philosophy](#design-philosophy)
 2. [High-Level Architecture](#high-level-architecture)
 3. [The LangGraph State Machine](#the-langgraph-state-machine)
-4. [The 10 AI Agents](#the-10-ai-agents)
+4. [The 8 AI Agents](#the-8-ai-agents)
 5. [The AgentContext Pattern](#the-agentcontext-pattern)
 6. [Data Flow](#data-flow)
 7. [The Self-Correcting Loop](#the-self-correcting-loop)

@@ -60,7 +60,7 @@ That's it. DockAI handles the rest.
       <p>Built-in Trivy CVE scanning and Hadolint linting. Enforces non-root users, minimal base images, and hardened configs.</p>
     </td>
     <td width="50%">
-      <h3>🤖 10 Specialized Agents</h3>
+      <h3>🤖 8 Specialized Agents</h3>
       <p>Each agent handles a specific task: analysis, planning, generation, review, and more. All fully customizable.</p>
     </td>
   </tr>

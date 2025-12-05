@@ -506,7 +506,7 @@ Lesson learned: {attempt.get('lesson_learned', 'Unknown')}
 """
     
     # Define the default system prompt for the "Chief Architect" persona
-    default_prompt = """You are the BLUEPRINT agent in a multi-agent Dockerfile generation pipeline. You are AGENT 2 of 10 - the Chief Architect who creates the strategic blueprint that guides all downstream agents.
+    default_prompt = """You are the BLUEPRINT agent in a multi-agent Dockerfile generation pipeline. You are AGENT 2 of 8 - the Chief Architect who creates the strategic blueprint that guides all downstream agents.
 
 ## Your Role in the Pipeline
 ```

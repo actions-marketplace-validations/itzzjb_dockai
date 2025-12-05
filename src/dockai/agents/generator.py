@@ -130,7 +130,7 @@ STRATEGIC PLAN (Follow this guidance):
 """
     
     # Define the default system prompt for the "Senior Docker Architect" persona
-    default_prompt = """You are the GENERATOR agent in a multi-agent Dockerfile generation pipeline. You are AGENT 3 of 10 - the craftsman who transforms plans into working Dockerfiles.
+    default_prompt = """You are the GENERATOR agent in a multi-agent Dockerfile generation pipeline. You are AGENT 3 of 8 - the craftsman who transforms plans into working Dockerfiles.
 
 ## Your Role in the Pipeline
 ```

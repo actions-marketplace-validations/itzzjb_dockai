@@ -54,7 +54,7 @@ def review_dockerfile(context: 'AgentContext') -> Tuple[SecurityReviewResult, An
     structured_llm = llm.with_structured_output(SecurityReviewResult)
     
     # Define the default system prompt for the "Lead Security Engineer" persona
-    default_prompt = """You are the REVIEWER agent in a multi-agent Dockerfile generation pipeline. You are AGENT 4 of 10 - the security gatekeeper that must approve or reject Dockerfiles.
+    default_prompt = """You are the REVIEWER agent in a multi-agent Dockerfile generation pipeline. You are AGENT 4 of 8 - the security gatekeeper that must approve or reject Dockerfiles.
 
 ## Your Role in the Pipeline
 ```
