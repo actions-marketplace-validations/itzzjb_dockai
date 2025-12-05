@@ -74,8 +74,9 @@ flowchart TB
         
         validate -->|"should_retry"| reflect["reflect_node"]
         reflect --> increment["increment_retry"]
-        increment -->|"check_reanalysis"| blueprint
-        increment -->|"check_reanalysis"| analyze
+        increment -->|"minor fix"| generate
+        increment -->|"strategy change"| blueprint
+        increment -->|"wrong assumptions"| analyze
         validate -->|"end"| done["END"]
     end
     
