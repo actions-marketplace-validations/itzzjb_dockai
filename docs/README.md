@@ -259,7 +259,7 @@ Show what the AI is thinking (thought processes), what tokens are used, and why 
 
 ## 📦 Version
 
-This documentation is for **DockAI v3.1.4**.
+This documentation is for **DockAI v3.1.5**.
 
 View the [Release Process](./releases.md) for versioning and release information.
 
