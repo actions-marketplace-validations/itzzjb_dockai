@@ -30,7 +30,8 @@ from ..core.schemas import (
     ReflectionResult,
     HealthEndpointDetectionResult,
     ReadinessPatternResult,
-    IterativeDockerfileResult
+    IterativeDockerfileResult,
+    RuntimeConfigResult
 )
 from ..utils.callbacks import TokenUsageCallback
 from ..utils.rate_limiter import with_rate_limit_handling
@@ -1056,6 +1057,116 @@ Explain your changes in the thought process.""")
             "start_command": context.analysis_result.get("start_command", "None"),
             "file_contents": context.file_contents,
             "custom_instructions": context.custom_instructions
+        },
+        [callback]
+    )
+    
+    return result, callback.get_usage()
+
+
+def detect_runtime_config(context: 'AgentContext') -> Tuple[RuntimeConfigResult, Dict[str, int]]:
+    """
+    Combined analysis of runtime configuration: health endpoints and readiness patterns.
+    
+    This function replaces the separate health and readiness detection steps to improve
+    efficiency by making a single LLM call.
+    
+    Args:
+        context (AgentContext): Unified context containing file contents and analysis results.
+        
+    Returns:
+        Tuple[RuntimeConfigResult, Dict[str, int]]: A tuple containing:
+            - The combined runtime configuration result.
+            - A dictionary tracking token usage.
+    """
+    from ..core.agent_context import AgentContext
+    
+    # Create LLM using the provider factory for the runtime detector agent
+    # We use the same model as the other detectors (usually a fast one)
+    llm = create_llm(agent_name="health_detector", temperature=0)
+    
+    # Configure the LLM to return a structured output matching the RuntimeConfigResult schema
+    structured_llm = llm.with_structured_output(RuntimeConfigResult)
+    
+    # Define the default system prompt combining Health and Readiness detection
+    default_prompt = """You are the RUNTIME CONFIG DETECTOR agent in a multi-agent Dockerfile generation pipeline.
+    
+## Your Role in the Pipeline
+```
+Analyzer → [YOU: Runtime Detector] → Planner → Generator
+                   ↓
+         Health endpoints + Readiness patterns
+```
+
+## Your Mission
+Analyze source code to discover TWO key things in a single pass:
+1. **Health Check Endpoints**: URLs the container can hit to verify it's healthy.
+2. **Readiness Patterns**: Log messages that indicate the app has started successfully.
+
+## Part 1: Health Detection Strategy
+
+### Identify Application Type & Health Approach
+- **Web Server/API**: Look for HTTP endpoints (GET /health, /healthz, /ready)
+- **gRPC Service**: Look for gRPC health check protocol
+- **TCP Service**: TCP port check
+- **Worker/Consumer**: Custom health file or no health check
+
+### Framework-Specific Patterns
+- **Node/Express**: `app.get('/health', ...)`
+- **Python/Flask**: `@app.route('/health')`
+- **Go**: `http.HandleFunc("/health", ...)`
+- **Java/Spring**: `@GetMapping("/health")` or Actuator
+
+### Port Detection
+- Look for `listen(3000)`, `port=8080`, `PORT` env var.
+
+## Part 2: Readiness Pattern Strategy
+
+### Success Patterns (Log messages)
+- **Node**: `console.log('Server listening...')`
+- **Python**: `print(" * Running on http://...")`
+- **Go**: `log.Println("Server started...")`
+- **Java**: `Started Application in X seconds`
+
+### Failure Patterns
+- Fatal errors, panics, connection refused, missing dependencies.
+
+### Timing Estimation
+- Estimate startup time based on stack (Node/Go is fast, Java/DB-heavy is slower).
+
+## Output Requirements
+You must provide a structured result containing BOTH health detection and readiness patterns.
+"""
+
+    # Get custom prompt if configured, otherwise use default
+    system_prompt = get_prompt("runtime_detector", default_prompt)
+
+    # Create the chat prompt template
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("user", """Analyze these files to detect runtime configuration (Health + Readiness).
+
+STACK: {stack}
+
+FILE CONTENTS:
+{file_contents}
+
+Find health endpoints, ports, and startup log patterns.
+Explain your reasoning in the thought process.""")
+    ])
+    
+    # Create the execution chain
+    chain = prompt | structured_llm
+    
+    # Initialize callback to track token usage
+    callback = TokenUsageCallback()
+    
+    # Execute the chain
+    result = safe_invoke_chain(
+        chain,
+        {
+            "stack": context.analysis_result.get("stack", "Unknown"),
+            "file_contents": context.file_contents
         },
         [callback]
     )

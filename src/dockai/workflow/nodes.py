@@ -23,8 +23,7 @@ from ..utils.registry import get_docker_tags
 from ..agents.agent_functions import (
     create_plan,
     reflect_on_failure,
-    detect_health_endpoints,
-    detect_readiness_patterns,
+    detect_runtime_config,
     generate_iterative_dockerfile
 )
 from ..core.llm_providers import get_model_for_agent
@@ -179,42 +178,36 @@ def read_files_node(state: DockAIState) -> DockAIState:
     return {"file_contents": file_contents_str}
 
 
-def detect_health_node(state: DockAIState) -> DockAIState:
+def detect_runtime_config_node(state: DockAIState) -> DockAIState:
     """
-    AI-powered health endpoint detection from actual file contents.
+    Combined AI-powered detection of health endpoints and startup patterns.
     
-    Unlike the initial analysis which might guess based on filenames, this node
-    uses an LLM to scan the code content for route definitions (e.g., @app.get('/health'))
-    to accurately identify health check endpoints.
-
+    This node replaces the separate health and readiness detection steps to improve
+    efficiency by making a single LLM call.
+    
     Args:
         state (DockAIState): The current state with file contents.
-
+        
     Returns:
-        DockAIState: Updated state with 'detected_health_endpoint' and usage stats.
+        DockAIState: Updated state with health endpoints, readiness patterns, and usage stats.
     """
     file_contents = state.get("file_contents", "")
     analysis_result = state.get("analysis_result", {})
     
-    # Skip if analyzer already found a high-confidence endpoint
-    existing_health = analysis_result.get("health_endpoint")
-    if existing_health:
-        logger.info(f"Using analyzer-detected health endpoint: {existing_health.get('path')}:{existing_health.get('port')}")
-        return {}
-    
-    logger.info("Detecting health endpoints from code...")
+    logger.info("Detecting runtime configuration (health & readiness)...")
     
     try:
         from ..core.agent_context import AgentContext
-        health_context = AgentContext(
+        context = AgentContext(
             file_tree=state.get("file_tree", []),
             file_contents=file_contents,
             analysis_result=analysis_result
         )
-        detection_result, usage = detect_health_endpoints(context=health_context)
+        
+        result, usage = detect_runtime_config(context=context)
         
         usage_dict = {
-            "stage": "health_detection",
+            "stage": "runtime_detector",
             "prompt_tokens": usage.get("prompt_tokens", 0),
             "completion_tokens": usage.get("completion_tokens", 0),
             "total_tokens": usage.get("total_tokens", 0),
@@ -223,71 +216,23 @@ def detect_health_node(state: DockAIState) -> DockAIState:
         
         current_stats = state.get("usage_stats", [])
         
-        # Store detected health endpoint
+        # Process Health Endpoint
         detected_endpoint = None
-        if detection_result.primary_health_endpoint:
-            detected_endpoint = detection_result.primary_health_endpoint.model_dump() if hasattr(detection_result.primary_health_endpoint, 'model_dump') else detection_result.primary_health_endpoint
+        if result.primary_health_endpoint:
+            detected_endpoint = result.primary_health_endpoint.model_dump() if hasattr(result.primary_health_endpoint, 'model_dump') else result.primary_health_endpoint
             logger.info(f"Detected health endpoint: {detected_endpoint}")
-        elif detection_result.confidence != "none":
-            logger.info(f"Health detection confidence: {detection_result.confidence}")
+            
+        # Process Readiness Patterns
+        logger.info(f"Detected {len(result.startup_success_patterns)} success patterns")
         
         return {
             "detected_health_endpoint": detected_endpoint,
+            "readiness_patterns": result.startup_success_patterns,
+            "failure_patterns": result.startup_failure_patterns,
             "usage_stats": current_stats + [usage_dict]
         }
     except Exception as e:
-        logger.warning(f"Health endpoint detection failed: {e}")
-        return {}
-
-
-def detect_readiness_node(state: DockAIState) -> DockAIState:
-    """
-    AI-powered detection of startup log patterns.
-    
-    This node analyzes the code to predict what the application will log when
-    it starts successfully (e.g., "Server listening on port 8080"). This allows
-    for smart readiness checking instead of relying on arbitrary sleep times.
-
-    Args:
-        state (DockAIState): The current state with file contents.
-
-    Returns:
-        DockAIState: Updated state with 'readiness_patterns', 'failure_patterns', and usage stats.
-    """
-    file_contents = state.get("file_contents", "")
-    analysis_result = state.get("analysis_result", {})
-    
-    logger.info("Detecting startup readiness patterns...")
-    
-    try:
-        from ..core.agent_context import AgentContext
-        readiness_context = AgentContext(
-            file_tree=state.get("file_tree", []),
-            file_contents=file_contents,
-            analysis_result=analysis_result
-        )
-        patterns_result, usage = detect_readiness_patterns(context=readiness_context)
-        
-        usage_dict = {
-            "stage": "readiness_detection",
-            "prompt_tokens": usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "total_tokens": usage.get("total_tokens", 0),
-            "model": get_model_for_agent("readiness_detector")
-        }
-        
-        current_stats = state.get("usage_stats", [])
-        
-        logger.info(f"Detected {len(patterns_result.startup_success_patterns)} success patterns, {len(patterns_result.startup_failure_patterns)} failure patterns")
-        logger.info(f"Estimated startup time: {patterns_result.estimated_startup_time}s (max wait: {patterns_result.max_wait_time}s)")
-        
-        return {
-            "readiness_patterns": patterns_result.startup_success_patterns,
-            "failure_patterns": patterns_result.startup_failure_patterns,
-            "usage_stats": current_stats + [usage_dict]
-        }
-    except Exception as e:
-        logger.warning(f"Readiness pattern detection failed: {e}")
+        logger.warning(f"Runtime configuration detection failed: {e}")
         return {"readiness_patterns": [], "failure_patterns": []}
 
 

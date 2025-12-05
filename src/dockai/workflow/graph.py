@@ -22,8 +22,7 @@ from .nodes import (
     scan_node,
     analyze_node,
     read_files_node,
-    detect_health_node,
-    detect_readiness_node,
+    detect_runtime_config_node,
     plan_node,
     generate_node,
     review_node,
@@ -179,8 +178,7 @@ def create_graph():
     workflow.add_node("scan", scan_node)
     workflow.add_node("analyze", analyze_node)
     workflow.add_node("read_files", read_files_node)
-    workflow.add_node("detect_health", detect_health_node)
-    workflow.add_node("detect_readiness", detect_readiness_node)
+    workflow.add_node("detect_runtime_config", detect_runtime_config_node)
     workflow.add_node("plan", plan_node)
     workflow.add_node("generate", generate_node)
     workflow.add_node("review", review_node)
@@ -194,9 +192,8 @@ def create_graph():
     # Define the main linear flow
     workflow.add_edge("scan", "analyze")
     workflow.add_edge("analyze", "read_files")
-    workflow.add_edge("read_files", "detect_health")
-    workflow.add_edge("detect_health", "detect_readiness")
-    workflow.add_edge("detect_readiness", "plan")
+    workflow.add_edge("read_files", "detect_runtime_config")
+    workflow.add_edge("detect_runtime_config", "plan")
     workflow.add_edge("plan", "generate")
     workflow.add_edge("generate", "review")
     

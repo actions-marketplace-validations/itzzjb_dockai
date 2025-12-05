@@ -286,3 +286,44 @@ class IterativeDockerfileResult(BaseModel):
     )
     
     project_type: Literal["service", "script"] = Field(description="Re-confirmed project type")
+
+
+class RuntimeConfigResult(BaseModel):
+    """
+    Combined result for runtime configuration detection (health endpoints and readiness patterns).
+    
+    This model combines health detection and readiness pattern analysis into a single
+    LLM call to improve efficiency.
+    """
+    thought_process: str = Field(description="Reasoning about runtime configuration detection")
+    
+    # Health Detection
+    health_endpoints_found: List[HealthEndpoint] = Field(
+        default=[],
+        description="List of detected health endpoints with their paths and ports"
+    )
+    primary_health_endpoint: Optional[HealthEndpoint] = Field(
+        default=None,
+        description="The primary health endpoint to use for validation"
+    )
+    health_confidence: Literal["high", "medium", "low", "none"] = Field(
+        description="Confidence in the health detection"
+    )
+    
+    # Readiness Detection
+    startup_success_patterns: List[str] = Field(
+        description="Regex patterns that indicate successful startup"
+    )
+    startup_failure_patterns: List[str] = Field(
+        description="Regex patterns that indicate startup failure"
+    )
+    estimated_startup_time: int = Field(
+        description="Estimated time in seconds for the application to start",
+        ge=1,
+        le=300
+    )
+    max_wait_time: int = Field(
+        description="Maximum time to wait before considering startup failed",
+        ge=5,
+        le=600
+    )

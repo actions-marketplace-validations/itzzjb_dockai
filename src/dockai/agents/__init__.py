@@ -17,6 +17,7 @@ from .agent_functions import (
     reflect_on_failure,
     detect_health_endpoints,
     detect_readiness_patterns,
+    detect_runtime_config,
     generate_iterative_dockerfile,
 )
 
@@ -28,5 +29,6 @@ __all__ = [
     "reflect_on_failure",
     "detect_health_endpoints",
     "detect_readiness_patterns",
+    "detect_runtime_config",
     "generate_iterative_dockerfile",
 ]
