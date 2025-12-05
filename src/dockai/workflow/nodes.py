@@ -291,13 +291,13 @@ def generate_node(state: DockAIState) -> DockAIState:
         
         verified_tags_str = ", ".join(verified_tags) if verified_tags else "Use your best judgement based on the detected technology stack."
         
-        # Dynamic Model Selection: Use smarter model for retries/complex tasks
+        # Use powerful model for initial generation - better quality upfront reduces retries
+        # This optimization reduces total token usage by avoiding costly retry cycles
+        model_name = get_model_for_agent("generator")  # Always use powerful model
         if retry_count == 0:
-            model_name = get_model_for_agent("analyzer") # Use fast model for draft
-            logger.info(f"Generating Dockerfile (Draft Model: {model_name})...")
+            logger.info(f"Generating Dockerfile (Model: {model_name})...")
         else:
-            model_name = get_model_for_agent("generator") # Use powerful model for fixes
-            logger.info(f"Improving Dockerfile (Expert Model: {model_name}, attempt {retry_count + 1})...")
+            logger.info(f"Improving Dockerfile (Model: {model_name}, attempt {retry_count + 1})...")
         
         # Decide: Fresh generation or iterative improvement?
         if reflection and previous_dockerfile and retry_count > 0:
@@ -640,15 +640,17 @@ def reflect_node(state: DockAIState) -> DockAIState:
         span.set_attribute("confidence", reflection_result.confidence_in_fix)
         span.set_attribute("needs_reanalysis", reflection_result.needs_reanalysis)
         
-        # Add to retry history for learning
+        # Add to retry history for learning (compact format to save tokens)
+        # We intentionally exclude full dockerfile_content - it's stored in previous_dockerfile
+        # and including it here would bloat context on subsequent retries
         new_retry_entry = {
             "attempt_number": state.get("retry_count", 0) + 1,
-            "dockerfile_content": dockerfile_content,
-            "error_message": error_message,
             "error_type": error_details.get("error_type", "unknown") if error_details else "unknown",
+            "error_summary": error_message[:200] if error_message else "Unknown",  # Truncate long errors
             "what_was_tried": reflection_result.what_was_tried,
             "why_it_failed": reflection_result.why_it_failed,
-            "lesson_learned": reflection_result.lesson_learned
+            "lesson_learned": reflection_result.lesson_learned,
+            "fix_applied": ", ".join(reflection_result.specific_fixes[:2]) if reflection_result.specific_fixes else ""  # Top 2 fixes only
         }
         
         updated_history = retry_history + [new_retry_entry]

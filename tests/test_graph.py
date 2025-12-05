@@ -267,7 +267,7 @@ def test_read_files_node_truncation_via_env_var():
 @patch("dockai.workflow.nodes.generate_dockerfile")
 @patch("dockai.workflow.nodes.get_docker_tags")
 def test_generate_node_first_attempt(mock_get_tags, mock_generate):
-    """Test generate node on first attempt (uses cheaper model)"""
+    """Test generate node on first attempt (uses powerful model upfront to reduce retries)"""
     
     mock_get_tags.return_value = ["python:3.11-alpine", "python:3.11-slim"]
     mock_generate.return_value = (
@@ -296,8 +296,8 @@ def test_generate_node_first_attempt(mock_get_tags, mock_generate):
     assert result["dockerfile_content"] == "FROM python:3.11-alpine"
     assert result["error"] is None
     assert len(result["usage_stats"]) == 1
-    # Should use MODEL_ANALYZER on first attempt
-    assert result["usage_stats"][0]["model"] == "gpt-4o-mini"
+    # Now uses MODEL_GENERATOR (powerful) on first attempt to reduce retry cycles
+    assert result["usage_stats"][0]["model"] == "gpt-4o"
 
 @patch("dockai.workflow.nodes.generate_dockerfile")
 @patch("dockai.workflow.nodes.get_docker_tags")

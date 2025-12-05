@@ -102,11 +102,13 @@ cat > .env << EOF
 DOCKAI_LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-your-api-key-here
 
-# Cost optimization: use faster models for simple tasks
+# Model configuration (defaults are optimized for quality-first)
+# Fast models for simple tasks:
 DOCKAI_MODEL_ANALYZER=gpt-4o-mini
-DOCKAI_MODEL_BLUEPRINT=gpt-4o-mini
-DOCKAI_MODEL_GENERATOR=gpt-4o
 DOCKAI_MODEL_REVIEWER=gpt-4o-mini
+# Powerful models for critical tasks (reduces retries):
+DOCKAI_MODEL_BLUEPRINT=gpt-4o
+DOCKAI_MODEL_GENERATOR=gpt-4o
 
 # Security settings
 DOCKAI_STRICT_SECURITY=true

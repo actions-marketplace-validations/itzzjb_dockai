@@ -243,7 +243,7 @@ flowchart TB
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DOCKAI_MODEL_ANALYZER` | Model for project analyzer | `gpt-4o-mini` |
-| `DOCKAI_MODEL_BLUEPRINT` | Model for build architect (blueprint) | `gpt-4o-mini` |
+| `DOCKAI_MODEL_BLUEPRINT` | Model for build architect (blueprint) | `gpt-4o` |
 | `DOCKAI_MODEL_GENERATOR` | Model for Dockerfile generator | `gpt-4o` |
 | `DOCKAI_MODEL_GENERATOR_ITERATIVE` | Model for iterative generator | `gpt-4o` |
 | `DOCKAI_MODEL_REVIEWER` | Model for security reviewer | `gpt-4o-mini` |

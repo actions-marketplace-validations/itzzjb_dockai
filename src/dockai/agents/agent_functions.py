@@ -101,13 +101,15 @@ def reflect_on_failure(context: 'AgentContext') -> Tuple[ReflectionResult, Dict[
     # Configure structured output for consistent parsing of the reflection
     structured_llm = llm.with_structured_output(ReflectionResult)
     
-    # Construct the history of previous failures to provide context
+    # Construct the history of previous failures to provide context (compact format)
     retry_context = ""
     if context.retry_history and len(context.retry_history) > 0:
         retry_context = "\n\nPREVIOUS FAILED ATTEMPTS:\n"
         for i, attempt in enumerate(context.retry_history, 1):
             retry_context += f"""
 Attempt {i}: {attempt.get('what_was_tried', 'Unknown')} -> Failed: {attempt.get('why_it_failed', 'Unknown')}
+  Lesson: {attempt.get('lesson_learned', 'N/A')}
+  Fix applied: {attempt.get('fix_applied', 'N/A')}
 """
     
     # Define the default system prompt for the "Principal DevOps Engineer" persona
@@ -493,16 +495,17 @@ def create_blueprint(context: 'AgentContext') -> Tuple[BlueprintResult, Dict[str
     # Configure the LLM to return a structured output matching the BlueprintResult schema
     structured_llm = llm.with_structured_output(BlueprintResult)
     
-    # Construct retry context if available
+    # Construct retry context if available (compact format)
     retry_context = ""
     if context.retry_history and len(context.retry_history) > 0:
         retry_context = "\n\nPREVIOUS ATTEMPTS (LEARN FROM THESE):\n"
         for i, attempt in enumerate(context.retry_history, 1):
             retry_context += f"""
 --- Attempt {i} ---
-What was tried: {attempt.get('what_was_tried', 'Unknown')}
+Error: {attempt.get('error_type', 'unknown')} - {attempt.get('error_summary', 'Unknown')[:100]}
 Why it failed: {attempt.get('why_it_failed', 'Unknown')}
-Lesson learned: {attempt.get('lesson_learned', 'Unknown')}
+Lesson: {attempt.get('lesson_learned', 'Unknown')}
+Fix applied: {attempt.get('fix_applied', 'N/A')}
 """
     
     # Define the default system prompt for the "Chief Architect" persona

@@ -227,18 +227,18 @@ Completely replace default prompts (use with caution):
 
 ### Cost-Optimized Configuration
 
-Use cheaper/faster models for simple tasks:
+Quality-first approach (fewer retries = lower total cost):
 
 ```yaml
 - uses: itzzjb/dockai@v3
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-    # Fast models for simple tasks
+    # Fast models for pattern matching tasks
     model_analyzer: gpt-4o-mini
-    model_blueprint: gpt-4o-mini
     model_reviewer: gpt-4o-mini
     model_error_analyzer: gpt-4o-mini
-    # Powerful models where it matters
+    # Powerful models for critical tasks (default - reduces retries)
+    model_blueprint: gpt-4o
     model_generator: gpt-4o
     model_generator_iterative: gpt-4o
     model_reflector: gpt-4o

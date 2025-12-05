@@ -167,19 +167,21 @@ Not all tasks require the most powerful model:
 
 ### Cost Optimization Strategy
 
-Use powerful models only where needed:
+**Quality-first approach** (recommended): Use powerful models for critical agents. Better quality upfront reduces retries, which saves more tokens overall:
 
 ```bash
-# Recommended cost-optimized configuration
-DOCKAI_MODEL_ANALYZER=gpt-4o-mini        # Pattern matching
-DOCKAI_MODEL_BLUEPRINT=gpt-4o-mini         # Quick planning
-DOCKAI_MODEL_GENERATOR=gpt-4o            # Complex code gen (worth it)
-DOCKAI_MODEL_GENERATOR_ITERATIVE=gpt-4o  # Debugging (worth it)
-DOCKAI_MODEL_REVIEWER=gpt-4o-mini        # Rule checking
-DOCKAI_MODEL_REFLECTOR=gpt-4o            # Root cause analysis (worth it)
-DOCKAI_MODEL_ERROR_ANALYZER=gpt-4o-mini
-DOCKAI_MODEL_ITERATIVE_IMPROVER=gpt-4o   # Code modification (worth it)
+# Recommended: Quality-first (fewer retries = lower total cost)
+DOCKAI_MODEL_ANALYZER=gpt-4o-mini        # Pattern matching - fast is fine
+DOCKAI_MODEL_BLUEPRINT=gpt-4o            # Planning requires reasoning (default)
+DOCKAI_MODEL_GENERATOR=gpt-4o            # Code generation - quality matters (default)
+DOCKAI_MODEL_GENERATOR_ITERATIVE=gpt-4o  # Debugging (default)
+DOCKAI_MODEL_REVIEWER=gpt-4o-mini        # Rule checking - fast is fine
+DOCKAI_MODEL_REFLECTOR=gpt-4o            # Root cause analysis (default)
+DOCKAI_MODEL_ERROR_ANALYZER=gpt-4o-mini  # Classification - fast is fine
+DOCKAI_MODEL_ITERATIVE_IMPROVER=gpt-4o   # Code modification (default)
 ```
+
+**Why this saves money**: A single retry cycle costs ~3-5x more tokens than the initial generation. Investing in quality upfront typically reduces retry rate by 30-50%.
 
 ### Mixed Provider Configuration
 
@@ -632,20 +634,20 @@ OPENAI_API_KEY=sk-your-api-key-here
 
 ### Cost-Optimized Configuration
 
-For production with cost management:
+For production with quality-first approach (recommended):
 
 ```bash
 # .env
 DOCKAI_LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-your-api-key
 
-# Use fast models for simple tasks
+# Fast models for pattern matching tasks
 DOCKAI_MODEL_ANALYZER=gpt-4o-mini
-DOCKAI_MODEL_BLUEPRINT=gpt-4o-mini
 DOCKAI_MODEL_REVIEWER=gpt-4o-mini
 DOCKAI_MODEL_ERROR_ANALYZER=gpt-4o-mini
 
-# Use powerful models where it matters
+# Powerful models for critical tasks (default - reduces retries)
+DOCKAI_MODEL_BLUEPRINT=gpt-4o
 DOCKAI_MODEL_GENERATOR=gpt-4o
 DOCKAI_MODEL_GENERATOR_ITERATIVE=gpt-4o
 DOCKAI_MODEL_REFLECTOR=gpt-4o

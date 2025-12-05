@@ -562,29 +562,29 @@ The Reflector analyzes errors and decides the appropriate response:
 | Permission denied | User/ownership issues | Regenerate with correct perms |
 | Port conflict | Wrong port exposed | Regenerate with correct port |
 
-### Retry History
+### Retry History (Compact Format)
 
-Each retry builds on previous knowledge:
+Each retry builds on previous knowledge. The history is kept compact to save tokens (40-50% reduction):
 
 ```python
 retry_history = [
     {
-        "attempt": 1,
-        "dockerfile": "FROM python:3.11-alpine...",
-        "error": "pg_config executable not found",
-        "reflection": {
-            "root_cause": "psycopg2 needs PostgreSQL headers",
-            "lesson": "Alpine needs postgresql-dev for psycopg2"
-        }
+        "attempt_number": 1,
+        "error_type": "dependency_error",
+        "error_summary": "pg_config executable not found",  # Truncated to 200 chars
+        "what_was_tried": "Used alpine base with pip install",
+        "why_it_failed": "psycopg2 needs PostgreSQL headers to compile",
+        "lesson_learned": "Alpine needs postgresql-dev for psycopg2",
+        "fix_applied": "Add postgresql-dev to build dependencies"
     },
     {
-        "attempt": 2,
-        "dockerfile": "FROM python:3.11-slim...",
-        "error": "libpq.so.5 not found",
-        "reflection": {
-            "root_cause": "Runtime needs libpq",
-            "lesson": "Need libpq5 in final image, not just build stage"
-        }
+        "attempt_number": 2,
+        "error_type": "runtime_error",
+        "error_summary": "libpq.so.5 not found",
+        "what_was_tried": "Added build deps but used scratch runtime",
+        "why_it_failed": "Runtime needs libpq shared library",
+        "lesson_learned": "Need libpq5 in final image, not just build stage",
+        "fix_applied": "Use debian-slim runtime, install libpq5"
     }
 ]
 ```
