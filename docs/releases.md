@@ -201,6 +201,43 @@ Use this checklist for every release:
 
 ## Changelog
 
+### v3.1.5 (2025-12-05)
+
+**Fixes**:
+- Documentation consistency improvements
+- Fixed CLI flag references in FAQ to use environment variables
+- Updated agent counts in CLI help text
+- Fixed token usage breakdowns in documentation
+
+**Documentation**:
+- Ensured all version references are synchronized
+- Corrected node counts and deprecated terminology
+
+### v3.1.4 (2025-12-04)
+
+**Fixes**:
+- Minor bug fixes and stability improvements
+
+### v3.1.3 (2025-12-03)
+
+**Fixes**:
+- Bug fixes for LangSmith observability integration
+- Improved GitHub Actions workflow
+
+### v3.1.2 (2025-12-03)
+
+**Features**:
+- Added LangSmith observability support in GitHub Actions
+
+**Fixes**:
+- Version synchronization improvements
+
+### v3.1.1 (2025-12-XX)
+
+**Fixes**:
+- Minor stability improvements
+- Documentation updates
+
 ### v3.1.0 (2024-XX-XX)
 
 **Features**:
