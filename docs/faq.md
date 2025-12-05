@@ -50,7 +50,7 @@ Yes, DockAI requires Docker for:
 2. **Security scanning**: Running Trivy to check for vulnerabilities
 3. **Ollama provider**: Running local LLMs in containers
 
-You can skip validation with `--skip-validation`, but this is not recommended.
+You can set `DOCKAI_SKIP_HEALTH_CHECK=true` to skip health check validation, but this is not recommended.
 
 ### What are the system requirements?
 
@@ -79,26 +79,26 @@ You can skip validation with `--skip-validation`, but this is not recommended.
 
 ### How can I minimize API costs?
 
-1. **Use cheaper models for simple tasks**:
+1. **Use cheaper models for simple tasks** (via environment variables):
    ```bash
-   dockai build . \
-     --model-analyzer gpt-4o-mini \
-     --model-generator gpt-4o
+   DOCKAI_MODEL_ANALYZER=gpt-4o-mini \
+   DOCKAI_MODEL_GENERATOR=gpt-4o \
+   dockai build .
    ```
 
 2. **Use Gemini's free tier** for development:
    ```bash
-   dockai build . --provider gemini
+   DOCKAI_LLM_PROVIDER=gemini dockai build .
    ```
 
 3. **Use Ollama** for unlimited free usage:
    ```bash
-   dockai build . --provider ollama
+   DOCKAI_LLM_PROVIDER=ollama dockai build .
    ```
 
 4. **Limit retries** to control iterations:
    ```bash
-   dockai build . --max-retries 2
+   MAX_RETRIES=2 dockai build .
    ```
 
 ### What's the estimated token usage?
@@ -170,13 +170,13 @@ DockAI is designed to **never** include secrets in Dockerfiles:
 
 ### Can I use different models for different agents?
 
-Yes! This is recommended for cost optimization:
+Yes! This is recommended for cost optimization (via environment variables):
 
 ```bash
-dockai build . \
-  --model-analyzer gpt-4o-mini \    # Fast, simple analysis
-  --model-generator gpt-4o \         # Complex generation
-  --model-reviewer gpt-4o-mini       # Simple review
+DOCKAI_MODEL_ANALYZER=gpt-4o-mini \
+DOCKAI_MODEL_GENERATOR=gpt-4o \
+DOCKAI_MODEL_REVIEWER=gpt-4o-mini \
+dockai build .
 ```
 
 ### What Ollama models work best?
@@ -202,7 +202,7 @@ curl -fsSL https://ollama.ai/install.sh | sh
 ollama pull llama3.1:8b
 
 # Use with DockAI
-dockai build . --provider ollama --model llama3.1:8b
+DOCKAI_LLM_PROVIDER=ollama dockai build .
 ```
 
 If Ollama isn't installed, DockAI will automatically run it in Docker.
@@ -233,7 +233,7 @@ For simple Python scripts, single-stage is often better.
 
 To force multi-stage:
 ```bash
-dockai build . --generator-instructions "Always use multi-stage builds"
+DOCKAI_GENERATOR_INSTRUCTIONS="Always use multi-stage builds" dockai build .
 ```
 
 ### Why is my image still large?
@@ -245,7 +245,7 @@ Image size depends on:
 
 Solutions:
 ```bash
-dockai build . --generator-instructions "Minimize image size. Use Alpine. Remove unnecessary files."
+DOCKAI_GENERATOR_INSTRUCTIONS="Minimize image size. Use Alpine. Remove unnecessary files." dockai build .
 ```
 
 ### Can DockAI generate docker-compose.yml?
@@ -275,14 +275,14 @@ Most time is spent on:
 
 To speed up:
 ```bash
-# Skip validation (not recommended for production)
-dockai build . --skip-validation
+# Skip health check validation
+DOCKAI_SKIP_HEALTH_CHECK=true dockai build .
 
 # Skip security scan
-dockai build . --skip-security-scan
+DOCKAI_SKIP_SECURITY_SCAN=true dockai build .
 
-# Use faster models
-dockai build . --model-analyzer gpt-4o-mini
+# Use faster models (via environment variable)
+DOCKAI_MODEL_ANALYZER=gpt-4o-mini dockai build .
 ```
 
 ### Does DockAI cache anything?
@@ -300,25 +300,25 @@ Docker itself caches layers, so rebuilds are faster.
 
 ### How do I add organization standards?
 
-Use custom instructions:
+Use custom instructions (via environment variable or `.dockai` file):
 
 ```bash
-dockai build . --generator-instructions "
+DOCKAI_GENERATOR_INSTRUCTIONS="
 ORGANIZATION REQUIREMENTS:
 - Use company-registry.io base images only
 - Run as UID 10000
 - Include standard labels
 - Follow security policy v2.1
-"
+" dockai build .
 ```
 
 ### Can I modify the prompts?
 
-Yes, for complete control:
+Yes, for complete control use environment variables:
 
 ```bash
 # Replace the analyzer prompt entirely
-dockai build . --prompt-analyzer /path/to/custom-analyzer-prompt.txt
+DOCKAI_PROMPT_ANALYZER="Your custom prompt here" dockai build .
 ```
 
 See [Customization Guide](./customization.md) for details.
@@ -415,8 +415,8 @@ echo $OPENAI_API_KEY
 # Set it
 export OPENAI_API_KEY=sk-your-key
 
-# Or pass directly
-dockai build . --api-key sk-your-key
+# Then run
+dockai build .
 ```
 
 ### "Docker build failed"
@@ -431,11 +431,11 @@ dockai build . --api-key sk-your-key
 # Check Docker is running
 docker ps
 
-# Try with more retries
-dockai build . --max-retries 5
+# Try with more retries (via environment variable)
+MAX_RETRIES=5 dockai build .
 
-# Add debugging instructions
-dockai build . --generator-instructions "Add verbose output during build"
+# Add debugging instructions (via environment variable)
+DOCKAI_GENERATOR_INSTRUCTIONS="Add verbose output during build" dockai build .
 ```
 
 ### "Rate limit exceeded"
@@ -446,7 +446,7 @@ dockai build . --generator-instructions "Add verbose output during build"
 1. Wait and retry
 2. Use different API key
 3. Use local provider (Ollama)
-4. Reduce `--max-retries`
+4. Reduce `MAX_RETRIES` environment variable
 
 ### "Out of memory"
 
@@ -454,11 +454,11 @@ dockai build . --generator-instructions "Add verbose output during build"
 
 **Solutions**:
 ```bash
-# Increase validation memory limit
-dockai build . --validation-memory 2g
+# Increase validation memory limit (via environment variable)
+DOCKAI_VALIDATION_MEMORY=2g dockai build .
 
-# Or skip validation
-dockai build . --skip-validation
+# Or skip health check
+DOCKAI_SKIP_HEALTH_CHECK=true dockai build .
 ```
 
 ### "Hadolint/Trivy not found"

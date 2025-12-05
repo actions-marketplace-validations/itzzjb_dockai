@@ -64,7 +64,7 @@ def load_instructions(path: str):
         Tuple[str, str]: A tuple containing (analyzer_instructions, generator_instructions) for backward compatibility.
     """
     # Load and set custom prompts and instructions configuration
-    # This handles all 10 prompts and their instructions from env vars and .dockai file
+    # This handles all 8 prompts and their instructions from env vars and .dockai file
     prompt_config = load_prompts(path)
     set_prompt_config(prompt_config)
     logger.debug("Custom prompts and instructions configuration loaded")
