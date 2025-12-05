@@ -59,7 +59,7 @@ This means DockAI can handle:
 | [**GitHub Actions**](./github-actions.md) | Complete CI/CD integration guide with workflow examples | DevOps engineers automating pipelines |
 | [**MCP Server**](./mcp-server.md) | Integration with AI assistants like Claude Desktop and Cursor | AI power users and teams using AI assistants |
 | [**FAQ**](./faq.md) | Frequently asked questions covering costs, security, troubleshooting, and more | Anyone with specific questions |
-| [**Release Process**](./releases.md) | How to create releases and manage version tags | Maintainers and contributors |
+
 
 ---
 
@@ -260,8 +260,6 @@ Show what the AI is thinking (thought processes), what tokens are used, and why 
 ## 📦 Version
 
 This documentation is for **DockAI v3.1.5**.
-
-View the [Release Process](./releases.md) for versioning and release information.
 
 ---
 
