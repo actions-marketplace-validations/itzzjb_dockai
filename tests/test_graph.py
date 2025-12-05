@@ -336,3 +336,85 @@ def test_generate_node_retry(mock_getenv, mock_get_tags, mock_generate):
     
     # Should use MODEL_GENERATOR on retry
     assert result["usage_stats"][0]["model"] == "gpt-4o"
+
+
+# ============================================================================
+# Efficiency Optimization Tests
+# ============================================================================
+
+@patch("dockai.workflow.nodes.review_dockerfile")
+@patch("dockai.workflow.nodes.os.getenv")
+def test_review_node_skipped_for_scripts(mock_getenv, mock_review):
+    """Test that security review is skipped for script projects (efficiency optimization)."""
+    from dockai.workflow.nodes import review_node
+    
+    mock_getenv.side_effect = lambda key, default="": {
+        "DOCKAI_SKIP_SECURITY_REVIEW": "false"
+    }.get(key, default)
+    
+    state = {
+        "dockerfile_content": "FROM python:3.11\nCOPY . .\nCMD python script.py",
+        "analysis_result": {"project_type": "script"},
+        "file_tree": [],
+        "file_contents": ""
+    }
+    
+    result = review_node(state)
+    
+    # Review should be skipped for scripts
+    mock_review.assert_not_called()
+    assert result == {}
+
+
+@patch("dockai.workflow.nodes.review_dockerfile")
+@patch("dockai.workflow.nodes.os.getenv")
+def test_review_node_not_skipped_for_services(mock_getenv, mock_review):
+    """Test that security review runs for service projects."""
+    from dockai.workflow.nodes import review_node
+    from unittest.mock import MagicMock
+    
+    mock_getenv.side_effect = lambda key, default="": {
+        "DOCKAI_SKIP_SECURITY_REVIEW": "false"
+    }.get(key, default)
+    
+    # Mock review result
+    mock_result = MagicMock()
+    mock_result.is_secure = True
+    mock_result.issues = []
+    mock_review.return_value = (mock_result, {"total_tokens": 500})
+    
+    state = {
+        "dockerfile_content": "FROM python:3.11\nCOPY . .\nCMD gunicorn app:app",
+        "analysis_result": {"project_type": "service"},
+        "file_tree": [],
+        "file_contents": "",
+        "usage_stats": []
+    }
+    
+    result = review_node(state)
+    
+    # Review should run for services
+    mock_review.assert_called_once()
+
+
+def test_llm_config_caching_default():
+    """Test that LLM caching is enabled by default."""
+    from dockai.core.llm_providers import LLMConfig
+    
+    config = LLMConfig()
+    assert config.enable_caching is True
+
+
+@patch.dict("os.environ", {"DOCKAI_LLM_CACHING": "false"})
+def test_llm_config_caching_disabled():
+    """Test that LLM caching can be disabled via environment variable."""
+    import dockai.core.llm_providers
+    
+    # Reset global config
+    dockai.core.llm_providers._llm_config = None
+    
+    from dockai.core.llm_providers import load_llm_config_from_env
+    
+    config = load_llm_config_from_env()
+    assert config.enable_caching is False
+

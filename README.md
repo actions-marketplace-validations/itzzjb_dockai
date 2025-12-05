@@ -284,7 +284,14 @@ flowchart TB
 |----------|-------------|---------|
 | `DOCKAI_SKIP_HADOLINT` | Skip Hadolint Dockerfile linting | `false` |
 | `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy security scan | `false` |
+| `DOCKAI_SKIP_SECURITY_REVIEW` | Skip AI security review (auto for scripts) | `false` |
 | `DOCKAI_STRICT_SECURITY` | Fail on ANY HIGH/CRITICAL vulnerabilities | `false` |
+
+#### Efficiency Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_LLM_CACHING` | Enable in-memory LLM response caching | `true` |
 
 #### Observability & Tracing
 

@@ -381,6 +381,9 @@ def review_node(state: DockAIState) -> DockAIState:
     
     If the reviewer can fix the issue automatically, it does so. Otherwise, it
     flags the error for the next iteration.
+    
+    Optimization: Script projects skip the expensive AI security review since they
+    are single-run and carry less security risk than long-running services.
 
     Args:
         state (DockAIState): The current state with the generated Dockerfile.
@@ -389,6 +392,19 @@ def review_node(state: DockAIState) -> DockAIState:
         DockAIState: Updated state with potential errors or a fixed Dockerfile.
     """
     dockerfile_content = state["dockerfile_content"]
+    analysis_result = state.get("analysis_result", {})
+    project_type = analysis_result.get("project_type", "service")
+    
+    # OPTIMIZATION: Skip expensive AI security review for script projects
+    # Scripts are single-run and carry less security risk than long-running services
+    skip_review = os.getenv("DOCKAI_SKIP_SECURITY_REVIEW", "false").lower() == "true"
+    
+    if project_type == "script" or skip_review:
+        if project_type == "script":
+            logger.info("Skipping security review for script project (single-run, lower risk)")
+        else:
+            logger.info("Security review skipped (DOCKAI_SKIP_SECURITY_REVIEW=true)")
+        return {}  # No changes, proceed to validation
     
     with create_span("node.review", {}) as span:
         logger.info("Performing Security Review...")

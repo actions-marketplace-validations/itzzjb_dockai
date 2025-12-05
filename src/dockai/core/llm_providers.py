@@ -104,6 +104,9 @@ class LLMConfig:
 
     Ollama-specific attributes:
         ollama_base_url: Base URL for Ollama API (default: http://localhost:11434)
+        
+    Caching attributes:
+        enable_caching: Enable in-memory LLM response caching (default: True)
     """
     default_provider: LLMProvider = LLMProvider.OPENAI
     
@@ -123,10 +126,32 @@ class LLMConfig:
 
     # Ollama-specific settings
     ollama_base_url: str = "http://localhost:11434"
+    
+    # Caching settings
+    enable_caching: bool = True
 
 
 # Global LLM configuration instance
 _llm_config: Optional[LLMConfig] = None
+_cache_initialized: bool = False
+
+
+def _init_llm_cache() -> None:
+    """Initialize in-memory LLM response caching for the current run."""
+    global _cache_initialized
+    if _cache_initialized:
+        return
+    
+    try:
+        from langchain.cache import InMemoryCache
+        from langchain.globals import set_llm_cache
+        set_llm_cache(InMemoryCache())
+        _cache_initialized = True
+        logger.debug("LLM caching enabled (in-memory)")
+    except ImportError:
+        logger.debug("LangChain cache not available, skipping")
+    except Exception as e:
+        logger.debug(f"Failed to initialize LLM cache: {e}")
 
 
 def get_llm_config() -> LLMConfig:
@@ -223,6 +248,9 @@ def load_llm_config_from_env() -> LLMConfig:
     # Load Ollama-specific settings
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     
+    # Load caching settings (enabled by default for efficiency)
+    enable_caching = os.getenv("DOCKAI_LLM_CACHING", "true").lower() in ("true", "1", "yes")
+    
     return LLMConfig(
         default_provider=provider,
         models=models,
@@ -231,6 +259,7 @@ def load_llm_config_from_env() -> LLMConfig:
         azure_deployment_map=azure_deployment_map,
         google_project=google_project,
         ollama_base_url=ollama_base_url,
+        enable_caching=enable_caching,
     )
 
 
@@ -283,6 +312,10 @@ def create_llm(
     """
     if config is None:
         config = get_llm_config()
+    
+    # Initialize caching on first LLM creation
+    if config.enable_caching:
+        _init_llm_cache()
     
     model_name = get_model_for_agent(agent_name, config)
     

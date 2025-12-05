@@ -94,6 +94,10 @@ inputs:
     description: 'Skip health checks during validation (true/false)'
     required: false
     default: 'false'
+  skip_security_review:
+    description: 'Skip AI security review for faster generation (auto-skipped for scripts)'
+    required: false
+    default: 'false'
   validation_memory:
     description: 'Memory limit for container validation (e.g., 512m, 1g)'
     required: false
@@ -237,6 +241,7 @@ runs:
         DOCKAI_STRICT_SECURITY: ${{ inputs.strict_security }}
         DOCKAI_MAX_IMAGE_SIZE_MB: ${{ inputs.max_image_size_mb }}
         DOCKAI_SKIP_HEALTH_CHECK: ${{ inputs.skip_health_check }}
+        DOCKAI_SKIP_SECURITY_REVIEW: ${{ inputs.skip_security_review }}
         DOCKAI_VALIDATION_MEMORY: ${{ inputs.validation_memory }}
         DOCKAI_VALIDATION_CPUS: ${{ inputs.validation_cpus }}
         DOCKAI_VALIDATION_PIDS: ${{ inputs.validation_pids }}

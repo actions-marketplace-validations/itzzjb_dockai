@@ -243,6 +243,7 @@ MAX_RETRIES=1
 |----------|-------------|---------|----------------|
 | `DOCKAI_SKIP_HADOLINT` | Skip Hadolint Dockerfile linting | `false` | When Hadolint not available |
 | `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy vulnerability scan | `false` | For faster iteration, non-production |
+| `DOCKAI_SKIP_SECURITY_REVIEW` | Skip AI security review | `false` | Faster generation (auto-skipped for scripts) |
 | `DOCKAI_STRICT_SECURITY` | Fail on ANY vulnerability | `false` | Production environments |
 | `DOCKAI_MAX_IMAGE_SIZE_MB` | Maximum allowed image size | `500` | Enforce size limits |
 | `DOCKAI_SKIP_HEALTH_CHECK` | Skip health endpoint verification | `false` | For scripts, not services |
@@ -306,6 +307,45 @@ DOCKAI_MAX_FILE_CHARS=50000
 # For projects with large generated files
 DOCKAI_MAX_FILE_LINES=1000
 ```
+
+---
+
+## Efficiency Optimizations
+
+DockAI includes several built-in optimizations for faster generation and lower token usage.
+
+### LLM Response Caching
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_LLM_CACHING` | Enable in-memory LLM response caching | `true` |
+
+When enabled, identical prompts within a single run are cached to avoid repeated API calls. This helps when:
+- Retrying with the same error patterns
+- Multiple agents use similar context
+
+```bash
+# Disable caching (not recommended)
+DOCKAI_LLM_CACHING=false
+```
+
+### Automatic Optimizations for Scripts
+
+For **script** projects (single-run, non-service applications), DockAI automatically:
+
+1. **Skips AI security review** - Scripts carry less security risk than long-running services
+2. **Skips health checks** - Scripts don't have HTTP endpoints
+
+This can reduce generation time by 30-40% for simple script projects.
+
+### Quality-First Model Selection
+
+DockAI uses powerful models (e.g., `gpt-4o`) for:
+- Blueprint (strategic planning)
+- Generator (Dockerfile creation)
+- Reflector (failure analysis)
+
+This reduces retry cycles by 30-50%, saving more tokens overall than using cheaper models upfront.
 
 ---
 

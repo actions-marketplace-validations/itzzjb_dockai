@@ -128,6 +128,7 @@ Assign different models to different agents for cost optimization:
 |-------|-------------|---------|
 | `skip_hadolint` | Skip Hadolint Dockerfile linting | `false` |
 | `skip_security_scan` | Skip Trivy vulnerability scanning | `false` |
+| `skip_security_review` | Skip AI security review (auto for scripts) | `false` |
 | `strict_security` | Fail on ANY vulnerability | `false` |
 | `max_image_size_mb` | Maximum allowed image size (0=disabled) | `500` |
 | `skip_health_check` | Skip health endpoint verification | `false` |
