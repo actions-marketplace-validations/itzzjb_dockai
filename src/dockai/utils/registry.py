@@ -22,13 +22,13 @@ from typing import List, Optional
 
 @lru_cache(maxsize=128)
 @handle_registry_rate_limit
-def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
+def get_docker_tags(image_name: str, limit: int = 5, target_version: Optional[str] = None) -> List[str]:
     """
     Fetches valid tags for a given Docker image from supported registries.
     
     This function queries the registry API to get a list of available tags for
-    the specified image. It prioritizes 'alpine' and 'slim' tags to encourage
-    smaller, more secure images. Results are cached in memory.
+    the specified image. It prioritizes tags that match the target_version,
+    then 'alpine' and 'slim' variants. Results are cached in memory.
     
     Supported Registries:
     - Docker Hub (default)
@@ -38,49 +38,73 @@ def get_docker_tags(image_name: str, limit: int = 5) -> List[str]:
     - AWS ECR (limited support, skips verification)
 
     Args:
-        image_name (str): The name of the image (e.g., 'node', 'gcr.io/my-project/my-image').
+        image_name (str): The name of the image (e.g., 'node', 'node:20-alpine', 'gcr.io/my-project/my-image').
         limit (int, optional): The maximum number of fallback tags to return. Defaults to 5.
+        target_version (str, optional): The specific version to filter for (e.g., '3.11', '20').
+            If provided, only tags matching this version will be returned.
 
     Returns:
         List[str]: A list of verified, full image tags. Empty list if verification fails
                    (the generator will proceed with unverified tags).
     """
+    # Handle empty or invalid input
+    if not image_name or not image_name.strip():
+        logger.debug("Empty image name provided to get_docker_tags")
+        return []
+    
+    image_name = image_name.strip()
+    
+    # Strip any existing tag from the image name (e.g., "python:3.11-slim" -> "python")
+    # This is important because the analyzer may include a suggested tag
+    base_image = image_name.split(":")[0]
+    
+    # If image_name had a tag, try to extract version from it as fallback
+    if target_version is None and ":" in image_name:
+        original_tag = image_name.split(":")[1]
+        # Extract version from tag (e.g., "3.11-slim" -> "3.11")
+        version_match = re.match(r"^v?(\d+(?:\.\d+)*)", original_tag)
+        if version_match:
+            target_version = version_match.group(1)
+            logger.debug(f"Extracted target version from image tag: {target_version}")
+    
+    logger.debug(f"Looking up tags for base image: {base_image} (target_version: {target_version})")
+    
     tags = []
     
     try:
-        # Dispatch to appropriate registry handler
-        if ".dkr.ecr." in image_name and ".amazonaws.com" in image_name:
-            logger.info(f"ECR image detected: {image_name}. Skipping tag verification (requires AWS credentials).")
+        # Dispatch to appropriate registry handler based on base_image (without tag)
+        if ".dkr.ecr." in base_image and ".amazonaws.com" in base_image:
+            logger.info(f"ECR image detected: {base_image}. Skipping tag verification (requires AWS credentials).")
             return []
             
-        elif "gcr.io" in image_name:
-            logger.debug(f"Fetching tags from GCR for: {image_name}")
-            tags = _fetch_gcr_tags(image_name)
+        elif "gcr.io" in base_image:
+            logger.debug(f"Fetching tags from GCR for: {base_image}")
+            tags = _fetch_gcr_tags(base_image)
             
-        elif "quay.io" in image_name:
-            logger.debug(f"Fetching tags from Quay for: {image_name}")
-            tags = _fetch_quay_tags(image_name)
+        elif "quay.io" in base_image:
+            logger.debug(f"Fetching tags from Quay for: {base_image}")
+            tags = _fetch_quay_tags(base_image)
             
-        elif "ghcr.io" in image_name:
-            logger.debug(f"Fetching tags from GHCR for: {image_name}")
-            tags = _fetch_ghcr_tags(image_name)
+        elif "ghcr.io" in base_image:
+            logger.debug(f"Fetching tags from GHCR for: {base_image}")
+            tags = _fetch_ghcr_tags(base_image)
             
         else:
-            logger.debug(f"Fetching tags from Docker Hub for: {image_name}")
-            tags = _fetch_docker_hub_tags(image_name)
+            logger.debug(f"Fetching tags from Docker Hub for: {base_image}")
+            tags = _fetch_docker_hub_tags(base_image)
 
         if not tags:
-            logger.debug(f"No tags found for {image_name} - will use AI-suggested tags without verification")
+            logger.debug(f"No tags found for {base_image} - will use AI-suggested tags without verification")
             return []
 
-        # Filter and sort tags
-        processed = _process_tags(image_name, tags, limit)
+        # Filter and sort tags, prioritizing target_version if provided
+        processed = _process_tags(base_image, tags, limit, target_version)
         if processed:
-            logger.debug(f"Found {len(processed)} verified tags for {image_name}")
+            logger.debug(f"Found {len(processed)} verified tags for {base_image}")
         return processed
         
     except Exception as e:
-        logger.warning(f"Failed to fetch tags for {image_name}: {e}")
+        logger.warning(f"Failed to fetch tags for {base_image}: {e}")
         return []
 
 
@@ -268,16 +292,52 @@ def _fetch_ghcr_tags(image_name: str) -> List[str]:
     return []
 
 
-def _process_tags(image_name: str, tags: List[str], limit: int) -> List[str]:
-    """Filter, sort, and format the fetched tags."""
+def _process_tags(image_name: str, tags: List[str], limit: int, target_version: Optional[str] = None) -> List[str]:
+    """
+    Filter, sort, and format the fetched tags.
+    
+    Args:
+        image_name: The base image name (for prefix building)
+        tags: Raw list of tags from the registry
+        limit: Maximum number of tags to return
+        target_version: If provided, prioritize tags matching this version (e.g., '3.11', '20')
+    """
     # Filter out unstable tags
     version_tags = [t for t in tags if t not in ["latest", "stable", "edge", "nightly", "canary"]]
     
     if not version_tags:
         return []
 
+    prefix = _get_image_prefix(image_name)
+    
+    # If target_version is specified, use it instead of detecting latest
+    if target_version:
+        logger.info(f"Using target version for {image_name}: {target_version}")
+        
+        # Get all tags that match the target version
+        target_specific_tags = [
+            t for t in tags 
+            if t.startswith(target_version) or 
+               t.startswith(f"v{target_version}") or
+               t == target_version
+        ]
+        
+        if target_specific_tags:
+            # Sort: Alpine first, then Slim, then others
+            def preference_sort(tag):
+                score = 0
+                if "alpine" in tag: score -= 2
+                elif "slim" in tag: score -= 1
+                if "window" in tag: score += 10  # Penalize windows images
+                return score
+                
+            final_tags = sorted(target_specific_tags, key=preference_sort)
+            return [f"{prefix}{t}" for t in final_tags]
+        else:
+            logger.warning(f"No tags found matching target version '{target_version}' for {image_name}")
+            # Fall through to detect latest
+    
     # Sort tags semantically to find the latest versions
-    # We want to find the highest version number
     sorted_versions = _sort_tags_semantically(version_tags)
     
     if not sorted_versions:
@@ -288,11 +348,8 @@ def _process_tags(image_name: str, tags: List[str], limit: int) -> List[str]:
     latest_tag = sorted_versions[0]
     
     # Extract the version number part (e.g., "3.11" from "3.11-slim")
-    # This regex looks for the first sequence of numbers and dots
     match = re.match(r"^v?(\d+(?:\.\d+)*)", latest_tag)
     latest_version_prefix = match.group(1) if match else None
-
-    prefix = _get_image_prefix(image_name)
 
     if latest_version_prefix:
         logger.info(f"Detected latest version for {image_name}: {latest_version_prefix}")
@@ -305,7 +362,7 @@ def _process_tags(image_name: str, tags: List[str], limit: int) -> List[str]:
             score = 0
             if "alpine" in tag: score -= 2
             elif "slim" in tag: score -= 1
-            if "window" in tag: score += 10 # Penalize windows images
+            if "window" in tag: score += 10  # Penalize windows images
             return score
             
         final_tags = sorted(version_specific_tags, key=preference_sort)

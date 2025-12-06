@@ -578,16 +578,22 @@ def generate_node(state: DockAIState) -> DockAIState:
             # Fetch verified tags dynamically to ensure image existence
             suggested_image = analysis_result.get("suggested_base_image", "").strip()
             
+            # Get detected runtime version from analyzer (e.g., "3.11" from pyproject.toml)
+            detected_version = analysis_result.get("detected_runtime_version")
+            
             # Check if reflection suggests a different base image
             if reflection and reflection.get("should_change_base_image"):
                 suggested_image = reflection.get("suggested_base_image", suggested_image)
                 logger.info(f"Using reflection-suggested base image: {suggested_image}")
+                # Clear detected version when switching base images (reflection may suggest different tech)
+                detected_version = None
             
             verified_tags = []
             if suggested_image:
-                logger.info(f"Fetching tags for: {suggested_image}")
+                logger.info(f"Fetching tags for: {suggested_image}" + 
+                           (f" (target version: {detected_version})" if detected_version else ""))
                 try:
-                    verified_tags = get_docker_tags(suggested_image)
+                    verified_tags = get_docker_tags(suggested_image, target_version=detected_version)
                 except Exception as e:
                     logger.warning(f"Failed to fetch Docker tags for {suggested_image}: {e}")
                     verified_tags = []
