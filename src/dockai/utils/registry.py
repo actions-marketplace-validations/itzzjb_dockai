@@ -20,6 +20,19 @@ import re
 from functools import lru_cache
 from typing import List, Optional
 
+
+def _strip_tag(image_name: str) -> tuple[str, Optional[str]]:
+    """Split image into (repo, tag) without breaking registry hosts.
+
+    We only treat a ':' as a tag separator if it appears *after* the last '/'.
+    This prevents mis-parsing registries that include a port (e.g. gcr:5000/foo).
+    """
+    last_slash = image_name.rfind("/")
+    last_colon = image_name.rfind(":")
+    if last_colon > last_slash:
+        return image_name[:last_colon], image_name[last_colon + 1 :]
+    return image_name, None
+
 @lru_cache(maxsize=128)
 @handle_registry_rate_limit
 def get_docker_tags(image_name: str, limit: int = 5, target_version: Optional[str] = None) -> List[str]:
@@ -55,14 +68,12 @@ def get_docker_tags(image_name: str, limit: int = 5, target_version: Optional[st
     image_name = image_name.strip()
     
     # Strip any existing tag from the image name (e.g., "python:3.11-slim" -> "python")
-    # This is important because the analyzer may include a suggested tag
-    base_image = image_name.split(":")[0]
+    # without breaking registry hosts that include ports (gcr:5000/foo:bar).
+    base_image, extracted_tag = _strip_tag(image_name)
     
     # If image_name had a tag, try to extract version from it as fallback
-    if target_version is None and ":" in image_name:
-        original_tag = image_name.split(":")[1]
-        # Extract version from tag (e.g., "3.11-slim" -> "3.11")
-        version_match = re.match(r"^v?(\d+(?:\.\d+)*)", original_tag)
+    if target_version is None and extracted_tag:
+        version_match = re.match(r"^v?(\d+(?:\.\d+)*)", extracted_tag)
         if version_match:
             target_version = version_match.group(1)
             logger.debug(f"Extracted target version from image tag: {target_version}")

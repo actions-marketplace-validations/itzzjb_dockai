@@ -1,0 +1,13 @@
+{
+  "name": "dockai-node-example",
+  "version": "0.1.0",
+  "description": "Minimal Express app used to demonstrate DockAI Dockerfile generation.",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
