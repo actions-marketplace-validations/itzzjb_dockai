@@ -90,8 +90,9 @@ def scan_node(state: DockAIState) -> DockAIState:
     with create_span("node.scan", {"path": path}) as span:
         logger.info(f"Scanning directory: {path}")
         
-        # Validate path exists and is accessible
-        if not os.path.exists(path):
+        try:
+            file_tree = get_file_tree(path)
+        except FileNotFoundError:
             logger.error(f"Directory does not exist: {path}")
             return {
                 "file_tree": [],
@@ -103,8 +104,7 @@ def scan_node(state: DockAIState) -> DockAIState:
                     "should_retry": False
                 }
             }
-        
-        if not os.path.isdir(path):
+        except NotADirectoryError:
             logger.error(f"Path is not a directory: {path}")
             return {
                 "file_tree": [],
@@ -116,9 +116,6 @@ def scan_node(state: DockAIState) -> DockAIState:
                     "should_retry": False
                 }
             }
-        
-        try:
-            file_tree = get_file_tree(path)
         except PermissionError as e:
             logger.error(f"Permission denied accessing directory: {path} - {e}")
             return {
