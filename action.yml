@@ -273,5 +273,5 @@ runs:
         DOCKAI_TRACING_EXPORTER: ${{ inputs.tracing_exporter }}
         OTEL_EXPORTER_OTLP_ENDPOINT: ${{ inputs.otlp_endpoint }}
       run: |
-        echo "🐳 Starting DockAI Framework..."
+        echo "Starting DockAI Framework..."
         dockai build ${{ inputs.project_path }} --no-cache
