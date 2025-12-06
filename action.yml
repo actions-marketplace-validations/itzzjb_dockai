@@ -207,9 +207,12 @@ runs:
       with:
         python-version: '3.11'
 
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+
     - name: Install DockAI
       shell: bash
-      run: pip install dockai-cli
+      run: uv pip install dockai-cli --system
 
     - name: Run DockAI Framework
       shell: bash
