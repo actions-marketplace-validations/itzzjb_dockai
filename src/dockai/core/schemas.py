@@ -30,7 +30,18 @@ class AnalysisResult(BaseModel):
     files_to_read: List[str] = Field(description="List of critical files needed to understand dependencies, configuration, entrypoints, and build requirements")
     build_command: Optional[str] = Field(description="The command to build/compile the application, if applicable. Determined from project analysis.")
     start_command: Optional[str] = Field(description="The command to start/run the application. Determined from project analysis.")
-    suggested_base_image: str = Field(description="The most appropriate Docker Hub base image for this technology stack")
+    
+    # Version detection from project files
+    detected_runtime_version: Optional[str] = Field(
+        default=None,
+        description="The exact runtime version detected from project files (e.g., '3.11' from pyproject.toml, '20' from .nvmrc, '1.21' from go.mod). Extract from package.json engines.node, python_requires, .nvmrc, .python-version, go.mod, etc."
+    )
+    version_source: Optional[str] = Field(
+        default=None,
+        description="The file where the runtime version was detected (e.g., 'package.json', '.nvmrc', 'pyproject.toml')"
+    )
+    
+    suggested_base_image: str = Field(description="The most appropriate Docker Hub base image for this technology stack. MUST use the detected_runtime_version if available (e.g., node:20-alpine, python:3.11-slim)")
     health_endpoint: Optional[HealthEndpoint] = Field(
         default=None,
         description="Health endpoint details if explicitly defined in the codebase. Set to null if no health endpoint is detected - do NOT guess."

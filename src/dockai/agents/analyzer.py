@@ -104,7 +104,42 @@ Determine what's needed to BUILD:
 5. Build artifacts: dist/, build/, target/, bin/
 ```
 
-### PHASE 4: RUNTIME REQUIREMENTS
+### PHASE 4: RUNTIME VERSION DETECTION (CRITICAL)
+Extract the EXACT runtime version from project files. This is MANDATORY:
+```
+Node.js:
+  - .nvmrc: Contains exact version (e.g., "20.10.0" or "20")
+  - .node-version: Contains exact version
+  - package.json engines.node: ">=18" means use 18, "^20.0.0" means use 20
+  
+Python:
+  - .python-version: Contains exact version (e.g., "3.11.6" or "3.11")
+  - pyproject.toml [project] python = ">=3.10" means use 3.10
+  - pyproject.toml [tool.poetry.dependencies] python = "^3.11" means use 3.11
+  - setup.py python_requires = ">=3.9" means use 3.9
+  - Pipfile [requires] python_version = "3.10"
+  
+Go:
+  - go.mod: "go 1.21" means use 1.21
+  
+Rust:
+  - rust-toolchain.toml: channel = "1.75"
+  - rust-toolchain: exact version
+  
+Java:
+  - pom.xml: <java.version>17</java.version>
+  - build.gradle: sourceCompatibility = '17'
+  - .java-version: exact version
+  
+Ruby:
+  - .ruby-version: exact version (e.g., "3.2.2")
+  - Gemfile: ruby "3.2.2"
+```
+
+ALWAYS set detected_runtime_version and version_source when found!
+The suggested_base_image MUST match the detected version (e.g., if detected_runtime_version is "3.11", use python:3.11-slim, NOT python:latest)
+
+### PHASE 5: RUNTIME REQUIREMENTS
 Determine what's needed to RUN:
 ```
 1. Runtime only (node, python) vs compiled binary
@@ -114,7 +149,7 @@ Determine what's needed to RUN:
 5. File paths the app expects (/app, static files, templates)
 ```
 
-### PHASE 5: EXECUTION PATTERN
+### PHASE 6: EXECUTION PATTERN
 Classify the application:
 ```
 SERVICE: Long-running process (web server, API, worker)
@@ -133,13 +168,16 @@ HYBRID: Service with CLI commands (Django manage.py, etc.)
 Your analysis MUST provide clear answers for:
 1. **stack**: Technology identification (e.g., "Node.js 20 with Next.js 14")
 2. **project_type**: "service" or "script"
-3. **build_command**: Exact command to build (e.g., "npm ci && npm run build")
-4. **start_command**: Exact command to run (e.g., "node server.js")
-5. **suggested_base_image**: Recommended base (e.g., "node:20-alpine")
-6. **critical_files**: Files the Generator MUST copy
+3. **detected_runtime_version**: EXACT version from project files (e.g., "3.11", "20", "1.21")
+4. **version_source**: File where version was found (e.g., "pyproject.toml", ".nvmrc")
+5. **build_command**: Exact command to build (e.g., "npm ci && npm run build")
+6. **start_command**: Exact command to run (e.g., "node server.js")
+7. **suggested_base_image**: Base image USING the detected version (e.g., "node:20-alpine", "python:3.11-slim")
+8. **files_to_read**: Files the Generator MUST read for context
 
 ## Anti-Patterns to Avoid
-- DON'T guess without evidence
+- DON'T use "latest" tags - always detect specific versions
+- DON'T guess versions without evidence from project files
 - DON'T assume standard ports without checking config
 - DON'T overlook lock files (they indicate package manager)
 - DON'T ignore existing Dockerfile hints
