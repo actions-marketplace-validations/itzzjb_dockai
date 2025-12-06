@@ -413,8 +413,33 @@ def blueprint_node(state: DockAIState) -> DockAIState:
             "usage_stats": current_stats + [usage_dict]
         }
     except Exception as e:
+        error_str = str(e).lower()
+        
+        # Check for rate limit errors
+        if 'rate limit' in error_str or '429' in error_str or 'quota exceeded' in error_str:
+            logger.error(f"Rate limit exceeded during blueprint creation: {e}")
+            return {
+                "current_plan": {},
+                "error": "API rate limit exceeded",
+                "error_details": {
+                    "error_type": "environment_error",
+                    "message": "The LLM API rate limit was exceeded.",
+                    "suggestion": "Wait a few minutes before retrying.",
+                    "should_retry": False
+                }
+            }
+        
         logger.warning(f"Blueprint creation failed: {e}")
-        return {}
+        return {
+            "current_plan": {},
+            "error": f"Blueprint creation failed: {str(e)[:200]}",
+            "error_details": {
+                "error_type": "dockerfile_error",
+                "message": f"Failed to create blueprint: {str(e)[:200]}",
+                "suggestion": "This may be a temporary issue. Will continue without blueprint.",
+                "should_retry": True
+            }
+        }
 
 
 def generate_node(state: DockAIState) -> DockAIState:
@@ -633,9 +658,22 @@ def review_node(state: DockAIState) -> DockAIState:
     Returns:
         DockAIState: Updated state with potential errors or a fixed Dockerfile.
     """
-    dockerfile_content = state["dockerfile_content"]
+    dockerfile_content = state.get("dockerfile_content", "")
     analysis_result = state.get("analysis_result", {})
     project_type = analysis_result.get("project_type", "service")
+    
+    # Edge case: Check for empty dockerfile
+    if not dockerfile_content or not dockerfile_content.strip():
+        logger.error("Cannot review: dockerfile_content is empty")
+        return {
+            "error": "No Dockerfile to review",
+            "error_details": {
+                "error_type": "dockerfile_error",
+                "message": "Cannot perform security review on empty Dockerfile.",
+                "suggestion": "Dockerfile generation may have failed.",
+                "should_retry": True
+            }
+        }
     
     # OPTIMIZATION: Skip expensive AI security review for script projects
     # Scripts are single-run and carry less security risk than long-running services
@@ -651,64 +689,88 @@ def review_node(state: DockAIState) -> DockAIState:
     with create_span("node.review", {}) as span:
         logger.info("Performing Security Review...")
         
-        # Create unified context for the reviewer
-        from ..core.agent_context import AgentContext
-        reviewer_context = AgentContext(
-            file_tree=state.get("file_tree", []),
-            file_contents=state.get("file_contents", ""),
-            analysis_result=state.get("analysis_result", {}),
-            dockerfile_content=dockerfile_content
-        )
-        
-        review_result, usage = review_dockerfile(context=reviewer_context)
-        
-        usage_dict = {
-            "stage": "reviewer",
-            "prompt_tokens": usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "total_tokens": usage.get("total_tokens", 0),
-            "model": get_model_for_agent("reviewer")
-        }
-        
-        current_stats = state.get("usage_stats", [])
-        span.set_attribute("is_secure", review_result.is_secure)
-        
-        if not review_result.is_secure:
-            # Construct detailed error with structured fixes
-            issues_str = "\n".join([
-                f"- [{issue.severity}] {issue.description} (Fix: {issue.suggestion})" 
-                for issue in review_result.issues
-            ])
-            error_msg = f"Security Review Failed:\n{issues_str}"
-            logger.warning(error_msg)
-            span.set_attribute("issues_count", len(review_result.issues))
+        try:
+            # Create unified context for the reviewer
+            from ..core.agent_context import AgentContext
+            reviewer_context = AgentContext(
+                file_tree=state.get("file_tree", []),
+                file_contents=state.get("file_contents", ""),
+                analysis_result=state.get("analysis_result", {}),
+                dockerfile_content=dockerfile_content
+            )
             
-            # Check if reviewer provided a fixed dockerfile
-            if review_result.fixed_dockerfile:
-                logger.info("Reviewer provided a corrected Dockerfile - will use it directly")
-                span.set_attribute("auto_fixed", True)
+            review_result, usage = review_dockerfile(context=reviewer_context)
+            
+            usage_dict = {
+                "stage": "reviewer",
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+                "total_tokens": usage.get("total_tokens", 0),
+                "model": get_model_for_agent("reviewer")
+            }
+            
+            current_stats = state.get("usage_stats", [])
+            if span:
+                span.set_attribute("is_secure", review_result.is_secure)
+            
+            if not review_result.is_secure:
+                # Construct detailed error with structured fixes
+                issues_str = "\n".join([
+                    f"- [{issue.severity}] {issue.description} (Fix: {issue.suggestion})" 
+                    for issue in review_result.issues
+                ])
+                error_msg = f"Security Review Failed:\n{issues_str}"
+                logger.warning(error_msg)
+                if span:
+                    span.set_attribute("issues_count", len(review_result.issues))
+                
+                # Check if reviewer provided a fixed dockerfile
+                if review_result.fixed_dockerfile:
+                    logger.info("Reviewer provided a corrected Dockerfile - will use it directly")
+                    if span:
+                        span.set_attribute("auto_fixed", True)
+                    return {
+                        "dockerfile_content": review_result.fixed_dockerfile,
+                        "error": None,
+                        "usage_stats": current_stats + [usage_dict]
+                    }
+                
+                # Otherwise, pass the fixes to the next iteration
                 return {
-                    "dockerfile_content": review_result.fixed_dockerfile,
-                    "error": None,
+                    "error": error_msg,
+                    "error_details": {
+                        "error_type": "security_review",
+                        "message": error_msg,
+                        "dockerfile_fixes": review_result.dockerfile_fixes,
+                        "should_retry": True
+                    },
                     "usage_stats": current_stats + [usage_dict]
                 }
             
-            # Otherwise, pass the fixes to the next iteration
+            logger.info("Security Review Passed.")
             return {
-                "error": error_msg,
-                "error_details": {
-                    "error_type": "security_review",
-                    "message": error_msg,
-                    "dockerfile_fixes": review_result.dockerfile_fixes,
-                    "should_retry": True
-                },
                 "usage_stats": current_stats + [usage_dict]
             }
-        
-        logger.info("Security Review Passed.")
-        return {
-            "usage_stats": current_stats + [usage_dict]
-        }
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            
+            # Check for rate limit errors
+            if 'rate limit' in error_str or '429' in error_str or 'quota exceeded' in error_str:
+                logger.error(f"Rate limit exceeded during security review: {e}")
+                return {
+                    "error": "API rate limit exceeded",
+                    "error_details": {
+                        "error_type": "environment_error",
+                        "message": "The LLM API rate limit was exceeded.",
+                        "suggestion": "Wait a few minutes before retrying.",
+                        "should_retry": False
+                    }
+                }
+            
+            # For other errors, skip the review and proceed (non-critical)
+            logger.warning(f"Security review failed (continuing without review): {e}")
+            return {}  # Proceed to validation without blocking
 
 
 def validate_node(state: DockAIState) -> DockAIState:
@@ -753,8 +815,33 @@ def validate_node(state: DockAIState) -> DockAIState:
         
         # Save Dockerfile for validation
         output_path = os.path.join(path, "Dockerfile")
-        with open(output_path, "w") as f:
-            f.write(dockerfile_content)
+        try:
+            with open(output_path, "w") as f:
+                f.write(dockerfile_content)
+        except PermissionError as e:
+            logger.error(f"Permission denied writing Dockerfile: {output_path}")
+            return {
+                "validation_result": {"success": False, "message": f"Permission denied: {e}"},
+                "error": f"Cannot write Dockerfile: Permission denied",
+                "error_details": {
+                    "error_type": "environment_error",
+                    "message": f"Cannot write Dockerfile to {output_path}: Permission denied",
+                    "suggestion": "Check directory permissions or run with appropriate privileges.",
+                    "should_retry": False
+                }
+            }
+        except OSError as e:
+            logger.error(f"Failed to write Dockerfile: {e}")
+            return {
+                "validation_result": {"success": False, "message": str(e)},
+                "error": f"Cannot write Dockerfile: {e}",
+                "error_details": {
+                    "error_type": "environment_error",
+                    "message": f"Failed to write Dockerfile to {output_path}: {e}",
+                    "suggestion": "Check disk space and directory permissions.",
+                    "should_retry": False
+                }
+            }
             
         logger.info("Validating Dockerfile...")
         
@@ -860,66 +947,123 @@ def reflect_node(state: DockAIState) -> DockAIState:
         
         logger.info("Reflecting on failure...")
         
-        # Get container logs from error details if available
-        container_logs = error_details.get("original_error", "") if error_details else ""
-        
-        from ..core.agent_context import AgentContext
-        reflect_context = AgentContext(
-            file_tree=state.get("file_tree", []),
-            file_contents=state.get("file_contents", ""),
-            analysis_result=analysis_result,
-            dockerfile_content=dockerfile_content,
-            error_message=error_message,
-            error_details=error_details,
-            retry_history=retry_history,
-            container_logs=container_logs
-        )
-        
-        reflection_result, usage = reflect_on_failure(context=reflect_context)
-        
-        usage_dict = {
-            "stage": "reflector",
-            "prompt_tokens": usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "total_tokens": usage.get("total_tokens", 0),
-            "model": get_model_for_agent("reflector")
-        }
-        
-        current_stats = state.get("usage_stats", [])
-        
-        # Convert reflection to dict
-        reflection_dict = reflection_result.model_dump()
-        
-        logger.info(f"Root Cause: {reflection_result.root_cause_analysis}")
-        logger.info(f"Fix Strategy: {', '.join(reflection_result.specific_fixes[:2])}")
-        logger.info(f"Confidence: {reflection_result.confidence_in_fix}")
-        
-        span.set_attribute("root_cause", reflection_result.root_cause_analysis[:200])
-        span.set_attribute("confidence", reflection_result.confidence_in_fix)
-        span.set_attribute("needs_reanalysis", reflection_result.needs_reanalysis)
-        
-        # Add to retry history for learning (compact format to save tokens)
-        # We intentionally exclude full dockerfile_content - it's stored in previous_dockerfile
-        # and including it here would bloat context on subsequent retries
-        new_retry_entry = {
-            "attempt_number": state.get("retry_count", 0) + 1,
-            "error_type": error_details.get("error_type", "unknown") if error_details else "unknown",
-            "error_summary": error_message[:200] if error_message else "Unknown",  # Truncate long errors
-            "what_was_tried": reflection_result.what_was_tried,
-            "why_it_failed": reflection_result.why_it_failed,
-            "lesson_learned": reflection_result.lesson_learned,
-            "fix_applied": ", ".join(reflection_result.specific_fixes[:2]) if reflection_result.specific_fixes else ""  # Top 2 fixes only
-        }
-        
-        updated_history = retry_history + [new_retry_entry]
-        
-        return {
-            "reflection": reflection_dict,
-            "previous_dockerfile": dockerfile_content,  # Store for iterative improvement
-            "needs_reanalysis": reflection_result.needs_reanalysis,
-            "retry_history": updated_history,
-            "usage_stats": current_stats + [usage_dict]
-        }
+        try:
+            # Get container logs from error details if available
+            container_logs = error_details.get("original_error", "") if error_details else ""
+            
+            from ..core.agent_context import AgentContext
+            reflect_context = AgentContext(
+                file_tree=state.get("file_tree", []),
+                file_contents=state.get("file_contents", ""),
+                analysis_result=analysis_result,
+                dockerfile_content=dockerfile_content,
+                error_message=error_message,
+                error_details=error_details,
+                retry_history=retry_history,
+                container_logs=container_logs
+            )
+            
+            reflection_result, usage = reflect_on_failure(context=reflect_context)
+            
+            usage_dict = {
+                "stage": "reflector",
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+                "total_tokens": usage.get("total_tokens", 0),
+                "model": get_model_for_agent("reflector")
+            }
+            
+            current_stats = state.get("usage_stats", [])
+            
+            # Convert reflection to dict
+            reflection_dict = reflection_result.model_dump()
+            
+            logger.info(f"Root Cause: {reflection_result.root_cause_analysis}")
+            logger.info(f"Fix Strategy: {', '.join(reflection_result.specific_fixes[:2])}")
+            logger.info(f"Confidence: {reflection_result.confidence_in_fix}")
+            
+            if span:
+                span.set_attribute("root_cause", reflection_result.root_cause_analysis[:200])
+                span.set_attribute("confidence", reflection_result.confidence_in_fix)
+                span.set_attribute("needs_reanalysis", reflection_result.needs_reanalysis)
+            
+            # Add to retry history for learning (compact format to save tokens)
+            # We intentionally exclude full dockerfile_content - it's stored in previous_dockerfile
+            # and including it here would bloat context on subsequent retries
+            new_retry_entry = {
+                "attempt_number": state.get("retry_count", 0) + 1,
+                "error_type": error_details.get("error_type", "unknown") if error_details else "unknown",
+                "error_summary": error_message[:200] if error_message else "Unknown",  # Truncate long errors
+                "what_was_tried": reflection_result.what_was_tried,
+                "why_it_failed": reflection_result.why_it_failed,
+                "lesson_learned": reflection_result.lesson_learned,
+                "fix_applied": ", ".join(reflection_result.specific_fixes[:2]) if reflection_result.specific_fixes else ""  # Top 2 fixes only
+            }
+            
+            updated_history = retry_history + [new_retry_entry]
+            
+            return {
+                "reflection": reflection_dict,
+                "previous_dockerfile": dockerfile_content,  # Store for iterative improvement
+                "needs_reanalysis": reflection_result.needs_reanalysis,
+                "retry_history": updated_history,
+                "usage_stats": current_stats + [usage_dict]
+            }
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            
+            # Check for rate limit errors
+            if 'rate limit' in error_str or '429' in error_str or 'quota exceeded' in error_str:
+                logger.error(f"Rate limit exceeded during reflection: {e}")
+                # Return a basic reflection that suggests retrying
+                return {
+                    "reflection": {
+                        "root_cause_analysis": "Rate limit exceeded during analysis",
+                        "specific_fixes": ["Wait and retry"],
+                        "confidence_in_fix": 0.5,
+                        "needs_reanalysis": False,
+                        "what_was_tried": "Attempted to analyze failure",
+                        "why_it_failed": "API rate limit exceeded",
+                        "lesson_learned": "Rate limits can cause reflection failures"
+                    },
+                    "previous_dockerfile": dockerfile_content,
+                    "needs_reanalysis": False,
+                    "retry_history": retry_history + [{
+                        "attempt_number": retry_count + 1,
+                        "error_type": "rate_limit",
+                        "error_summary": "Rate limit exceeded during reflection",
+                        "what_was_tried": "Unknown",
+                        "why_it_failed": "Rate limit",
+                        "lesson_learned": "N/A",
+                        "fix_applied": "Retry with basic fix approach"
+                    }]
+                }
+            
+            # For other errors, provide a basic fallback reflection
+            logger.error(f"Reflection failed: {e}")
+            return {
+                "reflection": {
+                    "root_cause_analysis": f"Reflection failed: {str(e)[:200]}",
+                    "specific_fixes": ["Review error details manually", "Check Dockerfile syntax"],
+                    "confidence_in_fix": 0.3,
+                    "needs_reanalysis": True,
+                    "what_was_tried": "Unknown - reflection failed",
+                    "why_it_failed": str(e)[:200],
+                    "lesson_learned": "Reflection can fail on complex errors"
+                },
+                "previous_dockerfile": dockerfile_content,
+                "needs_reanalysis": True,
+                "retry_history": retry_history + [{
+                    "attempt_number": retry_count + 1,
+                    "error_type": error_type,
+                    "error_summary": error_message[:200] if error_message else "Unknown",
+                    "what_was_tried": "Unknown - reflection failed",
+                    "why_it_failed": str(e)[:100],
+                    "lesson_learned": "Reflection failed",
+                    "fix_applied": "Attempting basic fixes"
+                }]
+            }
 
 
 def increment_retry(state: DockAIState) -> DockAIState:
