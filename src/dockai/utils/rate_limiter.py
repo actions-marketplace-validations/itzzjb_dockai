@@ -1,9 +1,8 @@
 """
 Rate Limit Handler for DockAI.
 
-This module provides intelligent rate limit detection, exponential backoff,
-This module provides intelligent rate limit detection, exponential backoff,
-and retry logic for API calls to LLM providers and Docker Hub.
+Provides exponential backoff with jitter for generic rate limits and
+registry-specific retries for Docker Hub/GCR/Quay.
 """
 
 import time
@@ -46,6 +45,25 @@ class RateLimitHandler:
         Args:
             attempt (int): Current retry attempt number
             retry_after (Optional[int]): Retry-After header value in seconds
+            
+        Returns:
+            float: Delay duration in seconds
+        """
+        if retry_after:
+            return min(retry_after, self.max_delay)
+        delay = min(
+            self.base_delay * (self.backoff_factor ** attempt),
+            self.max_delay
+        )
+        import random
+        jitter = random.uniform(0, delay * 0.1)  # 10% jitter
+        return delay + jitter
+    
+    def reset(self):
+        """Reset retry counter."""
+        self.retry_count = 0
+
+
 def with_rate_limit_handling(
     max_retries: int = 5,
     base_delay: float = 1.0,
@@ -55,20 +73,6 @@ def with_rate_limit_handling(
     Decorator to add rate limit handling to any function.
     
     Catches rate limit errors and retries with exponential backoff.
-    
-    Args:
-        max_retries (int): Maximum number of retry attempts
-        base_delay (float): Initial delay in seconds
-        max_delay (float): Maximum delay in seconds
-        
-    Returns:
-        Decorated function with rate limit handling
-        
-    Example:
-        @with_rate_limit_handling(max_retries=3)
-        def call_openai_api():
-            # Your API call here
-            pass
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
@@ -220,25 +224,3 @@ def handle_registry_rate_limit(func: Callable) -> Callable:
     
     return wrapper
 
-
-def get_rate_limit_status() -> Dict[str, Any]:
-    """
-    Get current rate limit status information.
-    
-    This can be expanded to track API usage and provide warnings
-    before limits are hit.
-    
-    Returns:
-        Dict with rate limit information
-    """
-    # This is a placeholder for future implementation
-    # Could track:
-    # - Number of API calls made in current session
-    # - Estimated tokens used
-    # - Time until rate limits reset
-    
-    return {
-        "calls_made": 0,
-        "tokens_used": 0,
-        "status": "ok"
-    }
