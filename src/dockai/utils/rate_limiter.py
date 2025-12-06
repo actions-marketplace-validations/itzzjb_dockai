@@ -8,7 +8,7 @@ and retry logic for API calls to LLM providers and Docker Hub.
 
 import time
 import logging
-from typing import Callable, Any, Optional, Dict
+from typing import Callable, Any, Optional
 from functools import wraps
 
 
@@ -46,31 +46,6 @@ class RateLimitHandler:
         Args:
             attempt (int): Current retry attempt number
             retry_after (Optional[int]): Retry-After header value in seconds
-            
-        Returns:
-            float: Delay duration in seconds
-        """
-        if retry_after:
-            # Honor the Retry-After header if provided
-            return min(retry_after, self.max_delay)
-        
-        # Calculate exponential backoff: base_delay * (backoff_factor ^ attempt)
-        delay = min(
-            self.base_delay * (self.backoff_factor ** attempt),
-            self.max_delay
-        )
-        
-        # Add jitter (randomness) to prevent thundering herd
-        import random
-        jitter = random.uniform(0, delay * 0.1)  # 10% jitter
-        
-        return delay + jitter
-    
-    def reset(self):
-        """Reset retry counter."""
-        self.retry_count = 0
-
-
 def with_rate_limit_handling(
     max_retries: int = 5,
     base_delay: float = 1.0,

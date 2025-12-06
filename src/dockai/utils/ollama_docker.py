@@ -301,21 +301,3 @@ def get_ollama_url(model_name: str = "llama3", preferred_url: str = "http://loca
     return start_ollama_container(model_name)
 
 
-def cleanup_ollama_resources(remove_container: bool = False, remove_volume: bool = False) -> None:
-    """
-    Clean up Ollama Docker resources.
-    
-    Args:
-        remove_container: If True, remove the stopped container.
-        remove_volume: If True, also remove the model cache volume.
-    """
-    # Stop any running container
-    stop_ollama_container()
-    
-    if remove_container:
-        logger.info("Removing Ollama container...")
-        _run_command(["docker", "rm", "-f", OLLAMA_CONTAINER_NAME])
-    
-    if remove_volume:
-        logger.info("Removing Ollama model cache...")
-        _run_command(["docker", "volume", "rm", "ollama_models"])
