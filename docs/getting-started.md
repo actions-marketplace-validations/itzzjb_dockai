@@ -67,7 +67,7 @@ This means DockAI can handle projects that don't work on the first try—which i
 |----------|---------|---------|--------------|
 | **Python** | 3.10+ | Runs DockAI | [python.org](https://python.org) |
 | **Docker** | 20.10+ | Builds and validates Dockerfiles | [docker.com](https://docker.com) |
-| **pip** | Latest | Installs DockAI package | Included with Python |
+| **pip** or **uv** | Latest | Installs DockAI package | pip included with Python, [uv](https://docs.astral.sh/uv/) for faster installs |
 
 ### Checking Your Setup
 
@@ -175,10 +175,22 @@ docker pull hadolint/hadolint
 
 ### Option 1: Install from PyPI (Recommended)
 
-This is the simplest method for most users:
+This is the simplest method for most users. Choose your preferred package manager:
 
+#### Using pip
 ```bash
 pip install dockai-cli
+```
+
+#### Using uv (Faster)
+[uv](https://docs.astral.sh/uv/) is a fast Python package installer written in Rust:
+
+```bash
+# Install uv first (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dockai-cli
+uv pip install dockai-cli
 ```
 
 This installs:
@@ -208,8 +220,9 @@ If you want to contribute to DockAI or use the latest development version:
 git clone https://github.com/itzzjb/dockai.git
 cd dockai
 
-# Install in development mode
-pip install -e .
+# Install in development mode (choose one)
+pip install -e .      # Using pip
+uv sync                # Using uv (recommended - also creates uv.lock)
 
 # Verify installation
 dockai --help
@@ -772,7 +785,12 @@ Now that you've generated your first Dockerfile, explore more:
 
 ### Minimal Setup
 ```bash
+# Using pip
 pip install dockai-cli
+
+# Or using uv (faster)
+uv pip install dockai-cli
+
 export OPENAI_API_KEY=sk-your-key
 dockai build .
 ```

@@ -33,7 +33,12 @@
 DockAI is an **agentic AI framework** that analyzes your codebase and generates optimized, production-ready Dockerfiles. Unlike template-based tools, DockAI uses **first-principles reasoning** to understand your application and create Dockerfiles from scratch—handling everything from standard stacks to legacy systems.
 
 ```bash
+# Using pip
 pip install dockai-cli
+
+# Or using uv (faster)
+uv pip install dockai-cli
+
 dockai build /path/to/project
 ```
 
@@ -96,8 +101,9 @@ DockAI is designed to fit into any workflow, whether you are a developer, a DevO
 Perfect for running locally on your machine.
 
 ```bash
-# Install
-pip install dockai-cli
+# Install (choose one)
+pip install dockai-cli    # Using pip
+uv pip install dockai-cli # Using uv (faster)
 
 # Run
 dockai build .
