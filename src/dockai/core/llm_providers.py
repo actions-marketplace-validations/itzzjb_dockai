@@ -350,74 +350,138 @@ def create_llm(
 
 def _create_openai_llm(model_name: str, temperature: float, **kwargs) -> Any:
     """Creates an OpenAI LLM instance."""
-    from langchain_openai import ChatOpenAI
+    try:
+        from langchain_openai import ChatOpenAI
+    except ImportError as e:
+        logger.error("Failed to import langchain_openai - is it installed?")
+        raise ImportError(
+            "The langchain_openai package is not installed. "
+            "Install it with: pip install langchain-openai"
+        ) from e
     
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is required for OpenAI provider")
+        logger.error("OPENAI_API_KEY environment variable is missing")
+        raise ValueError(
+            "OPENAI_API_KEY environment variable is required for OpenAI provider. "
+            "Set it in your .env file or environment."
+        )
     
-    return ChatOpenAI(
-        model=model_name,
-        temperature=temperature,
-        api_key=api_key,
-        **kwargs
-    )
+    try:
+        return ChatOpenAI(
+            model=model_name,
+            temperature=temperature,
+            api_key=api_key,
+            **kwargs
+        )
+    except Exception as e:
+        logger.error(f"Failed to create OpenAI LLM: {e}")
+        raise
 
 
 def _create_azure_llm(model_name: str, temperature: float, config: LLMConfig, **kwargs) -> Any:
     """Creates an Azure OpenAI LLM instance."""
-    from langchain_openai import AzureChatOpenAI
+    try:
+        from langchain_openai import AzureChatOpenAI
+    except ImportError as e:
+        logger.error("Failed to import langchain_openai - is it installed?")
+        raise ImportError(
+            "The langchain_openai package is not installed. "
+            "Install it with: pip install langchain-openai"
+        ) from e
     
     api_key = os.getenv("AZURE_OPENAI_API_KEY")
     if not api_key:
-        raise ValueError("AZURE_OPENAI_API_KEY environment variable is required for Azure provider")
+        logger.error("AZURE_OPENAI_API_KEY environment variable is missing")
+        raise ValueError(
+            "AZURE_OPENAI_API_KEY environment variable is required for Azure provider. "
+            "Set it in your .env file or environment."
+        )
     
     if not config.azure_endpoint:
-        raise ValueError("AZURE_OPENAI_ENDPOINT environment variable is required for Azure provider")
+        logger.error("AZURE_OPENAI_ENDPOINT environment variable is missing")
+        raise ValueError(
+            "AZURE_OPENAI_ENDPOINT environment variable is required for Azure provider. "
+            "Set it to your Azure OpenAI endpoint URL."
+        )
     
     # Get deployment name from mapping or use model name
     deployment_name = config.azure_deployment_map.get(model_name, model_name)
     
-    return AzureChatOpenAI(
-        azure_deployment=deployment_name,
-        azure_endpoint=config.azure_endpoint,
-        api_version=config.azure_api_version,
-        api_key=api_key,
-        temperature=temperature,
-        **kwargs
-    )
+    try:
+        return AzureChatOpenAI(
+            azure_deployment=deployment_name,
+            azure_endpoint=config.azure_endpoint,
+            api_version=config.azure_api_version,
+            api_key=api_key,
+            temperature=temperature,
+            **kwargs
+        )
+    except Exception as e:
+        logger.error(f"Failed to create Azure OpenAI LLM: {e}")
+        raise
 
 
 def _create_gemini_llm(model_name: str, temperature: float, config: LLMConfig, **kwargs) -> Any:
     """Creates a Google Gemini LLM instance."""
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+    except ImportError as e:
+        logger.error("Failed to import langchain_google_genai - is it installed?")
+        raise ImportError(
+            "The langchain_google_genai package is not installed. "
+            "Install it with: pip install langchain-google-genai"
+        ) from e
     
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        raise ValueError("GOOGLE_API_KEY environment variable is required for Gemini provider")
+        logger.error("GOOGLE_API_KEY environment variable is missing")
+        raise ValueError(
+            "GOOGLE_API_KEY environment variable is required for Gemini provider. "
+            "Set it in your .env file or environment."
+        )
     
-    return ChatGoogleGenerativeAI(
-        model=model_name,
-        temperature=temperature,
-        google_api_key=api_key,
-        **kwargs
-    )
+    try:
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            temperature=temperature,
+            google_api_key=api_key,
+            **kwargs
+        )
+    except Exception as e:
+        logger.error(f"Failed to create Gemini LLM: {e}")
+        raise
 
 
 def _create_anthropic_llm(model_name: str, temperature: float, **kwargs) -> Any:
     """Creates an Anthropic Claude LLM instance."""
-    from langchain_anthropic import ChatAnthropic
+    try:
+        from langchain_anthropic import ChatAnthropic
+    except ImportError as e:
+        logger.error("Failed to import langchain_anthropic - is it installed?")
+        raise ImportError(
+            "The langchain_anthropic package is not installed. "
+            "Install it with: pip install langchain-anthropic"
+        ) from e
     
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY environment variable is required for Anthropic provider")
+        logger.error("ANTHROPIC_API_KEY environment variable is missing")
+        raise ValueError(
+            "ANTHROPIC_API_KEY environment variable is required for Anthropic provider. "
+            "Set it in your .env file or environment."
+        )
     
-    return ChatAnthropic(
-        model=model_name,
-        temperature=temperature,
-        api_key=api_key,
-        **kwargs
-    )
+    try:
+        return ChatAnthropic(
+            model=model_name,
+            temperature=temperature,
+            api_key=api_key,
+            **kwargs
+        )
+    except Exception as e:
+        logger.error(f"Failed to create Anthropic LLM: {e}")
+        raise
 
 
 def _create_ollama_llm(model_name: str, temperature: float, config: LLMConfig, **kwargs) -> Any:

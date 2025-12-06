@@ -50,7 +50,75 @@ def scan_node(state: DockAIState) -> DockAIState:
     
     with create_span("node.scan", {"path": path}) as span:
         logger.info(f"Scanning directory: {path}")
-        file_tree = get_file_tree(path)
+        
+        # Validate path exists and is accessible
+        if not os.path.exists(path):
+            logger.error(f"Directory does not exist: {path}")
+            return {
+                "file_tree": [],
+                "error": f"Directory not found: {path}",
+                "error_details": {
+                    "error_type": "environment_error",
+                    "message": f"The specified path does not exist: {path}",
+                    "suggestion": "Please verify the path and try again.",
+                    "should_retry": False
+                }
+            }
+        
+        if not os.path.isdir(path):
+            logger.error(f"Path is not a directory: {path}")
+            return {
+                "file_tree": [],
+                "error": f"Path is not a directory: {path}",
+                "error_details": {
+                    "error_type": "environment_error",
+                    "message": f"The specified path is not a directory: {path}",
+                    "suggestion": "Please specify a directory path, not a file.",
+                    "should_retry": False
+                }
+            }
+        
+        try:
+            file_tree = get_file_tree(path)
+        except PermissionError as e:
+            logger.error(f"Permission denied accessing directory: {path} - {e}")
+            return {
+                "file_tree": [],
+                "error": f"Permission denied: {path}",
+                "error_details": {
+                    "error_type": "environment_error",
+                    "message": f"Cannot access directory due to permissions: {path}",
+                    "suggestion": "Check directory permissions or run with appropriate privileges.",
+                    "should_retry": False
+                }
+            }
+        except Exception as e:
+            logger.error(f"Unexpected error scanning directory: {path} - {e}")
+            return {
+                "file_tree": [],
+                "error": f"Failed to scan directory: {e}",
+                "error_details": {
+                    "error_type": "environment_error",
+                    "message": str(e),
+                    "suggestion": "Check the directory path and permissions.",
+                    "should_retry": False
+                }
+            }
+        
+        # Check for empty directory
+        if not file_tree:
+            logger.warning(f"No files found in directory: {path} (may be empty or all files are ignored)")
+            return {
+                "file_tree": [],
+                "error": "Empty directory or all files ignored",
+                "error_details": {
+                    "error_type": "project_error",
+                    "message": "No files found to analyze. The directory may be empty or all files match ignore patterns.",
+                    "suggestion": "Ensure the directory contains source code files and check .gitignore/.dockerignore patterns.",
+                    "should_retry": False
+                }
+            }
+        
         logger.info(f"Found {len(file_tree)} files to analyze")
         
         if span:
@@ -79,9 +147,23 @@ def analyze_node(state: DockAIState) -> DockAIState:
         DockAIState: Updated state with 'analysis_result', 'usage_stats',
         and clears the 'needs_reanalysis' flag.
     """
-    file_tree = state["file_tree"]
+    file_tree = state.get("file_tree", [])
     config = state.get("config", {})
     instructions = config.get("analyzer_instructions", "")
+    
+    # Check for empty file tree (edge case - should have been caught in scan_node)
+    if not file_tree:
+        logger.error("Cannot analyze: file tree is empty")
+        return {
+            "analysis_result": {},
+            "error": "No files to analyze",
+            "error_details": {
+                "error_type": "project_error",
+                "message": "The file tree is empty. Cannot analyze a project with no files.",
+                "suggestion": "Ensure the project directory contains source files.",
+                "should_retry": False
+            }
+        }
     
     # Check if this is a re-analysis triggered by reflection
     needs_reanalysis = state.get("needs_reanalysis", False)
@@ -101,42 +183,87 @@ def analyze_node(state: DockAIState) -> DockAIState:
         else:
             logger.info("Analyzing repository needs...")
         
-        # Create unified context for the analyzer
-        from ..core.agent_context import AgentContext
-        analyzer_context = AgentContext(
-            file_tree=file_tree,
-            file_contents=state.get("file_contents", ""),
-            analysis_result=state.get("analysis_result", {}),
-            custom_instructions=instructions
-        )
-        
-        # Execute analysis (returns AnalysisResult object and token usage)
-        analysis_result_obj, usage = analyze_repo_needs(context=analyzer_context)
-        
-        logger.info(f"Analyzer Reasoning:\n{analysis_result_obj.thought_process}")
-        
-        # Convert Pydantic model to dict for state storage
-        analysis_result = analysis_result_obj.model_dump()
-        
-        if span:
-            span.set_attribute("detected_stack", analysis_result.get("stack", ""))
-            span.set_attribute("project_type", analysis_result.get("project_type", ""))
-            span.set_attribute("llm.total_tokens", usage.get("total_tokens", 0))
-        
-        usage_dict = {
-            "stage": "analyzer" if not needs_reanalysis else "re-analyzer",
-            "prompt_tokens": usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "total_tokens": usage.get("total_tokens", 0),
-            "model": get_model_for_agent("analyzer")
-        }
-        
-        current_stats = state.get("usage_stats", [])
-        return {
-            "analysis_result": analysis_result, 
-            "usage_stats": current_stats + [usage_dict],
-            "needs_reanalysis": False  # Clear the flag as analysis is done
-        }
+        try:
+            # Create unified context for the analyzer
+            from ..core.agent_context import AgentContext
+            analyzer_context = AgentContext(
+                file_tree=file_tree,
+                file_contents=state.get("file_contents", ""),
+                analysis_result=state.get("analysis_result", {}),
+                custom_instructions=instructions
+            )
+            
+            # Execute analysis (returns AnalysisResult object and token usage)
+            analysis_result_obj, usage = analyze_repo_needs(context=analyzer_context)
+            
+            logger.info(f"Analyzer Reasoning:\n{analysis_result_obj.thought_process}")
+            
+            # Convert Pydantic model to dict for state storage
+            analysis_result = analysis_result_obj.model_dump()
+            
+            if span:
+                span.set_attribute("detected_stack", analysis_result.get("stack", ""))
+                span.set_attribute("project_type", analysis_result.get("project_type", ""))
+                span.set_attribute("llm.total_tokens", usage.get("total_tokens", 0))
+            
+            usage_dict = {
+                "stage": "analyzer" if not needs_reanalysis else "re-analyzer",
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+                "total_tokens": usage.get("total_tokens", 0),
+                "model": get_model_for_agent("analyzer")
+            }
+            
+            current_stats = state.get("usage_stats", [])
+            return {
+                "analysis_result": analysis_result, 
+                "usage_stats": current_stats + [usage_dict],
+                "needs_reanalysis": False  # Clear the flag as analysis is done
+            }
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            
+            # Check for rate limit errors
+            if 'rate limit' in error_str or '429' in error_str or 'quota exceeded' in error_str:
+                logger.error(f"Rate limit exceeded during analysis: {e}")
+                return {
+                    "analysis_result": {},
+                    "error": "API rate limit exceeded",
+                    "error_details": {
+                        "error_type": "environment_error",
+                        "message": "The LLM API rate limit was exceeded. Please wait a few minutes and try again.",
+                        "suggestion": "Wait a few minutes before retrying, or check your API quota.",
+                        "should_retry": False
+                    }
+                }
+            
+            # Check for authentication errors
+            if 'authentication' in error_str or 'api key' in error_str or 'unauthorized' in error_str or '401' in error_str:
+                logger.error(f"Authentication error during analysis: {e}")
+                return {
+                    "analysis_result": {},
+                    "error": "API authentication failed",
+                    "error_details": {
+                        "error_type": "environment_error",
+                        "message": "Failed to authenticate with the LLM provider. Check your API key.",
+                        "suggestion": "Verify your API key is correct and has not expired.",
+                        "should_retry": False
+                    }
+                }
+            
+            # Generic LLM error
+            logger.error(f"LLM error during analysis: {e}")
+            return {
+                "analysis_result": {},
+                "error": f"Analysis failed: {str(e)[:200]}",
+                "error_details": {
+                    "error_type": "dockerfile_error",
+                    "message": f"The AI analysis failed unexpectedly: {str(e)[:200]}",
+                    "suggestion": "This may be a temporary issue. Try again or check your LLM configuration.",
+                    "should_retry": True
+                }
+            }
 
 
 from ..utils.file_utils import smart_truncate, read_critical_files
@@ -161,8 +288,39 @@ def read_files_node(state: DockAIState) -> DockAIState:
         DockAIState: Updated state with 'file_contents' string.
     """
     path = state["path"]
-    files_to_read = state["analysis_result"].get("files_to_read", [])
+    analysis_result = state.get("analysis_result", {})
+    
+    # Handle case where analysis_result is empty or missing files_to_read
+    if not analysis_result:
+        logger.warning("No analysis result available - cannot determine files to read")
+        return {
+            "file_contents": "",
+            "error": "Analysis result is missing",
+            "error_details": {
+                "error_type": "dockerfile_error",
+                "message": "Analyzer did not produce results - cannot determine which files to read.",
+                "suggestion": "This is an internal issue. Will retry with different approach.",
+                "should_retry": True
+            }
+        }
+    
+    files_to_read = analysis_result.get("files_to_read", [])
     config = state.get("config", {})
+    
+    # Handle empty files_to_read list
+    if not files_to_read:
+        logger.warning("Analyzer did not identify any critical files to read")
+        # Try to use common file patterns as fallback
+        common_files = ["package.json", "requirements.txt", "Gemfile", "go.mod", "Cargo.toml", "pom.xml", "build.gradle", "Makefile", "setup.py", "pyproject.toml"]
+        for f in common_files:
+            if os.path.exists(os.path.join(path, f)):
+                files_to_read.append(f)
+        
+        if files_to_read:
+            logger.info(f"Using fallback: found {len(files_to_read)} common project files")
+        else:
+            logger.warning("No common project files found either - proceeding with empty context")
+            return {"file_contents": ""}
     
     # Truncation setting priority:
     # 1. Config value (if explicitly set)
@@ -172,7 +330,23 @@ def read_files_node(state: DockAIState) -> DockAIState:
     
     logger.info(f"Reading {len(files_to_read)} critical files...")
     
-    file_contents_str = read_critical_files(path, files_to_read, truncation_enabled=truncation_enabled)
+    try:
+        file_contents_str = read_critical_files(path, files_to_read, truncation_enabled=truncation_enabled)
+    except Exception as e:
+        logger.error(f"Error reading critical files: {e}")
+        return {
+            "file_contents": "",
+            "error": f"Failed to read project files: {e}",
+            "error_details": {
+                "error_type": "environment_error",
+                "message": str(e),
+                "suggestion": "Check file permissions and encoding.",
+                "should_retry": False
+            }
+        }
+    
+    if not file_contents_str.strip():
+        logger.warning("All critical files were empty or could not be read")
     
     return {"file_contents": file_contents_str}
 
@@ -266,109 +440,177 @@ def generate_node(state: DockAIState) -> DockAIState:
     stack = analysis_result.get("stack", "Unknown")
     retry_count = state.get("retry_count", 0)
     
+    # Edge case: Check for empty analysis result
+    if not analysis_result:
+        logger.error("Cannot generate Dockerfile: analysis result is empty")
+        return {
+            "dockerfile_content": "",
+            "error": "No analysis result available",
+            "error_details": {
+                "error_type": "dockerfile_error",
+                "message": "Cannot generate Dockerfile without analysis results.",
+                "suggestion": "This is an internal error. The analysis step may have failed.",
+                "should_retry": True
+            }
+        }
+    
     with create_span("node.generate", {"stack": stack, "retry_count": retry_count}) as span:
-        file_contents = state["file_contents"]
+        file_contents = state.get("file_contents", "")
         config = state.get("config", {})
         instructions = config.get("generator_instructions", "")
         current_plan = state.get("current_plan", {})
         reflection = state.get("reflection")
         previous_dockerfile = state.get("previous_dockerfile")
         
-        # Fetch verified tags dynamically to ensure image existence
-        suggested_image = analysis_result.get("suggested_base_image", "").strip()
+        # Edge case: Check for empty file contents (non-critical but log it)
+        if not file_contents:
+            logger.warning("File contents are empty - generating Dockerfile with limited context")
         
-        # Check if reflection suggests a different base image
-        if reflection and reflection.get("should_change_base_image"):
-            suggested_image = reflection.get("suggested_base_image", suggested_image)
-            logger.info(f"Using reflection-suggested base image: {suggested_image}")
-        
-        verified_tags = []
-        if suggested_image:
-            logger.info(f"Fetching tags for: {suggested_image}")
-            verified_tags = get_docker_tags(suggested_image)
-        else:
-            logger.warning("No suggested base image from analysis. AI will determine the best base image.")
-        
-        verified_tags_str = ", ".join(verified_tags) if verified_tags else "Use your best judgement based on the detected technology stack."
-        
-        # Use powerful model for initial generation - better quality upfront reduces retries
-        # This optimization reduces total token usage by avoiding costly retry cycles
-        model_name = get_model_for_agent("generator")  # Always use powerful model
-        if retry_count == 0:
-            logger.info(f"Generating Dockerfile (Model: {model_name})...")
-        else:
-            logger.info(f"Improving Dockerfile (Model: {model_name}, attempt {retry_count + 1})...")
-        
-        # Decide: Fresh generation or iterative improvement?
-        if reflection and previous_dockerfile and retry_count > 0:
-            # Iterative improvement based on reflection
-            logger.info("Using iterative improvement strategy...")
+        try:
+            # Fetch verified tags dynamically to ensure image existence
+            suggested_image = analysis_result.get("suggested_base_image", "").strip()
             
-            from ..core.agent_context import AgentContext
-            iterative_context = AgentContext(
-                file_tree=state.get("file_tree", []),
-                file_contents=file_contents,
-                analysis_result=analysis_result,
-                current_plan=current_plan,
-                dockerfile_content=previous_dockerfile,
-                reflection=reflection,
-                verified_tags=verified_tags_str,
-                custom_instructions=instructions
-            )
+            # Check if reflection suggests a different base image
+            if reflection and reflection.get("should_change_base_image"):
+                suggested_image = reflection.get("suggested_base_image", suggested_image)
+                logger.info(f"Using reflection-suggested base image: {suggested_image}")
             
-            iteration_result, usage = generate_iterative_dockerfile(context=iterative_context)
+            verified_tags = []
+            if suggested_image:
+                logger.info(f"Fetching tags for: {suggested_image}")
+                try:
+                    verified_tags = get_docker_tags(suggested_image)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch Docker tags for {suggested_image}: {e}")
+                    verified_tags = []
+            else:
+                logger.warning("No suggested base image from analysis. AI will determine the best base image.")
             
-            dockerfile_content = iteration_result.dockerfile
-            project_type = iteration_result.project_type
-            thought_process = iteration_result.thought_process
+            verified_tags_str = ", ".join(verified_tags) if verified_tags else "Use your best judgement based on the detected technology stack."
             
-            logger.info(f"Changes made: {', '.join(iteration_result.changes_summary[:3])}")
-            logger.info(f"Confidence: {iteration_result.confidence_in_fix}")
+            # Use powerful model for initial generation - better quality upfront reduces retries
+            # This optimization reduces total token usage by avoiding costly retry cycles
+            model_name = get_model_for_agent("generator")  # Always use powerful model
+            if retry_count == 0:
+                logger.info(f"Generating Dockerfile (Model: {model_name})...")
+            else:
+                logger.info(f"Improving Dockerfile (Model: {model_name}, attempt {retry_count + 1})...")
             
-        else:
-            # Fresh generation with AgentContext
-            from ..core.agent_context import AgentContext
-            file_tree = state.get("file_tree", [])
+            # Decide: Fresh generation or iterative improvement?
+            if reflection and previous_dockerfile and retry_count > 0:
+                # Iterative improvement based on reflection
+                logger.info("Using iterative improvement strategy...")
+                
+                from ..core.agent_context import AgentContext
+                iterative_context = AgentContext(
+                    file_tree=state.get("file_tree", []),
+                    file_contents=file_contents,
+                    analysis_result=analysis_result,
+                    current_plan=current_plan,
+                    dockerfile_content=previous_dockerfile,
+                    reflection=reflection,
+                    verified_tags=verified_tags_str,
+                    custom_instructions=instructions
+                )
+                
+                iteration_result, usage = generate_iterative_dockerfile(context=iterative_context)
+                
+                dockerfile_content = iteration_result.dockerfile
+                project_type = iteration_result.project_type
+                thought_process = iteration_result.thought_process
+                
+                logger.info(f"Changes made: {', '.join(iteration_result.changes_summary[:3])}")
+                logger.info(f"Confidence: {iteration_result.confidence_in_fix}")
+                
+            else:
+                # Fresh generation with AgentContext
+                from ..core.agent_context import AgentContext
+                file_tree = state.get("file_tree", [])
+                
+                generator_context = AgentContext(
+                    file_tree=file_tree,
+                    file_contents=file_contents,
+                    analysis_result=analysis_result,
+                    current_plan=current_plan,
+                    retry_history=state.get("retry_history", []),
+                    error_message=state.get("error"),
+                    error_details=state.get("error_details"),
+                    verified_tags=verified_tags_str,
+                    custom_instructions=instructions
+                )
+                
+                dockerfile_content, project_type, thought_process, usage = generate_dockerfile(context=generator_context)
             
-            generator_context = AgentContext(
-                file_tree=file_tree,
-                file_contents=file_contents,
-                analysis_result=analysis_result,
-                current_plan=current_plan,
-                retry_history=state.get("retry_history", []),
-                error_message=state.get("error"),
-                error_details=state.get("error_details"),
-                verified_tags=verified_tags_str,
-                custom_instructions=instructions
-            )
+            logger.info(f"Architect's Reasoning:\n{thought_process}")
+            if span:
+                span.set_attribute("project_type", project_type)
             
-            dockerfile_content, project_type, thought_process, usage = generate_dockerfile(context=generator_context)
-        
-        logger.info(f"Architect's Reasoning:\n{thought_process}")
-        span.set_attribute("project_type", project_type)
-        
-        # Update analysis result with confirmed project type
-        updated_analysis = analysis_result.copy()
-        updated_analysis["project_type"] = project_type
-        
-        usage_dict = {
-            "stage": "generator" if retry_count == 0 else f"generator_retry_{retry_count}",
-            "prompt_tokens": usage.get("prompt_tokens", 0),
-            "completion_tokens": usage.get("completion_tokens", 0),
-            "total_tokens": usage.get("total_tokens", 0),
-            "model": model_name
-        }
-        
-        current_stats = state.get("usage_stats", [])
-        
-        return {
-            "dockerfile_content": dockerfile_content,
-            "analysis_result": updated_analysis,
-            "usage_stats": current_stats + [usage_dict],
-            "error": None,  # Clear previous error
-            "error_details": None,
-            "reflection": None  # Clear reflection after using it
-        }
+            # Edge case: Check if generated Dockerfile is empty
+            if not dockerfile_content or not dockerfile_content.strip():
+                logger.error("Generated Dockerfile is empty")
+                return {
+                    "dockerfile_content": "",
+                    "error": "Empty Dockerfile generated",
+                    "error_details": {
+                        "error_type": "dockerfile_error",
+                        "message": "The AI generated an empty Dockerfile.",
+                        "suggestion": "This may be a temporary LLM issue. Retrying...",
+                        "should_retry": True
+                    }
+                }
+            
+            # Update analysis result with confirmed project type
+            updated_analysis = analysis_result.copy()
+            updated_analysis["project_type"] = project_type
+            
+            usage_dict = {
+                "stage": "generator" if retry_count == 0 else f"generator_retry_{retry_count}",
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+                "total_tokens": usage.get("total_tokens", 0),
+                "model": model_name
+            }
+            
+            current_stats = state.get("usage_stats", [])
+            
+            return {
+                "dockerfile_content": dockerfile_content,
+                "analysis_result": updated_analysis,
+                "usage_stats": current_stats + [usage_dict],
+                "error": None,  # Clear previous error
+                "error_details": None,
+                "reflection": None  # Clear reflection after using it
+            }
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            
+            # Check for rate limit errors
+            if 'rate limit' in error_str or '429' in error_str or 'quota exceeded' in error_str:
+                logger.error(f"Rate limit exceeded during generation: {e}")
+                return {
+                    "dockerfile_content": "",
+                    "error": "API rate limit exceeded",
+                    "error_details": {
+                        "error_type": "environment_error",
+                        "message": "The LLM API rate limit was exceeded.",
+                        "suggestion": "Wait a few minutes before retrying, or check your API quota.",
+                        "should_retry": False
+                    }
+                }
+            
+            # Generic LLM error
+            logger.error(f"Dockerfile generation failed: {e}")
+            return {
+                "dockerfile_content": "",
+                "error": f"Generation failed: {str(e)[:200]}",
+                "error_details": {
+                    "error_type": "dockerfile_error",
+                    "message": f"Failed to generate Dockerfile: {str(e)[:200]}",
+                    "suggestion": "This may be a temporary issue. Retrying...",
+                    "should_retry": True
+                }
+            }
 
 
 def review_node(state: DockAIState) -> DockAIState:
