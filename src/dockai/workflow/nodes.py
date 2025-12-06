@@ -32,6 +32,45 @@ from ..utils.tracing import create_span
 logger = logging.getLogger("dockai")
 
 
+def _is_model_not_found_error(error_str: str) -> bool:
+    """
+    Check if an error indicates the model was not found.
+    
+    Handles various provider-specific error messages:
+    - OpenAI: "model 'xyz' not found", "does not exist"
+    - Anthropic: "model not found", "invalid model"
+    - Gemini: "model not found", "not a valid model"
+    - Azure: "model not found", "deployment not found"
+    """
+    model_error_patterns = [
+        'model not found',
+        'model_not_found',
+        'does not exist',
+        'invalid model',
+        'not a valid model',
+        'deployment not found',
+        'no such model',
+        'unknown model',
+        'the model',  # Common in "The model 'x' does not exist"
+    ]
+    return any(pattern in error_str for pattern in model_error_patterns)
+
+
+def _is_rate_limit_error(error_str: str) -> bool:
+    """Check if an error indicates rate limiting."""
+    return any(pattern in error_str for pattern in [
+        'rate limit', '429', 'too many requests', 'quota exceeded'
+    ])
+
+
+def _is_auth_error(error_str: str) -> bool:
+    """Check if an error indicates authentication failure."""
+    return any(pattern in error_str for pattern in [
+        'authentication', 'api key', 'unauthorized', '401', 
+        'invalid api key', 'incorrect api key', 'api_key'
+    ])
+
+
 def scan_node(state: DockAIState) -> DockAIState:
     """
     Scans the repository directory tree.
@@ -224,8 +263,23 @@ def analyze_node(state: DockAIState) -> DockAIState:
         except Exception as e:
             error_str = str(e).lower()
             
+            # Check for model not found errors
+            if _is_model_not_found_error(error_str):
+                logger.error(f"Model not found during analysis: {e}")
+                model_name = get_model_for_agent("analyzer")
+                return {
+                    "analysis_result": {},
+                    "error": f"Model '{model_name}' not found",
+                    "error_details": {
+                        "error_type": "environment_error",
+                        "message": f"The specified model '{model_name}' was not found. Check your model configuration.",
+                        "suggestion": f"Verify the model name is correct. Set DOCKAI_MODEL_ANALYZER to a valid model name for your provider.",
+                        "should_retry": False
+                    }
+                }
+            
             # Check for rate limit errors
-            if 'rate limit' in error_str or '429' in error_str or 'quota exceeded' in error_str:
+            if _is_rate_limit_error(error_str):
                 logger.error(f"Rate limit exceeded during analysis: {e}")
                 return {
                     "analysis_result": {},
@@ -239,7 +293,7 @@ def analyze_node(state: DockAIState) -> DockAIState:
                 }
             
             # Check for authentication errors
-            if 'authentication' in error_str or 'api key' in error_str or 'unauthorized' in error_str or '401' in error_str:
+            if _is_auth_error(error_str):
                 logger.error(f"Authentication error during analysis: {e}")
                 return {
                     "analysis_result": {},
@@ -415,8 +469,23 @@ def blueprint_node(state: DockAIState) -> DockAIState:
     except Exception as e:
         error_str = str(e).lower()
         
+        # Check for model not found errors
+        if _is_model_not_found_error(error_str):
+            logger.error(f"Model not found during blueprint creation: {e}")
+            model_name = get_model_for_agent("blueprint")
+            return {
+                "current_plan": {},
+                "error": f"Model '{model_name}' not found",
+                "error_details": {
+                    "error_type": "environment_error",
+                    "message": f"The specified model '{model_name}' was not found. Check your model configuration.",
+                    "suggestion": f"Verify the model name is correct. Set DOCKAI_MODEL_BLUEPRINT to a valid model name for your provider.",
+                    "should_retry": False
+                }
+            }
+        
         # Check for rate limit errors
-        if 'rate limit' in error_str or '429' in error_str or 'quota exceeded' in error_str:
+        if _is_rate_limit_error(error_str):
             logger.error(f"Rate limit exceeded during blueprint creation: {e}")
             return {
                 "current_plan": {},
@@ -425,6 +494,20 @@ def blueprint_node(state: DockAIState) -> DockAIState:
                     "error_type": "environment_error",
                     "message": "The LLM API rate limit was exceeded.",
                     "suggestion": "Wait a few minutes before retrying.",
+                    "should_retry": False
+                }
+            }
+        
+        # Check for authentication errors
+        if _is_auth_error(error_str):
+            logger.error(f"Authentication error during blueprint creation: {e}")
+            return {
+                "current_plan": {},
+                "error": "API authentication failed",
+                "error_details": {
+                    "error_type": "environment_error",
+                    "message": "Failed to authenticate with the LLM provider. Check your API key.",
+                    "suggestion": "Verify your API key is correct and has not expired.",
                     "should_retry": False
                 }
             }
@@ -610,8 +693,23 @@ def generate_node(state: DockAIState) -> DockAIState:
         except Exception as e:
             error_str = str(e).lower()
             
+            # Check for model not found errors
+            if _is_model_not_found_error(error_str):
+                logger.error(f"Model not found during generation: {e}")
+                model_name = get_model_for_agent("generator")
+                return {
+                    "dockerfile_content": "",
+                    "error": f"Model '{model_name}' not found",
+                    "error_details": {
+                        "error_type": "environment_error",
+                        "message": f"The specified model '{model_name}' was not found. Check your model configuration.",
+                        "suggestion": f"Verify the model name is correct. Set DOCKAI_MODEL_GENERATOR to a valid model name for your provider.",
+                        "should_retry": False
+                    }
+                }
+            
             # Check for rate limit errors
-            if 'rate limit' in error_str or '429' in error_str or 'quota exceeded' in error_str:
+            if _is_rate_limit_error(error_str):
                 logger.error(f"Rate limit exceeded during generation: {e}")
                 return {
                     "dockerfile_content": "",
@@ -620,6 +718,20 @@ def generate_node(state: DockAIState) -> DockAIState:
                         "error_type": "environment_error",
                         "message": "The LLM API rate limit was exceeded.",
                         "suggestion": "Wait a few minutes before retrying, or check your API quota.",
+                        "should_retry": False
+                    }
+                }
+            
+            # Check for authentication errors
+            if _is_auth_error(error_str):
+                logger.error(f"Authentication error during generation: {e}")
+                return {
+                    "dockerfile_content": "",
+                    "error": "API authentication failed",
+                    "error_details": {
+                        "error_type": "environment_error",
+                        "message": "Failed to authenticate with the LLM provider. Check your API key.",
+                        "suggestion": "Verify your API key is correct and has not expired.",
                         "should_retry": False
                     }
                 }
