@@ -310,6 +310,7 @@ flowchart TB
 | `LANGCHAIN_TRACING_V2` | Enable LangSmith tracing | `false` |
 | `LANGCHAIN_API_KEY` | LangSmith API Key | - |
 | `LANGCHAIN_PROJECT` | LangSmith Project Name | `dockai` |
+| `LANGCHAIN_ENDPOINT` | LangSmith Endpoint URL | `https://api.smith.langchain.com` |
 
 #### Custom Instructions (Per-Agent)
 
