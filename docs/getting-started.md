@@ -16,8 +16,15 @@ pip install dockai-cli
 
 ### Install via uv (Recommended)
 
-`uv` is a faster package installer.
+`uv` is a faster alternative to pip.
 
+**Option A: Install as a tool (Recommended)**
+This installs `dockai` in an isolated environment and makes it available globally.
+```bash
+uv tool install dockai-cli
+```
+
+**Option B: Install in current environment**
 ```bash
 uv pip install dockai-cli
 ```

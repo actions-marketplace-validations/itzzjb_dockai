@@ -42,7 +42,9 @@ It behaves like a Senior DevOps Engineer sitting next to you:
 
 ```bash
 # Install
-pip install dockai-cli
+# Install (choose one)
+pip install dockai-cli    # Standard pip
+uv tool install dockai-cli # Recommended (fast & isolated)
 
 # Run
 dockai build .
@@ -136,7 +138,9 @@ The fastest way to get started.
 
 ```bash
 # Install
-pip install dockai-cli
+# Install (choose one)
+pip install dockai-cli    # Standard
+uv tool install dockai-cli # Recommended (fast)
 
 # Run in your project root
 dockai build .
