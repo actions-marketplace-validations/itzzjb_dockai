@@ -204,6 +204,21 @@ class ContextRetriever:
                         context_type="semantic_match"
                     ))
                     seen_files.add(chunk.file_path)
+
+        # 6. CATCH-ALL: Include ALL other files if enabled (default: True)
+        # This addresses user requirement for "no filtering" while keeping priority logic.
+        read_all = os.getenv("DOCKAI_READ_ALL_FILES", "true").lower() in ("true", "1", "yes", "on")
+        if read_all:
+            for chunk in self.index.chunks:
+                if chunk.file_path not in seen_files:
+                    # Give lower relevance so they are dropped first if token limit hit
+                    context_parts.append(RetrievedContext(
+                        content=self._format_chunk(chunk),
+                        source=chunk.file_path,
+                        relevance_score=0.5,
+                        context_type="catch_all"
+                    ))
+                    seen_files.add(chunk.file_path)
         
         # 6. SORT by relevance and MERGE
         context_parts.sort(key=lambda x: x.relevance_score, reverse=True)
