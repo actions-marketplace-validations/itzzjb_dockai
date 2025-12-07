@@ -358,6 +358,27 @@ def read_files_node(state: DockAIState) -> DockAIState:
     files_to_read = analysis_result.get("files_to_read", [])
     config = state.get("config", {})
     
+    # ENHANCEMENT: Automatically include existing Dockerfile(s) if present
+    # This ensures the AI agents have visibility into any existing Docker configuration
+    # Uses glob to match: Dockerfile, dockerfile, Dockerfile.*, dockerfile.*
+    import glob
+    dockerfile_patterns = [
+        os.path.join(path, "Dockerfile"),
+        os.path.join(path, "dockerfile"),
+        os.path.join(path, "Dockerfile.*"),
+        os.path.join(path, "dockerfile.*"),
+    ]
+    existing_dockerfiles = []
+    for pattern in dockerfile_patterns:
+        for dockerfile_path in glob.glob(pattern):
+            dockerfile_name = os.path.basename(dockerfile_path)
+            if dockerfile_name not in files_to_read and os.path.isfile(dockerfile_path):
+                existing_dockerfiles.append(dockerfile_name)
+                files_to_read.insert(0, dockerfile_name)  # Add at the beginning for priority
+    
+    if existing_dockerfiles:
+        logger.info(f"Found existing Dockerfile(s): {', '.join(existing_dockerfiles)} - including in context for AI agents")
+    
     # Handle empty files_to_read list
     if not files_to_read:
         logger.warning("Analyzer did not identify any critical files to read")
