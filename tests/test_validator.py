@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 from dockai.utils.validator import validate_docker_build_and_run, check_health_endpoint, lint_dockerfile_with_hadolint
 from dockai.core.errors import ClassifiedError, ErrorType
 
+
 @patch("dockai.utils.validator.lint_dockerfile_with_hadolint")
 @patch("dockai.utils.validator.run_command")
 @patch("dockai.utils.validator.time.sleep")

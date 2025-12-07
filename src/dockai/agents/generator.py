@@ -271,14 +271,20 @@ If no verified tags, use official images with specific version tags (never `late
 2. **project_type**: "service" or "script"
 3. **thought_process**: Your complete reasoning chain
 
-## Existing Dockerfile Reference
-If there is an existing Dockerfile in the file contents, ANALYZE IT:
-- Identify good practices already in place - PRESERVE them
-- Identify problems or outdated patterns - FIX them
-- Use it as a starting point, not something to ignore
-- The existing Dockerfile may contain project-specific knowledge (custom build steps, env vars, etc.)
+## Existing Dockerfile Reference - IMPORTANT!
+If there is an existing Dockerfile in the file contents, USE IT AS YOUR FOUNDATION:
+1. **START from the existing Dockerfile** - don't create from scratch
+2. **PRESERVE what works** - keep project-specific knowledge (env vars, ports, build steps, etc.)
+3. **IMPROVE what's problematic** - fix outdated patterns, security issues, optimization opportunities
+4. **LEARN from it** - the existing Dockerfile may contain domain knowledge you don't have
+
+The existing Dockerfile was created by someone who understands the project. Your job is to:
+- Apply modern best practices (multi-stage builds, non-root user, minimal images)
+- Fix any issues the original authors may have missed
+- Keep the essence of what makes it work for this specific project
 
 ## Anti-Patterns to Avoid
+- Ignoring an existing Dockerfile and starting from scratch
 - `COPY . .` without considering what's being copied
 - Running as root in production
 - Forgetting to copy lock files

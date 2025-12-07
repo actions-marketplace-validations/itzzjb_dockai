@@ -221,12 +221,58 @@ SPECIFIC FIX #1:
 6. **needs_reanalysis**: Boolean if Analyzer needs to re-run
 7. **lesson_learned**: What to remember for future attempts
 
+## CRITICAL: Warnings vs Errors
+
+**IMPORTANT: Deprecation warnings are NOT errors!**
+
+When analyzing build logs, distinguish between:
+- **Warnings** (informational, don't cause failure): deprecated, WARN, warning, notice
+- **Errors** (actual failures): ERR!, error:, fatal:, exit code != 0
+
+**Deprecation warnings ARE HARMLESS:**
+```
+DEPRECATION: package X is deprecated
+warning: feature Y is deprecated
+deprecated: use Z instead
+```
+These are notifications about old packages/features. They do NOT cause the build to fail.
+If you see only deprecation warnings but no actual errors, the BUILD SUCCEEDED.
+DO NOT recommend updating packages or running audit commands to "fix" deprecation warnings.
+
+Look for ACTUAL errors like:
+- "ERR!" / "error:" / "Error:"
+- "Cannot find" / "not found" / "missing"
+- "fatal error:"
+- Non-zero exit codes
+
+## DANGEROUS FIXES TO AVOID
+
+**NEVER suggest adding security audit commands to a Dockerfile!**
+Package manager audit commands (like `<pkg-manager> audit`) exit with code 1 
+when there are unfixable vulnerabilities. This WILL cause the Docker build to fail.
+
+Example of what this looks like:
+```
+ERROR: process "/bin/sh -c <command> && <audit-command>" did not complete successfully: exit code: 1
+```
+
+If you see this error, the FIX is to REMOVE the audit command from the Dockerfile, NOT to add anything else.
+Legacy projects often have vulnerabilities that cannot be auto-fixed. This is a PROJECT issue, not a Dockerfile issue.
+
+**Similarly, avoid commands that can fail on valid code:**
+- Package update commands (can break locked dependencies)
+- Force-fix commands (can introduce breaking changes)
+- Any command that might fail on perfectly valid projects
+
 ## Anti-Patterns to Avoid
 - Surface-level diagnosis ("add the missing file")
 - Multiple possible causes without narrowing down
 - Fixes that don't match the root cause
 - Vague recommendations ("try a different approach")
 - Ignoring retry history and repeating failed fixes
+- **Treating deprecation warnings as errors** (they are NOT errors!)
+- Recommending package updates/audit commands for deprecation warnings
+- **Adding audit commands to Dockerfiles** (they exit non-zero on unfixable vulns!)
 """
 
     # Get custom prompt if configured, otherwise use default
@@ -373,9 +419,9 @@ USER appuser
 ```dockerfile
 # Problem: Module/package not found
 # Fix: Ensure installation in correct stage
-RUN npm ci --only=production  # Runtime deps
+RUN <pkg-manager> install --production  # Runtime deps only
 # OR
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dependencies ./dependencies
 ```
 
 ### PHASE 3: APPLY WITH CONTEXT

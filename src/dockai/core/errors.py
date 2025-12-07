@@ -196,6 +196,27 @@ STEP 4 - PROVIDE GUIDANCE:
   - For DOCKERFILE_ERROR: Specify the dockerfile_fix to apply
   - For ENVIRONMENT_ERROR: Explain the system issue to resolve
 
+## CRITICAL: Warnings vs Errors
+
+**IMPORTANT: Deprecation warnings are NOT errors!**
+
+When analyzing build logs, you MUST distinguish between:
+- **Warnings** (informational, don't cause failure): deprecated, WARN, warning, notice
+- **Errors** (actual failures): ERR!, error:, fatal:, exit code != 0
+
+**Package manager deprecation warnings ARE NOT ERRORS:**
+```
+<pkg-manager> warn deprecated package@1.0.0
+DEPRECATION: package X is no longer supported
+warning: feature Y is deprecated
+```
+These are HARMLESS warnings about packages/tools that might need updating.
+They do NOT cause the build to fail and do NOT require any action.
+DO NOT classify deprecation warnings as PROJECT_ERROR or DOCKERFILE_ERROR.
+
+If you see deprecation warnings but the build/run actually succeeded (exit code 0),
+the operation was SUCCESSFUL. Only look for ACTUAL errors.
+
 ## Special Cases
 
 **Source file not found in container**: 
@@ -209,6 +230,17 @@ STEP 4 - PROVIDE GUIDANCE:
 **Readiness timeout / startup pattern not detected**:
   The app started but the log pattern wasn't found.
   Look at actual logs to suggest a better readiness_fix regex pattern.
+
+**Deprecation warnings (ANY language)**:
+  Deprecation warnings are HARMLESS, NOT errors. They appear as:
+  "deprecated", "DEPRECATION:", "will be removed", "no longer supported"
+  DO NOT treat these as errors. Look for actual error messages instead.
+
+**Security audit tool failures**:
+  Commands like `<pkg-manager> audit` exit non-zero when there are unfixable vulnerabilities.
+  This is a DOCKERFILE_ERROR. The fix is to REMOVE the audit command from the Dockerfile.
+  Legacy projects often have vulnerabilities that cannot be auto-fixed.
+  The dockerfile_fix should be: "Remove the audit command from the RUN instruction"
 
 ## Output Requirements
 
