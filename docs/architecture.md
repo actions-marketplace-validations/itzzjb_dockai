@@ -665,6 +665,69 @@ def get_docker_tags(image: str, target_version: str = None) -> List[str]:
 
 **Token Savings**: Only passes ~100 filtered tags to AI instead of thousands.
 
+### 6. RAG Mode for Intelligent Context (v4.0+)
+
+For large projects, DockAI can use Retrieval-Augmented Generation (RAG) to select the most relevant context:
+
+```mermaid
+flowchart TB
+    subgraph Indexing["📊 Indexing (Once Per Run)"]
+        files["All Source Files"] --> ast["AST Parser<br/>(Python, JS, Go)"]
+        files --> chunk["Chunking<br/>(400 lines)"]
+        ast --> analysis["Code Analysis:<br/>• Entry points<br/>• Env vars<br/>• Ports<br/>• Frameworks"]
+        chunk --> embed["Local Embeddings<br/>(HuggingFace)"]
+        embed --> index["Vector Index"]
+    end
+    
+    subgraph Retrieval["🔍 Retrieval"]
+        query["Query: 'dockerfile dependencies'"]
+        query --> search["Semantic Search"]
+        index --> search
+        analysis --> merge["Merge Results"]
+        search --> merge
+        merge --> context["Optimized Context<br/>(~50K tokens)"]
+    end
+    
+    context --> llm["LLM Generator"]
+```
+
+**Enable with**: `DOCKAI_USE_RAG=true`
+
+**Components**:
+
+| Module | Purpose | Cost |
+|--------|---------|------|
+| `code_intelligence.py` | AST parsing for Python, JS, Go | FREE (local) |
+| `indexer.py` | Semantic search with embeddings | FREE (local HuggingFace model) |
+| `context_retriever.py` | Combines AST + search for optimal context | FREE |
+
+**What Code Intelligence Extracts**:
+
+```python
+# From a Python file like app.py:
+entry_points = ["app.py:main()", "app.py:__main__"]
+env_vars = ["DATABASE_URL", "PORT", "DEBUG"]
+exposed_ports = [8000, 8080]
+frameworks = ["FastAPI", "SQLAlchemy"]
+```
+
+**When to Use RAG**:
+
+| Scenario | Recommended Mode |
+|----------|-----------------|
+| Small project (<50 files) | Standard (read all) |
+| Medium project (50-200 files) | Either works |
+| Large project (200+ files) | RAG mode |
+| Monorepo | RAG mode |
+
+**Performance on GitHub Actions**:
+
+| Repo Size | Indexing Time | Memory |
+|-----------|---------------|--------|
+| Small | ~5-10s | ~500MB |
+| Medium | ~15-30s | ~800MB |
+| Large | ~30-60s | ~1.2GB |
+
 ---
 
 ## Interfaces
@@ -793,7 +856,10 @@ src/dockai/
 │   ├── callbacks.py      # LLM callback handlers
 │   ├── rate_limiter.py   # API rate limiting
 │   ├── tracing.py        # OpenTelemetry integration
-│   └── ollama_docker.py  # Ollama Docker fallback
+│   ├── ollama_docker.py  # Ollama Docker fallback
+│   ├── code_intelligence.py  # AST-based code analysis (v4.0+)
+│   ├── indexer.py        # Semantic search indexing (v4.0+)
+│   └── context_retriever.py  # Smart context retrieval (v4.0+)
 │
 └── workflow/             # LangGraph workflow
     ├── __init__.py

@@ -89,6 +89,16 @@ That's it. DockAI handles the rest.
       <p>Built-in <strong>OpenTelemetry tracing</strong> and <strong>LangSmith</strong> support for distributed observability and LLM debugging. Export traces to console, OTLP backends, or LangSmith.</p>
     </td>
   </tr>
+  <tr>
+    <td width="50%">
+      <h3>🧠 Intelligent Context (RAG)</h3>
+      <p><strong>New in v4.0!</strong> Uses local AST analysis and semantic search to understand large codebases without token bloat. Zero API cost.</p>
+    </td>
+    <td width="50%">
+      <h3>⚡ GitHub Actions Ready</h3>
+      <p>Run entirely within CI/CD pipelines with zero-config setup. Automatically commits generated Dockerfiles back to your repo.</p>
+    </td>
+  </tr>
 </table>
 
 ---
@@ -283,6 +293,14 @@ flowchart TB
 | `DOCKAI_TOKEN_LIMIT` | Token limit for auto-truncation | `100000` |
 | `DOCKAI_MAX_FILE_CHARS` | Max chars per file (when truncating) | `200000` |
 | `DOCKAI_MAX_FILE_LINES` | Max lines per file (when truncating) | `5000` |
+
+#### Intelligent Context (RAG) Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_USE_RAG` | Enable semantic search context retrieval | `false` |
+| `DOCKAI_READ_ALL_FILES` | Read all source files (disable for priority-only) | `true` |
+| `DOCKAI_EMBEDDING_MODEL` | HuggingFace model for local embeddings | `all-MiniLM-L6-v2` |
 
 #### Security Settings
 

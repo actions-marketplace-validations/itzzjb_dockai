@@ -321,35 +321,132 @@ from ..utils.file_utils import smart_truncate, read_critical_files
 
 def read_files_node(state: DockAIState) -> DockAIState:
     """
-    Reads ALL source code files from the repository.
+    Reads project files for LLM context with optional RAG support.
     
-    This node ensures the LLM has COMPLETE context by reading all source files,
-    not just those selected by the Analyzer. This makes DockAI more accurate
-    by providing the same visibility a human developer would have.
+    This node supports two modes:
     
-    Strategy:
-    1. Priority files: Analyzer-selected files + existing Dockerfiles (read first, full content)
-    2. All other source files: Read with truncation to fit token limits
-    3. Skip: Binary files, lock files, generated files
+    1. **Standard Mode** (DOCKAI_USE_RAG=false, default):
+       - Reads ALL source files with smart truncation
+       - Simple but effective for most projects
+    
+    2. **RAG Mode** (DOCKAI_USE_RAG=true):
+       - Uses semantic search + AST analysis
+       - Retrieves only the most relevant context
+       - Better for large projects with many files
+       - Detects entry points, env vars, ports automatically
+    
+    Environment Variables:
+        DOCKAI_USE_RAG: Enable RAG mode (default: false)
+        DOCKAI_READ_ALL_FILES: In standard mode, read all vs priority files (default: true)
     
     Args:
         state (DockAIState): The current state with analysis results.
 
     Returns:
-        DockAIState: Updated state with 'file_contents' string.
+        DockAIState: Updated state with 'file_contents' string and optionally 'code_intelligence'.
     """
     path = state["path"]
     analysis_result = state.get("analysis_result", {})
     file_tree = state.get("file_tree", [])
     config = state.get("config", {})
     
-    # Check if we should read all files (new feature, default: enabled)
+    # Check if RAG mode is enabled
+    use_rag = os.getenv("DOCKAI_USE_RAG", "false").lower() in ("true", "1", "yes", "on")
+    
+    if use_rag:
+        return _read_files_with_rag(path, file_tree, config)
+    else:
+        return _read_files_standard(path, analysis_result, file_tree, config)
+
+
+def _read_files_with_rag(path: str, file_tree: list, config: dict) -> dict:
+    """
+    Read files using RAG (Retrieval-Augmented Generation).
+    
+    Uses semantic search and AST analysis to retrieve the most relevant
+    context for Dockerfile generation. This is more efficient for large
+    projects and provides better signal-to-noise ratio.
+    
+    Args:
+        path: Project root path.
+        file_tree: List of all file paths.
+        config: Configuration dictionary.
+        
+    Returns:
+        State update dictionary with file_contents and code_intelligence.
+    """
+    try:
+        from ..utils.indexer import ProjectIndex
+        from ..utils.context_retriever import ContextRetriever
+    except ImportError as e:
+        logger.warning(f"RAG dependencies not available: {e}. Falling back to standard mode.")
+        return _read_files_standard(path, {}, file_tree, config)
+    
+    logger.info("Using RAG mode for intelligent context retrieval...")
+    
+    try:
+        # Initialize and build the index
+        index = ProjectIndex(use_embeddings=True)
+        index.index_project(path, file_tree)
+        
+        # Get token limit from config or env
+        token_limit = config.get("token_limit") or int(os.getenv("DOCKAI_TOKEN_LIMIT", "50000"))
+        
+        # Retrieve optimized context
+        retriever = ContextRetriever(index)
+        file_contents_str = retriever.get_dockerfile_context(max_tokens=token_limit)
+        
+        # Get code intelligence summary for logging/debugging
+        summary = retriever.get_quick_summary()
+        logger.info(
+            f"RAG: indexed {summary['files_indexed']} chunks, "
+            f"analyzed {summary['files_analyzed']} files, "
+            f"found {len(summary['entry_points'])} entry points, "
+            f"detected frameworks: {summary['frameworks']}"
+        )
+        
+        # Store code intelligence for use by other nodes
+        code_intelligence = {
+            "entry_points": summary["entry_points"],
+            "env_vars": summary["env_vars"],
+            "ports": summary["ports"],
+            "frameworks": summary["frameworks"],
+            "embeddings_available": summary["embeddings_available"],
+        }
+        
+        return {
+            "file_contents": file_contents_str,
+            "code_intelligence": code_intelligence
+        }
+        
+    except Exception as e:
+        logger.error(f"RAG indexing failed: {e}. Falling back to standard mode.")
+        return _read_files_standard(path, {}, file_tree, config)
+
+
+def _read_files_standard(path: str, analysis_result: dict, file_tree: list, config: dict) -> dict:
+    """
+    Read files using the standard approach (read all with truncation).
+    
+    This is the original file reading logic that reads all source files
+    with smart truncation to fit within token limits.
+    
+    Args:
+        path: Project root path.
+        analysis_result: Analyzer output with priority files.
+        file_tree: List of all file paths.
+        config: Configuration dictionary.
+        
+    Returns:
+        State update dictionary with file_contents.
+    """
+    # Check if we should read all files
     read_all_files = os.getenv("DOCKAI_READ_ALL_FILES", "true").lower() in ("true", "1", "yes", "on")
     
     # Files the Analyzer specifically requested (priority files)
     priority_files = analysis_result.get("files_to_read", []) if analysis_result else []
     
-    # ENHANCEMENT: Automatically include existing Dockerfile(s)
+    # Automatically include existing Dockerfile(s)
     import glob
     dockerfile_patterns = [
         os.path.join(path, "Dockerfile"),
@@ -370,7 +467,7 @@ def read_files_node(state: DockAIState) -> DockAIState:
     
     # FILES TO SKIP (lock files, binaries, generated)
     SKIP_PATTERNS = {
-        # Lock files (large, no useful info for Dockerfile)
+        # Lock files
         "package-lock.json", "yarn.lock", "pnpm-lock.yaml", 
         "Gemfile.lock", "go.sum", "Cargo.lock", "poetry.lock",
         "Pipfile.lock", "composer.lock", "packages.lock.json",
@@ -381,12 +478,12 @@ def read_files_node(state: DockAIState) -> DockAIState:
         ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".webp",
         # Fonts
         ".woff", ".woff2", ".ttf", ".eot", ".otf",
-        # Other generated
+        # Generated
         ".map", ".min.js", ".min.css", ".bundle.js",
     }
     
     def should_skip_file(filename: str) -> bool:
-        """Check if file should be skipped based on name/extension."""
+        """Check if file should be skipped."""
         basename = os.path.basename(filename)
         if basename in SKIP_PATTERNS:
             return True
@@ -394,43 +491,46 @@ def read_files_node(state: DockAIState) -> DockAIState:
         if ext in SKIP_PATTERNS:
             return True
         # Skip hidden files except important ones
-        if basename.startswith('.') and basename not in {'.env.example', '.dockerignore', '.gitignore', '.nvmrc', '.python-version', '.ruby-version', '.node-version'}:
+        important_hidden = {'.env.example', '.dockerignore', '.gitignore', '.nvmrc', 
+                          '.python-version', '.ruby-version', '.node-version', '.tool-versions'}
+        if basename.startswith('.') and basename not in important_hidden:
             return True
         return False
     
-    # Build the full file list
+    # Build the file list
     files_to_read = []
     
-    # 1. Add priority files first (they get read fully)
+    # Add priority files first
     for f in priority_files:
         if f not in files_to_read and not should_skip_file(f):
             files_to_read.append(f)
     
-    # 2. Add ALL other source files from the file tree
+    # Add all other source files from file tree
     if read_all_files and file_tree:
         for f in file_tree:
             if f not in files_to_read and not should_skip_file(f):
                 files_to_read.append(f)
         logger.info(f"Reading ALL {len(files_to_read)} source files (priority: {len(priority_files)}, additional: {len(files_to_read) - len(priority_files)})")
     else:
-        logger.info(f"Reading {len(files_to_read)} priority files only (set DOCKAI_READ_ALL_FILES=true to read all)")
+        logger.info(f"Reading {len(files_to_read)} priority files only")
     
-    # Handle empty file list with fallback
+    # Handle empty file list
     if not files_to_read:
         logger.warning("No files to read - trying common file patterns")
-        common_files = ["package.json", "requirements.txt", "Gemfile", "go.mod", "Cargo.toml", "pom.xml", "build.gradle", "Makefile", "setup.py", "pyproject.toml"]
+        common_files = ["package.json", "requirements.txt", "Gemfile", "go.mod", 
+                       "Cargo.toml", "pom.xml", "build.gradle", "Makefile", 
+                       "setup.py", "pyproject.toml"]
         for f in common_files:
             if os.path.exists(os.path.join(path, f)):
                 files_to_read.append(f)
         
         if not files_to_read:
-            logger.warning("No files found to read - proceeding with empty context")
+            logger.warning("No files found - proceeding with empty context")
             return {"file_contents": ""}
     
-    # Truncation setting - auto-enable when reading all files to stay within limits
+    # Auto-enable truncation when reading all files
     truncation_enabled = config.get("truncation_enabled", None)
     if truncation_enabled is None and read_all_files:
-        # Auto-enable truncation when reading all files
         truncation_enabled = True
         logger.info("Auto-enabling truncation for full-project read")
     

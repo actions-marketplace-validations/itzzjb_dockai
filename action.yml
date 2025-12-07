@@ -126,6 +126,14 @@ inputs:
     description: 'Token threshold that auto-enables truncation (default: 100000)'
     required: false
     default: '100000'
+  use_rag:
+    description: 'Enable RAG (Retrieval-Augmented Generation) for intelligent context retrieval (true/false)'
+    required: false
+    default: 'false'
+  read_all_files:
+    description: 'Read all source files for complete context (true/false, default: true)'
+    required: false
+    default: 'true'
   analyzer_instructions:
     description: 'Custom instructions for the analyzer (project discovery agent)'
     required: false
@@ -252,7 +260,13 @@ runs:
 
     - name: Install DockAI
       shell: bash
-      run: uv pip install dockai-cli --system
+      run: |
+        if [ "${{ inputs.use_rag }}" == "true" ]; then
+          echo "Installing DockAI with RAG support..."
+          uv pip install "dockai-cli[rag]" --system
+        else
+          uv pip install dockai-cli --system
+        fi
 
     - name: Run DockAI Framework
       shell: bash
@@ -292,6 +306,8 @@ runs:
         DOCKAI_MAX_FILE_LINES: ${{ inputs.max_file_lines }}
         DOCKAI_TRUNCATION_ENABLED: ${{ inputs.truncation_enabled }}
         DOCKAI_TOKEN_LIMIT: ${{ inputs.token_limit }}
+        DOCKAI_USE_RAG: ${{ inputs.use_rag }}
+        DOCKAI_READ_ALL_FILES: ${{ inputs.read_all_files }}
         # Custom Instructions
         DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
         DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
