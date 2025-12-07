@@ -112,8 +112,8 @@ class ProjectIndex:
             logger.info(f"Loaded local embedding model: {self._model_name}")
         except ImportError:
             logger.warning(
-                "sentence-transformers not installed. "
-                "Install with: pip install sentence-transformers. "
+                "sentence-transformers could not be imported. "
+                "It should be installed by default. "
                 "Falling back to keyword search."
             )
             self.use_embeddings = False
