@@ -321,17 +321,17 @@ from ..utils.file_utils import smart_truncate, read_critical_files
 
 def read_files_node(state: DockAIState) -> DockAIState:
     """
-    Reads critical files identified by the analyzer.
+    Reads ALL source code files from the repository.
     
-    This node fetches the actual content of the files that the AI determined
-    are necessary for understanding the project's build and runtime requirements.
+    This node ensures the LLM has COMPLETE context by reading all source files,
+    not just those selected by the Analyzer. This makes DockAI more accurate
+    by providing the same visibility a human developer would have.
     
-    Improvements:
-    - Skips lock files (package-lock.json, yarn.lock) to save tokens.
-    - Configurable limits via env vars (DOCKAI_MAX_FILE_CHARS, DOCKAI_MAX_FILE_LINES).
-    - Higher default limits (200KB / 5000 lines) for better context.
-    - Smart truncation to preserve file structure.
-
+    Strategy:
+    1. Priority files: Analyzer-selected files + existing Dockerfiles (read first, full content)
+    2. All other source files: Read with truncation to fit token limits
+    3. Skip: Binary files, lock files, generated files
+    
     Args:
         state (DockAIState): The current state with analysis results.
 
@@ -340,27 +340,16 @@ def read_files_node(state: DockAIState) -> DockAIState:
     """
     path = state["path"]
     analysis_result = state.get("analysis_result", {})
-    
-    # Handle case where analysis_result is empty or missing files_to_read
-    if not analysis_result:
-        logger.warning("No analysis result available - cannot determine files to read")
-        return {
-            "file_contents": "",
-            "error": "Analysis result is missing",
-            "error_details": {
-                "error_type": "dockerfile_error",
-                "message": "Analyzer did not produce results - cannot determine which files to read.",
-                "suggestion": "This is an internal issue. Will retry with different approach.",
-                "should_retry": True
-            }
-        }
-    
-    files_to_read = analysis_result.get("files_to_read", [])
+    file_tree = state.get("file_tree", [])
     config = state.get("config", {})
     
-    # ENHANCEMENT: Automatically include existing Dockerfile(s) if present
-    # This ensures the AI agents have visibility into any existing Docker configuration
-    # Uses glob to match: Dockerfile, dockerfile, Dockerfile.*, dockerfile.*
+    # Check if we should read all files (new feature, default: enabled)
+    read_all_files = os.getenv("DOCKAI_READ_ALL_FILES", "true").lower() in ("true", "1", "yes", "on")
+    
+    # Files the Analyzer specifically requested (priority files)
+    priority_files = analysis_result.get("files_to_read", []) if analysis_result else []
+    
+    # ENHANCEMENT: Automatically include existing Dockerfile(s)
     import glob
     dockerfile_patterns = [
         os.path.join(path, "Dockerfile"),
@@ -372,40 +361,83 @@ def read_files_node(state: DockAIState) -> DockAIState:
     for pattern in dockerfile_patterns:
         for dockerfile_path in glob.glob(pattern):
             dockerfile_name = os.path.basename(dockerfile_path)
-            if dockerfile_name not in files_to_read and os.path.isfile(dockerfile_path):
+            if dockerfile_name not in priority_files and os.path.isfile(dockerfile_path):
                 existing_dockerfiles.append(dockerfile_name)
-                files_to_read.insert(0, dockerfile_name)  # Add at the beginning for priority
+                priority_files.insert(0, dockerfile_name)
     
     if existing_dockerfiles:
-        logger.info(f"Found existing Dockerfile(s): {', '.join(existing_dockerfiles)} - including in context for AI agents")
+        logger.info(f"Found existing Dockerfile(s): {', '.join(existing_dockerfiles)} - including in context")
     
-    # Handle empty files_to_read list
+    # FILES TO SKIP (lock files, binaries, generated)
+    SKIP_PATTERNS = {
+        # Lock files (large, no useful info for Dockerfile)
+        "package-lock.json", "yarn.lock", "pnpm-lock.yaml", 
+        "Gemfile.lock", "go.sum", "Cargo.lock", "poetry.lock",
+        "Pipfile.lock", "composer.lock", "packages.lock.json",
+        # Binary/compressed
+        ".pyc", ".pyo", ".so", ".dll", ".exe", ".bin", ".jar", ".war",
+        ".zip", ".tar", ".gz", ".rar", ".7z",
+        # Images
+        ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".webp",
+        # Fonts
+        ".woff", ".woff2", ".ttf", ".eot", ".otf",
+        # Other generated
+        ".map", ".min.js", ".min.css", ".bundle.js",
+    }
+    
+    def should_skip_file(filename: str) -> bool:
+        """Check if file should be skipped based on name/extension."""
+        basename = os.path.basename(filename)
+        if basename in SKIP_PATTERNS:
+            return True
+        ext = os.path.splitext(filename)[1].lower()
+        if ext in SKIP_PATTERNS:
+            return True
+        # Skip hidden files except important ones
+        if basename.startswith('.') and basename not in {'.env.example', '.dockerignore', '.gitignore', '.nvmrc', '.python-version', '.ruby-version', '.node-version'}:
+            return True
+        return False
+    
+    # Build the full file list
+    files_to_read = []
+    
+    # 1. Add priority files first (they get read fully)
+    for f in priority_files:
+        if f not in files_to_read and not should_skip_file(f):
+            files_to_read.append(f)
+    
+    # 2. Add ALL other source files from the file tree
+    if read_all_files and file_tree:
+        for f in file_tree:
+            if f not in files_to_read and not should_skip_file(f):
+                files_to_read.append(f)
+        logger.info(f"Reading ALL {len(files_to_read)} source files (priority: {len(priority_files)}, additional: {len(files_to_read) - len(priority_files)})")
+    else:
+        logger.info(f"Reading {len(files_to_read)} priority files only (set DOCKAI_READ_ALL_FILES=true to read all)")
+    
+    # Handle empty file list with fallback
     if not files_to_read:
-        logger.warning("Analyzer did not identify any critical files to read")
-        # Try to use common file patterns as fallback
+        logger.warning("No files to read - trying common file patterns")
         common_files = ["package.json", "requirements.txt", "Gemfile", "go.mod", "Cargo.toml", "pom.xml", "build.gradle", "Makefile", "setup.py", "pyproject.toml"]
         for f in common_files:
             if os.path.exists(os.path.join(path, f)):
                 files_to_read.append(f)
         
-        if files_to_read:
-            logger.info(f"Using fallback: found {len(files_to_read)} common project files")
-        else:
-            logger.warning("No common project files found either - proceeding with empty context")
+        if not files_to_read:
+            logger.warning("No files found to read - proceeding with empty context")
             return {"file_contents": ""}
     
-    # Truncation setting priority:
-    # 1. Config value (if explicitly set)
-    # 2. Environment variable DOCKAI_TRUNCATION_ENABLED
-    # 3. Default: None (let read_critical_files decide, will auto-enable if token limit exceeded)
+    # Truncation setting - auto-enable when reading all files to stay within limits
     truncation_enabled = config.get("truncation_enabled", None)
-    
-    logger.info(f"Reading {len(files_to_read)} critical files...")
+    if truncation_enabled is None and read_all_files:
+        # Auto-enable truncation when reading all files
+        truncation_enabled = True
+        logger.info("Auto-enabling truncation for full-project read")
     
     try:
         file_contents_str = read_critical_files(path, files_to_read, truncation_enabled=truncation_enabled)
     except Exception as e:
-        logger.error(f"Error reading critical files: {e}")
+        logger.error(f"Error reading files: {e}")
         return {
             "file_contents": "",
             "error": f"Failed to read project files: {e}",
@@ -418,7 +450,7 @@ def read_files_node(state: DockAIState) -> DockAIState:
         }
     
     if not file_contents_str.strip():
-        logger.warning("All critical files were empty or could not be read")
+        logger.warning("All files were empty or could not be read")
     
     return {"file_contents": file_contents_str}
 
