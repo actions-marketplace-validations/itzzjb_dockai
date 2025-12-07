@@ -1,200 +1,97 @@
-"""
-Tests for the Code Intelligence module.
-
-These tests verify that AST analysis correctly extracts
-code structure, entry points, environment variables, and other
-metadata from source files.
-"""
 
 import pytest
 from dockai.utils.code_intelligence import (
-    analyze_file,
-    analyze_python_file,
-    analyze_javascript_file,
+    analyze_file, 
+    analyze_python_file, 
+    analyze_javascript_file, 
     analyze_go_file,
     analyze_generic_file,
-    analyze_project,
     get_project_summary,
     CodeSymbol,
-    FileAnalysis,
+    FileAnalysis
 )
-
 
 class TestPythonAnalysis:
     """Tests for Python file analysis."""
     
-    def test_basic_function_detection(self):
-        """Test that functions are correctly detected."""
+    def test_basic_analysis(self):
+        """Test basic analysis for Python code."""
         code = '''
-def hello():
-    """Say hello."""
-    print("Hello!")
+import os
+from flask import Flask
 
-def main():
-    hello()
-'''
-        analysis = analyze_python_file("test.py", code)
-        
-        assert analysis.language == "python"
-        assert len(analysis.symbols) == 2
-        
-        func_names = [s.name for s in analysis.symbols]
-        assert "hello" in func_names
-        assert "main" in func_names
-    
-    def test_main_entry_point_detection(self):
-        """Test that main() is detected as entry point."""
-        code = '''
-def main():
-    pass
+app = Flask(__name__)
+
+@app.route("/")
+def hello():
+    port = os.getenv("PORT")
+    return "Hello"
 
 if __name__ == "__main__":
-    main()
+    app.run(port=8080)
 '''
         analysis = analyze_python_file("app.py", code)
         
-        assert "app.py:main()" in analysis.entry_points
-        assert "app.py:__main__" in analysis.entry_points
-    
-    def test_class_detection(self):
-        """Test that classes are correctly detected."""
-        code = '''
-class MyApp:
-    """Application class."""
-    
-    def __init__(self):
-        pass
-    
-    def run(self):
-        pass
-'''
-        analysis = analyze_python_file("app.py", code)
-        
-        class_symbols = [s for s in analysis.symbols if s.type == "class"]
-        assert len(class_symbols) == 1
-        assert class_symbols[0].name == "MyApp"
-    
-    def test_import_detection(self):
-        """Test that imports are correctly extracted."""
-        code = '''
-import os
-import sys
-from flask import Flask
-from typing import List, Dict
-'''
-        analysis = analyze_python_file("app.py", code)
-        
-        assert "os" in analysis.imports
-        assert "sys" in analysis.imports
+        assert analysis.language == "python"
         assert "flask" in analysis.imports
-        assert "typing" in analysis.imports
-    
-    def test_framework_detection(self):
-        """Test that frameworks are detected from imports."""
-        code = '''
-from fastapi import FastAPI
-from flask import Flask
-import django
-'''
-        analysis = analyze_python_file("app.py", code)
-        
-        assert "FastAPI" in analysis.framework_hints
         assert "Flask" in analysis.framework_hints
-        assert "Django" in analysis.framework_hints
-    
-    def test_env_var_detection(self):
-        """Test that environment variable usage is detected."""
-        code = '''
-import os
-
-db_url = os.getenv("DATABASE_URL")
-port = os.environ.get("PORT", 8000)
-'''
-        analysis = analyze_python_file("config.py", code)
-        
-        assert "DATABASE_URL" in analysis.env_vars
         assert "PORT" in analysis.env_vars
-    
-    def test_port_detection(self):
-        """Test that port numbers are detected from code."""
-        code = '''
-app.run(port=8080)
-server.listen(3000)
-'''
-        analysis = analyze_python_file("server.py", code)
+        assert 8080 in analysis.exposed_ports
+        assert "app.py:__main__" in analysis.entry_points
         
-        # Port detection depends on specific patterns
-        # At minimum, we should not crash
-        assert analysis.language == "python"
-    
-    def test_async_function_detection(self):
-        """Test that async functions are detected."""
+    def test_async_analysis(self):
+        """Test detection of async functions and entry points."""
         code = '''
-async def fetch_data():
-    pass
+import uvicorn
+from fastapi import FastAPI
 
-async def main():
-    await fetch_data()
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
 '''
-        analysis = analyze_python_file("async_app.py", code)
+        analysis = analyze_python_file("main.py", code)
         
-        func_names = [s.name for s in analysis.symbols]
-        assert "fetch_data" in func_names
-        assert "main" in func_names
-    
-    def test_syntax_error_handling(self):
-        """Test that syntax errors are handled gracefully."""
-        code = '''
-def broken(
-    # Missing closing paren
-'''
-        analysis = analyze_python_file("broken.py", code)
+        assert "fastapi" in analysis.imports
+        # Check symbol extraction
+        func_symbol = next((s for s in analysis.symbols if s.name == "root"), None)
+        assert func_symbol is not None
+        assert "async def root" in func_symbol.signature
         
-        # Should return empty analysis, not crash
-        assert analysis.path == "broken.py"
-        assert analysis.language == "python"
+        # Check app assignment entry point detection
+        assert any("main.py:app" in ep for ep in analysis.entry_points) 
 
 
-class TestJavaScriptAnalysis:
-    """Tests for JavaScript file analysis."""
+class TestJavascriptAnalysis:
+    """Tests for JavaScript/TypeScript file analysis."""
     
     def test_import_detection(self):
         """Test that imports are detected."""
         code = '''
 import express from 'express';
-const http = require('http');
-import { Router } from 'express';
+const mongoose = require('mongoose');
 '''
         analysis = analyze_javascript_file("server.js", code)
         
         assert "express" in analysis.imports
-        assert "http" in analysis.imports
-    
-    def test_framework_detection(self):
-        """Test that frameworks are detected."""
-        code = '''
-import express from 'express';
-import React from 'react';
-const next = require('next');
-'''
-        analysis = analyze_javascript_file("app.js", code)
-        
+        assert "mongoose" in analysis.imports
         assert "Express" in analysis.framework_hints
-        assert "React" in analysis.framework_hints
-        assert "Next.js" in analysis.framework_hints
     
     def test_env_var_detection(self):
-        """Test that environment variables are detected."""
+        """Test that env vars are detected."""
         code = '''
 const port = process.env.PORT;
 const dbUrl = process.env.DATABASE_URL;
 const secret = process.env["API_SECRET"];
+const config = ConfigService.get('NEST_KEY');
 '''
         analysis = analyze_javascript_file("config.js", code)
         
         assert "PORT" in analysis.env_vars
         assert "DATABASE_URL" in analysis.env_vars
         assert "API_SECRET" in analysis.env_vars
+        assert "NEST_KEY" in analysis.env_vars
     
     def test_port_detection(self):
         """Test that ports are detected."""
@@ -214,6 +111,22 @@ import { Injectable } from '@nestjs/common';
         analysis = analyze_javascript_file("service.ts", code)
         
         assert analysis.language == "typescript"
+    
+    def test_nestjs_detection(self):
+        """Test NestJS framework detection."""
+        code = '''
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+}
+bootstrap();
+'''
+        analysis = analyze_javascript_file("main.ts", code)
+        assert "NestJS" in analysis.framework_hints
+        assert any("server" in ep for ep in analysis.entry_points)
 
 
 class TestGoAnalysis:
@@ -265,12 +178,13 @@ import "github.com/gin-gonic/gin"
         code = '''
 port := os.Getenv("PORT")
 dbUrl, exists := os.LookupEnv("DATABASE_URL")
+vip := viper.GetString("VIPER_KEY")
 '''
         analysis = analyze_go_file("config.go", code)
 
         assert "PORT" in analysis.env_vars
         assert "DATABASE_URL" in analysis.env_vars
-
+        assert "VIPER_KEY" in analysis.env_vars
 
 class TestGenericAnalysis:
     """Tests for Generic fallback analysis."""

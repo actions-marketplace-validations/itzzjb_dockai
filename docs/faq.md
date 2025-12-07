@@ -261,10 +261,11 @@ Currently, DockAI focuses on **Dockerfile generation only**. Docker Compose supp
 | Step | Typical Time |
 |------|--------------|
 | Project analysis | 5-15 seconds |
+| Code Indexing (RAG) | 15-45 seconds (first run) |
 | Dockerfile generation | 10-30 seconds |
 | Build validation | 30-300 seconds |
 | Security scanning | 10-60 seconds |
-| **Total** | **1-6 minutes** |
+| **Total** | **1-8 minutes** |
 
 ### Why is it slow?
 

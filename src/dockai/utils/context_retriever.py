@@ -178,7 +178,19 @@ class ContextRetriever:
                 ))
                 seen_files.add(code["source"])
         
-        # 4. SEMANTIC SEARCH: Find relevant chunks
+        # 4. GRAPH TRAVERSAL: Follow imports from entry points
+        imported_files = self._get_imported_files(seen_files)
+        for imp_file in imported_files:
+            if imp_file["source"] not in seen_files:
+                context_parts.append(RetrievedContext(
+                    content=imp_file["content"],
+                    source=imp_file["source"],
+                    relevance_score=0.85, # Higher than semantic search, lower than direct entry point
+                    context_type="imported_dependency"
+                ))
+                seen_files.add(imp_file["source"])
+
+        # 5. SEMANTIC SEARCH: Find relevant chunks
         queries = self._generate_dynamic_queries()
         
         for query in queries:
@@ -192,11 +204,26 @@ class ContextRetriever:
                         context_type="semantic_match"
                     ))
                     seen_files.add(chunk.file_path)
+
+        # 6. CATCH-ALL: Include ALL other files if enabled (default: True)
+        # This addresses user requirement for "no filtering" while keeping priority logic.
+        read_all = os.getenv("DOCKAI_READ_ALL_FILES", "true").lower() in ("true", "1", "yes", "on")
+        if read_all:
+            for chunk in self.index.chunks:
+                if chunk.file_path not in seen_files:
+                    # Give lower relevance so they are dropped first if token limit hit
+                    context_parts.append(RetrievedContext(
+                        content=self._format_chunk(chunk),
+                        source=chunk.file_path,
+                        relevance_score=0.5,
+                        context_type="catch_all"
+                    ))
+                    seen_files.add(chunk.file_path)
         
-        # 5. SORT by relevance and MERGE
+        # 6. SORT by relevance and MERGE
         context_parts.sort(key=lambda x: x.relevance_score, reverse=True)
         
-        # 6. BUILD final context string with token limit
+        # 7. BUILD final context string with token limit
         max_chars = max_tokens * 4  # Approximate chars per token
         final_context = self._build_final_context(context_parts, max_chars)
         
@@ -245,7 +272,13 @@ class ContextRetriever:
             chunk: The FileChunk to format.
             truncate_lines: Optional limit on lines (useful for lockfiles).
         """
-        content = chunk.content
+        from .file_utils import minify_code
+        
+        # Minify content to save tokens (remove comments/whitespace)
+        # We don't minify dependent files where exact line numbers might matter less than config structure
+        # But generally minification helps RAG.
+        content = minify_code(chunk.content, chunk.file_path)
+        
         if truncate_lines:
              lines = content.split('\n')
              if len(lines) > truncate_lines:
@@ -320,6 +353,82 @@ class ContextRetriever:
         
         return results[:5]  # Limit to 5 entry point files
     
+    def _get_imported_files(self, seen_files: Set[str]) -> List[Dict]:
+        """
+        Graph-RAG: Retrieve files imported by entry points.
+        This follows the import graph to find critical dependencies (settings, db config, etc.)
+        that might be missed by semantic search.
+        """
+        results = []
+        project_files = {c.file_path for c in self.index.chunks}
+        
+        # Identify entry point files
+        entry_point_files = [
+            path for path, analysis in self.index.code_analysis.items()
+            if analysis.entry_points
+        ]
+        
+        # If no explicit entry points, try to guess main files
+        if not entry_point_files:
+            entry_point_files = [
+                f for f in project_files 
+                if f.lower() in ('app.py', 'main.py', 'server.js', 'index.js', 'main.go', 'manage.py')
+            ]
+        
+        target_imports = set()
+        
+        # Collect all imports from entry point files
+        for ep_file in entry_point_files:
+            if ep_file in self.index.code_analysis:
+                target_imports.update(self.index.code_analysis[ep_file].imports)
+                
+        # Resolve imports to file paths
+        for imp in target_imports:
+            resolved_path = self._resolve_import_path(imp, project_files)
+            if resolved_path and resolved_path not in seen_files:
+                 # Find content
+                for chunk in self.index.chunks:
+                    if chunk.file_path == resolved_path and chunk.chunk_type == "full":
+                        results.append({
+                            "source": resolved_path,
+                            "content": self._format_chunk(chunk)
+                        })
+                        import_hit_msg = f"Graph-RAG: Found imported dependency '{imp}' -> {resolved_path}"
+                        logger.debug(import_hit_msg)
+                        break
+        
+        return results
+
+    def _resolve_import_path(self, import_name: str, project_files: Set[str]) -> Optional[str]:
+        """
+        Resolve a Python/JS import string to a likely file path in the project.
+        """
+        # Python style: "from core.config import settings" -> "core/config.py"
+        py_path = import_name.replace('.', '/') + '.py'
+        if py_path in project_files:
+            return py_path
+            
+        # Check __init__.py for module imports
+        init_path = import_name.replace('.', '/') + '/__init__.py'
+        if init_path in project_files:
+            return init_path
+            
+        # JS style: "./utils" -> "utils.js" or "utils/index.js"
+        # Since import_name typically comes from AST which cleans it, we assume basic name
+        js_path = import_name + '.js'
+        if js_path in project_files:
+            return js_path
+            
+        js_ts_path = import_name + '.ts'
+        if js_ts_path in project_files:
+            return js_ts_path
+            
+        # Try direct match (if import was "utils.py")
+        if import_name in project_files:
+            return import_name
+            
+        return None
+
     def _build_final_context(
         self, 
         context_parts: List[RetrievedContext], 
