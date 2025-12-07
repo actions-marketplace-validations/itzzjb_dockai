@@ -1,6 +1,7 @@
 
 import os
 import logging
+import re
 
 logger = logging.getLogger("dockai")
 
@@ -11,6 +12,44 @@ CHARS_PER_TOKEN = 4
 def estimate_tokens(text: str) -> int:
     """Estimate the number of tokens in a string (rough approximation)."""
     return len(text) // CHARS_PER_TOKEN
+
+
+def minify_code(content: str, filename: str) -> str:
+    """
+    Minify code by removing comments and excessive whitespace.
+    This saves tokens without losing semantic meaning for the LLM.
+    """
+    if not content:
+        return ""
+        
+    ext = os.path.splitext(filename)[1].lower()
+    
+    # Python/Ruby/Shell/Perl/YAML/Dockerfile style comments (#)
+    if ext in ('.py', '.rb', '.sh', '.pl', '.yml', '.yaml', '.dockerfile', '.conf', '.ini', '.toml'):
+        # Remove lines that are purely comments, but keep inline comments to be safe (simpler regex)
+        # Also remove empty lines
+        lines = content.splitlines()
+        minified_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            minified_lines.append(line)
+        return "\n".join(minified_lines)
+    
+    # C-style comments (//) for JS, TS, Go, Java, C, C++, Rust
+    elif ext in ('.js', '.ts', '.jsx', '.tsx', '.go', '.java', '.c', '.cpp', '.h', '.rs', '.css', '.scss'):
+        lines = content.splitlines()
+        minified_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("//"):
+                continue
+            minified_lines.append(line)
+        return "\n".join(minified_lines)
+        
+    return content
+
 
 
 def smart_truncate(content: str, filename: str, max_chars: int, max_lines: int) -> str:

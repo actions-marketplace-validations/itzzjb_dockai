@@ -128,6 +128,16 @@ STRATEGIC PLAN (Follow this guidance):
 - Potential Challenges: {', '.join(current_plan.get('potential_challenges', []))}
 - Mitigation Strategies: {', '.join(current_plan.get('mitigation_strategies', []))}
 """
+
+    # EXPERT KNOWLEDGE INJECTION
+    expert_guidance = _get_expert_guidance(stack_info)
+    expert_context = ""
+    if expert_guidance:
+        expert_context = f"""
+### PHASE 0: EXPERT STACK GUIDANCE (CRITICAL)
+Use these PRODUCTION-READY patterns for {stack_info}:
+{expert_guidance}
+"""
     
     # Define the default system prompt for the "Senior Docker Architect" persona
     default_prompt = """You are the GENERATOR agent in a multi-agent Dockerfile generation pipeline. You are AGENT 3 of 8 - the craftsman who transforms plans into working Dockerfiles.
@@ -147,6 +157,8 @@ Generate a production-ready Dockerfile that:
 4. Runs the application correctly
 
 ## Chain-of-Thought Generation Process
+
+{expert_context}
 
 ### PHASE 1: INTERNALIZE THE PLAN
 The Blueprint Architect has provided strategic guidance:
@@ -362,7 +374,8 @@ Generate the Dockerfile and explain your reasoning in the thought process.""")
             "custom_instructions": custom_instructions,
             "error_context": error_context,
             "plan_context": plan_context,
-            "retry_context": retry_context
+            "retry_context": retry_context,
+            "expert_context": expert_context
         },
         config={"callbacks": [callback]}
     )
@@ -623,3 +636,44 @@ Fallback Strategy: {result.fallback_strategy or 'None'}
 {result.thought_process}"""
     
     return result.dockerfile, result.project_type, thought_process, callback.get_usage()
+
+
+def _get_expert_guidance(stack: str) -> str:
+    """
+    Returns curated expert patterns for specific stacks.
+    This helps the LLM avoid common hallucinations and adhere to best practices.
+    """
+    stack_lower = stack.lower()
+    
+    if "python" in stack_lower:
+        return """
+- **Env Vars**: Set `PYTHONDONTWRITEBYTECODE=1` and `PYTHONUNBUFFERED=1` immediately after FROM.
+- **Dependencies**: COPY `requirements.txt` / `pyproject.toml` separately before `COPY . .` to leverage caching.
+- **User**: Create a non-root user `appuser`. Ensure `chown` is done *before* switching USER.
+- **Path**: Ensure `/home/appuser/.local/bin` is in PATH if installing with `--user`.
+- **Gunicorn**: For production, use `gunicorn` with `-w 4 -k uvicorn.workers.UvicornWorker` for FastAPI/ASGI apps.
+        """
+        
+    if "node" in stack_lower or "javascript" in stack_lower or "typescript" in stack_lower:
+        return """
+- **Node Environment**: Set `ENV NODE_ENV=production`.
+- **Dependencies**: COPY `package.json` AND `package-lock.json` (or `yarn.lock`). Run `npm ci` (clean install), not `npm install`.
+- **User**: Use the built-in `node` user (uid 1000). `USER node`.
+- **Permissions**: If you need to write to directories, do `RUN chown -R node:node /app` before switching.
+- **Tini**: Use `tini` as init process (`ENTRYPOINT ["/sbin/tini", "--"]`) to handle signals correctly if not using a process manager.
+        """
+        
+    if "go" in stack_lower:
+        return """
+- **Image**: Use `golang:*-alpine` for build, `alpine` or `gcr.io/distroless/static-debian12` for runtime.
+- **Build**: `CGO_ENABLED=0 GOOS=linux go build -o /app/main .`
+- **Security**: Do NOT run as root. `USER nonroot:nonroot` (if using distroless) or create user.
+- **Certificates**: If using scratch/minimal, install `ca-certificates` in builder and copy to runtime.
+        """
+        
+    # Default/Generic
+    return """
+- **Least Privilege**: Always create and use a non-root user.
+- **Layer Caching**: Copy dependency manifests first, install, then copy source.
+- **Minimalism**: Use multistage builds to ship only the binary/assets, not build tools.
+    """
