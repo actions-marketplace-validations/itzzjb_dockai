@@ -179,6 +179,11 @@ No issues                 → is_secure=True
 - ALWAYS provide the exact fix, not vague suggestions
 - If generating fixed_dockerfile, ensure ALL issues are addressed
 - Don't flag false positives (e.g., USER 1001 is valid)
+
+## DO NOT Add These to Dockerfiles
+- Security audit commands (`npm audit fix`, `pip-audit`, `bundler-audit`) - they fail on legacy projects
+- Package update commands - can break locked dependencies
+- Force-fix commands - can introduce breaking changes
 """
 
     # Get custom prompt if configured, otherwise use default

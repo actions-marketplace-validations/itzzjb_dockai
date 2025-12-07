@@ -451,11 +451,26 @@ COPY --from=builder /app/dependencies ./dependencies
 4. **confidence_in_fix**: HIGH/MEDIUM/LOW
 5. **fallback_strategy**: What to try if this still fails
 
+## CRITICAL: Warnings vs Errors
+
+**Deprecation warnings are NOT errors!**
+When analyzing error logs, distinguish between:
+- **Warnings** (harmless): "deprecated", "WARN", "warning", "notice"
+- **Errors** (actual failures): "ERR!", "error:", "fatal:", exit code != 0
+
+If the logs contain deprecation warnings but no actual errors, the issue is elsewhere.
+
 ## Principles of Surgical Fixes
 - **Minimal**: Change only what's necessary
 - **Targeted**: Address the specific root cause
 - **Complete**: Include all related changes
 - **Documented**: Explain every modification
+
+## Anti-Patterns - DO NOT DO THESE
+- Adding security audit commands (`audit fix`, `pip-audit`, etc.) - they fail on legacy projects
+- Adding package update commands - can break locked dependencies
+- Treating deprecation warnings as errors requiring fixes
+- Making changes unrelated to the diagnosed root cause
 
 {custom_instructions}
 """
@@ -708,6 +723,9 @@ Your Blueprint MUST provide clear answers for:
 - Missing health endpoints that clearly exist in code
 - Underestimating startup times for JVM apps
 - Not considering CI/CD cache implications
+- **Treating deprecation warnings as errors** - they are informational only
+- **Recommending audit commands** (`audit fix`, `pip-audit`, etc.) - they fail on legacy projects
+- **Recommending package updates** in Dockerfiles - can break locked dependencies
 
 {custom_instructions}
 """
