@@ -145,6 +145,9 @@ Assign different models to different agents for cost optimization:
 | `enable_tracing` | Enable OpenTelemetry tracing | `false` |
 | `tracing_exporter` | Exporter type (`console` or `otlp`) | `console` |
 | `otlp_endpoint` | OTLP endpoint for trace export | `http://localhost:4317` |
+| `langchain_tracing_v2` | Enable LangSmith/LangChain tracing | `false` |
+| `langchain_api_key` | LangSmith API key (required when tracing is enabled) | - |
+| `langchain_project` | LangSmith project name | `dockai` |
 
 ### Custom Instructions
 

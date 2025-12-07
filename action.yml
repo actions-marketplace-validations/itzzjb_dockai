@@ -118,6 +118,14 @@ inputs:
     description: 'Max lines to read per file (default: 5000)'
     required: false
     default: '5000'
+  truncation_enabled:
+    description: 'Force-enable smart truncation for critical files (true/false)'
+    required: false
+    default: 'false'
+  token_limit:
+    description: 'Token threshold that auto-enables truncation (default: 100000)'
+    required: false
+    default: '100000'
   analyzer_instructions:
     description: 'Custom instructions for the analyzer (project discovery agent)'
     required: false
@@ -184,6 +192,19 @@ inputs:
     description: 'Custom prompt - surgeon for precise corrections agent'
     required: false
     default: ''
+  # Provider & Runtime Settings
+  llm_caching:
+    description: 'Enable in-process LLM response caching (true/false)'
+    required: false
+    default: 'true'
+  ollama_base_url:
+    description: 'Base URL for Ollama when using llm_provider=ollama'
+    required: false
+    default: 'http://localhost:11434'
+  google_cloud_project:
+    description: 'Google Cloud project ID for Gemini (optional)'
+    required: false
+    default: ''
   
   # Observability & Tracing
   enable_tracing:
@@ -198,6 +219,25 @@ inputs:
     description: 'OTLP endpoint URL for trace export'
     required: false
     default: 'http://localhost:4317'
+  otel_service_name:
+    description: 'Service name for OpenTelemetry traces'
+    required: false
+    default: 'dockai'
+  langchain_tracing_v2:
+    description: 'Enable LangSmith/LangChain tracing (true/false)'
+    required: false
+    default: 'false'
+  langchain_api_key:
+    description: 'LangSmith API key (required when langchain_tracing_v2=true)'
+    required: false
+  langchain_project:
+    description: 'LangSmith project name'
+    required: false
+    default: 'dockai'
+  langchain_endpoint:
+    description: 'LangSmith endpoint URL'
+    required: false
+    default: 'https://api.smith.langchain.com'
 
 runs:
   using: "composite"
@@ -250,6 +290,8 @@ runs:
         DOCKAI_VALIDATION_PIDS: ${{ inputs.validation_pids }}
         DOCKAI_MAX_FILE_CHARS: ${{ inputs.max_file_chars }}
         DOCKAI_MAX_FILE_LINES: ${{ inputs.max_file_lines }}
+        DOCKAI_TRUNCATION_ENABLED: ${{ inputs.truncation_enabled }}
+        DOCKAI_TOKEN_LIMIT: ${{ inputs.token_limit }}
         # Custom Instructions
         DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
         DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
@@ -268,10 +310,19 @@ runs:
         DOCKAI_PROMPT_REFLECTOR: ${{ inputs.prompt_reflector }}
         DOCKAI_PROMPT_ERROR_ANALYZER: ${{ inputs.prompt_error_analyzer }}
         DOCKAI_PROMPT_ITERATIVE_IMPROVER: ${{ inputs.prompt_iterative_improver }}
+        # Provider & Runtime
+        DOCKAI_LLM_CACHING: ${{ inputs.llm_caching }}
+        OLLAMA_BASE_URL: ${{ inputs.ollama_base_url }}
+        GOOGLE_CLOUD_PROJECT: ${{ inputs.google_cloud_project }}
         # Observability & Tracing
         DOCKAI_ENABLE_TRACING: ${{ inputs.enable_tracing }}
         DOCKAI_TRACING_EXPORTER: ${{ inputs.tracing_exporter }}
         OTEL_EXPORTER_OTLP_ENDPOINT: ${{ inputs.otlp_endpoint }}
+        OTEL_SERVICE_NAME: ${{ inputs.otel_service_name }}
+        LANGCHAIN_TRACING_V2: ${{ inputs.langchain_tracing_v2 }}
+        LANGCHAIN_API_KEY: ${{ inputs.langchain_api_key }}
+        LANGCHAIN_PROJECT: ${{ inputs.langchain_project }}
+        LANGCHAIN_ENDPOINT: ${{ inputs.langchain_endpoint }}
       run: |
         echo "Starting DockAI Framework..."
         dockai build ${{ inputs.project_path }} --no-cache
