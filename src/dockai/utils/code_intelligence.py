@@ -327,6 +327,7 @@ def analyze_javascript_file(filepath: str, content: str) -> FileAnalysis:
         r'\.listen\s*\(\s*(\d+)',
         r'port\s*[=:]\s*(\d+)',
         r'PORT\s*[=:]\s*(\d+)',
+        r'\|\|\s*(\d{4,5})',  # process.env.PORT || 3000
     ]
     for pattern in port_patterns:
         for match in re.finditer(pattern, content, re.IGNORECASE):

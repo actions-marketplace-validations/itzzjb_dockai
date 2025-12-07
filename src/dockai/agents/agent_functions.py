@@ -491,7 +491,7 @@ Stack: {stack}
 Build Command: {build_command}
 Start Command: {start_command}
 
-KEY FILES:
+RAG-RETRIEVED CONTEXT (Most Relevant Chunks):
 {file_contents}
 
 Apply the fixes and return an improved Dockerfile.
@@ -745,7 +745,7 @@ Suggested Base Image: {suggested_base_image}
 Build Command: {build_command}
 Start Command: {start_command}
 
-FILE CONTENTS:
+RAG-RETRIEVED CONTEXT (Most Relevant Chunks):
 {file_contents}
 
 Generate the Strategic Plan and Runtime Configuration.

@@ -312,7 +312,7 @@ class ProjectIndex:
     def _semantic_search(self, query: str, top_k: int) -> List[FileChunk]:
         """Perform semantic similarity search using embeddings."""
         # Embed the query
-        query_embedding = self.embedder.encode([query])[0]
+        query_embedding = self.embedder.encode([query], show_progress_bar=False)[0]
         
         # Calculate cosine similarity
         # Normalize vectors for cosine similarity

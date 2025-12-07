@@ -335,7 +335,7 @@ Detected Start Command: {start_cmd}
 Project Files (ONLY copy files that actually exist in this list):
 {file_tree}
 
-File Contents:
+RAG-RETRIEVED CONTEXT (Most Relevant Chunks):
 {file_contents}
 
 Custom Instructions: {custom_instructions}
@@ -579,7 +579,7 @@ Stack: {stack}
 Build Command: {build_cmd}
 Start Command: {start_cmd}
 
-KEY FILE CONTENTS:
+RAG-RETRIEVED CONTEXT (Most Relevant Chunks):
 {file_contents}
 
 Apply the specific fixes and return an improved Dockerfile.

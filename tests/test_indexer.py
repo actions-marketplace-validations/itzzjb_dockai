@@ -161,7 +161,7 @@ class TestProjectIndex:
             index.index_project(tmpdir, ["app.py", "package.json"])
             
             assert len(index.chunks) == 2
-            assert len(index.code_analysis) == 1  # Only Python files get AST analysis
+            assert len(index.code_analysis) == 2  # Python AND package.json now analyzed
     
     def test_get_entry_points(self):
         """Test entry point extraction."""

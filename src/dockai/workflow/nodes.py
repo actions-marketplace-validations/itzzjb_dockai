@@ -350,37 +350,22 @@ def read_files_node(state: DockAIState) -> DockAIState:
     file_tree = state.get("file_tree", [])
     config = state.get("config", {})
     
-    # Check if RAG mode is enabled
-    use_rag = os.getenv("DOCKAI_USE_RAG", "false").lower() in ("true", "1", "yes", "on")
-    
-    if use_rag:
-        return _read_files_with_rag(path, file_tree, config)
-    else:
-        return _read_files_standard(path, analysis_result, file_tree, config)
+    # --- RAG STRATEGY (v4.0 ONLY) ---
+    return _read_files_rag(path, file_tree, config)
 
 
-def _read_files_with_rag(path: str, file_tree: list, config: dict) -> dict:
+def _read_files_rag(path: str, file_tree: list, config: dict) -> dict:
     """
     Read files using RAG (Retrieval-Augmented Generation).
     
-    Uses semantic search and AST analysis to retrieve the most relevant
-    context for Dockerfile generation. This is more efficient for large
-    projects and provides better signal-to-noise ratio.
-    
-    Args:
-        path: Project root path.
-        file_tree: List of all file paths.
-        config: Configuration dictionary.
-        
-    Returns:
-        State update dictionary with file_contents and code_intelligence.
+    This is the primary (and only) supported context strategy in v4.0.
     """
     try:
         from ..utils.indexer import ProjectIndex
         from ..utils.context_retriever import ContextRetriever
     except ImportError as e:
-        logger.warning(f"RAG dependencies not available: {e}. Falling back to standard mode.")
-        return _read_files_standard(path, {}, file_tree, config)
+        logger.error(f"Critical RAG dependencies missing: {e}. Please install dockai-cli[rag].")
+        return _fallback_read_simple(path, file_tree, config)
     
     logger.info("Using RAG mode for intelligent context retrieval...")
     
@@ -420,139 +405,55 @@ def _read_files_with_rag(path: str, file_tree: list, config: dict) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"RAG indexing failed: {e}. Falling back to standard mode.")
-        return _read_files_standard(path, {}, file_tree, config)
+        logger.error(f"RAG indexing failed: {e}. Falling back to simple read.")
+        return _fallback_read_simple(path, file_tree, config)
 
 
-def _read_files_standard(path: str, analysis_result: dict, file_tree: list, config: dict) -> dict:
+def _fallback_read_simple(path: str, file_tree: list, config: dict) -> dict:
     """
-    Read files using the standard approach (read all with truncation).
-    
-    This is the original file reading logic that reads all source files
-    with smart truncation to fit within token limits.
-    
-    Args:
-        path: Project root path.
-        analysis_result: Analyzer output with priority files.
-        file_tree: List of all file paths.
-        config: Configuration dictionary.
-        
-    Returns:
-        State update dictionary with file_contents.
+    Emergency fallback: Read all text files until token limit.
+    Used ONLY if RAG crashes.
     """
-    # Check if we should read all files
-    read_all_files = os.getenv("DOCKAI_READ_ALL_FILES", "true").lower() in ("true", "1", "yes", "on")
+    from ..utils.file_utils import smart_truncate
     
-    # Files the Analyzer specifically requested (priority files)
-    priority_files = analysis_result.get("files_to_read", []) if analysis_result else []
+    token_limit = config.get("token_limit") or int(os.getenv("DOCKAI_TOKEN_LIMIT", "50000"))
+    content_buffer = []
+    current_tokens = 0
     
-    # Automatically include existing Dockerfile(s)
-    import glob
-    dockerfile_patterns = [
-        os.path.join(path, "Dockerfile"),
-        os.path.join(path, "dockerfile"),
-        os.path.join(path, "Dockerfile.*"),
-        os.path.join(path, "dockerfile.*"),
-    ]
-    existing_dockerfiles = []
-    for pattern in dockerfile_patterns:
-        for dockerfile_path in glob.glob(pattern):
-            dockerfile_name = os.path.basename(dockerfile_path)
-            if dockerfile_name not in priority_files and os.path.isfile(dockerfile_path):
-                existing_dockerfiles.append(dockerfile_name)
-                priority_files.insert(0, dockerfile_name)
+    logger.info("Performing fallback file read (Simple Mode)...")
     
-    if existing_dockerfiles:
-        logger.info(f"Found existing Dockerfile(s): {', '.join(existing_dockerfiles)} - including in context")
+    for relative_path in file_tree:
+        # Skip lock files/ignored in fallback
+        if "lock" in relative_path or ".git" in relative_path:
+            continue
+            
+        full_path = os.path.join(path, relative_path)
+        try:
+            with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+                
+            # Truncate large files
+            content = smart_truncate(content, max_tokens=2000)
+            
+            # Form header
+            header = f"\n\n--- FILE: {relative_path} ---\n"
+            entry_len = len(header) + len(content)
+            
+            if current_tokens + (entry_len // 4) > token_limit:
+                break
+                
+            content_buffer.append(header)
+            content_buffer.append(content)
+            current_tokens += (entry_len // 4)
+            
+        except Exception:
+            continue
+            
+    return {"file_content": "".join(content_buffer)}
     
-    # FILES TO SKIP (lock files, binaries, generated)
-    SKIP_PATTERNS = {
-        # Lock files
-        "package-lock.json", "yarn.lock", "pnpm-lock.yaml", 
-        "Gemfile.lock", "go.sum", "Cargo.lock", "poetry.lock",
-        "Pipfile.lock", "composer.lock", "packages.lock.json",
-        # Binary/compressed
-        ".pyc", ".pyo", ".so", ".dll", ".exe", ".bin", ".jar", ".war",
-        ".zip", ".tar", ".gz", ".rar", ".7z",
-        # Images
-        ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".webp",
-        # Fonts
-        ".woff", ".woff2", ".ttf", ".eot", ".otf",
-        # Generated
-        ".map", ".min.js", ".min.css", ".bundle.js",
-    }
-    
-    def should_skip_file(filename: str) -> bool:
-        """Check if file should be skipped."""
-        basename = os.path.basename(filename)
-        if basename in SKIP_PATTERNS:
-            return True
-        ext = os.path.splitext(filename)[1].lower()
-        if ext in SKIP_PATTERNS:
-            return True
-        # Skip hidden files except important ones
-        important_hidden = {'.env.example', '.dockerignore', '.gitignore', '.nvmrc', 
-                          '.python-version', '.ruby-version', '.node-version', '.tool-versions'}
-        if basename.startswith('.') and basename not in important_hidden:
-            return True
-        return False
-    
-    # Build the file list
-    files_to_read = []
-    
-    # Add priority files first
-    for f in priority_files:
-        if f not in files_to_read and not should_skip_file(f):
-            files_to_read.append(f)
-    
-    # Add all other source files from file tree
-    if read_all_files and file_tree:
-        for f in file_tree:
-            if f not in files_to_read and not should_skip_file(f):
-                files_to_read.append(f)
-        logger.info(f"Reading ALL {len(files_to_read)} source files (priority: {len(priority_files)}, additional: {len(files_to_read) - len(priority_files)})")
-    else:
-        logger.info(f"Reading {len(files_to_read)} priority files only")
-    
-    # Handle empty file list
-    if not files_to_read:
-        logger.warning("No files to read - trying common file patterns")
-        common_files = ["package.json", "requirements.txt", "Gemfile", "go.mod", 
-                       "Cargo.toml", "pom.xml", "build.gradle", "Makefile", 
-                       "setup.py", "pyproject.toml"]
-        for f in common_files:
-            if os.path.exists(os.path.join(path, f)):
-                files_to_read.append(f)
-        
-        if not files_to_read:
-            logger.warning("No files found - proceeding with empty context")
-            return {"file_contents": ""}
-    
-    # Auto-enable truncation when reading all files
-    truncation_enabled = config.get("truncation_enabled", None)
-    if truncation_enabled is None and read_all_files:
-        truncation_enabled = True
-        logger.info("Auto-enabling truncation for full-project read")
-    
-    try:
-        file_contents_str = read_critical_files(path, files_to_read, truncation_enabled=truncation_enabled)
-    except Exception as e:
-        logger.error(f"Error reading files: {e}")
-        return {
-            "file_contents": "",
-            "error": f"Failed to read project files: {e}",
-            "error_details": {
-                "error_type": "environment_error",
-                "message": str(e),
-                "suggestion": "Check file permissions and encoding.",
-                "should_retry": False
-            }
-        }
-    
-    if not file_contents_str.strip():
-        logger.warning("All files were empty or could not be read")
-    
-    return {"file_contents": file_contents_str}
+
+
+
 
 
 def blueprint_node(state: DockAIState) -> DockAIState:
@@ -994,6 +895,7 @@ def review_node(state: DockAIState) -> DockAIState:
                 
                 # Check if reviewer provided a fixed dockerfile
                 if review_result.fixed_dockerfile:
+
                     logger.info("Reviewer provided a corrected Dockerfile - will use it directly")
                     if span:
                         span.set_attribute("auto_fixed", True)
