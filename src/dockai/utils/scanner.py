@@ -109,43 +109,96 @@ def get_file_tree(root_path: str) -> List[str]:
         
     Returns:
         List[str]: A list of relative file paths that should be analyzed.
+        
+    Raises:
+        PermissionError: If the directory cannot be accessed due to permissions.
     """
+    import logging
+    logger = logging.getLogger("dockai")
+    
+    # Validate root_path
+    if not root_path:
+        logger.error("Empty root_path provided to get_file_tree")
+        return []
+    
+    if not os.path.exists(root_path):
+        logger.error(f"Directory does not exist: {root_path}")
+        raise FileNotFoundError(f"Directory not found: {root_path}")
+    
+    if not os.path.isdir(root_path):
+        logger.error(f"Path is not a directory: {root_path}")
+        raise NotADirectoryError(f"Not a directory: {root_path}")
+    
     # Load ignore patterns from standard files
     gitignore_spec = load_ignore_spec(root_path, ".gitignore")
     dockerignore_spec = load_ignore_spec(root_path, ".dockerignore")
     
     file_list = []
+    skipped_dirs = 0
+    permission_errors = 0
     
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        # Filter directories in-place to prevent os.walk from descending into them
-        
-        # 1. Filter by default ignore dirs (fastest check)
-        dirnames[:] = [d for d in dirnames if d not in DEFAULT_IGNORE_DIRS]
-        
-        # 2. Filter by gitignore/dockerignore specs (more complex check)
-        # We need to check the relative path of the directory
-        i = 0
-        while i < len(dirnames):
-            d = dirnames[i]
-            abs_dir_path = os.path.join(dirpath, d)
-            rel_dir_path = os.path.relpath(abs_dir_path, root_path)
+    try:
+        for dirpath, dirnames, filenames in os.walk(root_path):
+            # Filter directories in-place to prevent os.walk from descending into them
             
-            # Add a trailing slash to indicate it's a directory for pathspec matching
-            # This ensures patterns like "build/" match correctly
-            if gitignore_spec.match_file(rel_dir_path + "/") or dockerignore_spec.match_file(rel_dir_path + "/"):
-                dirnames.pop(i)
-            else:
-                i += 1
-        
-        # Process files in the current directory
-        for filename in filenames:
-            abs_path = os.path.join(dirpath, filename)
-            rel_path = os.path.relpath(abs_path, root_path)
+            # 1. Filter by default ignore dirs (fastest check)
+            original_count = len(dirnames)
+            dirnames[:] = [d for d in dirnames if d not in DEFAULT_IGNORE_DIRS]
+            skipped_dirs += original_count - len(dirnames)
             
-            # Check if the file matches any ignore patterns
-            if gitignore_spec.match_file(rel_path) or dockerignore_spec.match_file(rel_path):
-                continue
+            # 2. Filter by gitignore/dockerignore specs (more complex check)
+            # We need to check the relative path of the directory
+            i = 0
+            while i < len(dirnames):
+                d = dirnames[i]
+                abs_dir_path = os.path.join(dirpath, d)
                 
-            file_list.append(rel_path)
+                # Check if directory is accessible
+                try:
+                    os.access(abs_dir_path, os.R_OK)
+                except OSError:
+                    logger.warning(f"Cannot access directory (skipping): {abs_dir_path}")
+                    dirnames.pop(i)
+                    permission_errors += 1
+                    continue
+                
+                rel_dir_path = os.path.relpath(abs_dir_path, root_path)
+                
+                # Add a trailing slash to indicate it's a directory for pathspec matching
+                # This ensures patterns like "build/" match correctly
+                if gitignore_spec.match_file(rel_dir_path + "/") or dockerignore_spec.match_file(rel_dir_path + "/"):
+                    dirnames.pop(i)
+                    skipped_dirs += 1
+                else:
+                    i += 1
             
+            # Process files in the current directory
+            for filename in filenames:
+                abs_path = os.path.join(dirpath, filename)
+                rel_path = os.path.relpath(abs_path, root_path)
+                
+                # Check if the file matches any ignore patterns
+                if gitignore_spec.match_file(rel_path) or dockerignore_spec.match_file(rel_path):
+                    continue
+                
+                # Check if file is readable
+                if not os.access(abs_path, os.R_OK):
+                    logger.debug(f"Skipping unreadable file: {rel_path}")
+                    continue
+                    
+                file_list.append(rel_path)
+    
+    except PermissionError as e:
+        logger.error(f"Permission denied while scanning directory: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error scanning directory: {e}")
+        raise
+    
+    # Log summary for debugging
+    if skipped_dirs > 0:
+        logger.debug(f"Skipped {skipped_dirs} directories (ignored or inaccessible)")
+    if permission_errors > 0:
+        logger.warning(f"Encountered {permission_errors} permission errors while scanning")
+    
     return file_list

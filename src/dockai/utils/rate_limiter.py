@@ -1,14 +1,13 @@
 """
 Rate Limit Handler for DockAI.
 
-This module provides intelligent rate limit detection, exponential backoff,
-This module provides intelligent rate limit detection, exponential backoff,
-and retry logic for API calls to LLM providers and Docker Hub.
+Provides exponential backoff with jitter for generic rate limits and
+registry-specific retries for Docker Hub/GCR/Quay.
 """
 
 import time
 import logging
-from typing import Callable, Any, Optional, Dict
+from typing import Callable, Any, Optional
 from functools import wraps
 
 
@@ -51,19 +50,13 @@ class RateLimitHandler:
             float: Delay duration in seconds
         """
         if retry_after:
-            # Honor the Retry-After header if provided
             return min(retry_after, self.max_delay)
-        
-        # Calculate exponential backoff: base_delay * (backoff_factor ^ attempt)
         delay = min(
             self.base_delay * (self.backoff_factor ** attempt),
             self.max_delay
         )
-        
-        # Add jitter (randomness) to prevent thundering herd
         import random
         jitter = random.uniform(0, delay * 0.1)  # 10% jitter
-        
         return delay + jitter
     
     def reset(self):
@@ -80,20 +73,6 @@ def with_rate_limit_handling(
     Decorator to add rate limit handling to any function.
     
     Catches rate limit errors and retries with exponential backoff.
-    
-    Args:
-        max_retries (int): Maximum number of retry attempts
-        base_delay (float): Initial delay in seconds
-        max_delay (float): Maximum delay in seconds
-        
-    Returns:
-        Decorated function with rate limit handling
-        
-    Example:
-        @with_rate_limit_handling(max_retries=3)
-        def call_openai_api():
-            # Your API call here
-            pass
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
@@ -113,7 +92,7 @@ def with_rate_limit_handling(
                     
                     # Reset retry count on success
                     if attempt > 0:
-                        logger.info(f"✓ Retry succeeded after {attempt} attempts")
+                        logger.info(f"Retry succeeded after {attempt} attempts")
                     
                     return result
                 
@@ -141,7 +120,7 @@ def with_rate_limit_handling(
                         last_exception = e
                         
                         if attempt >= max_retries:
-                            logger.error(f"✗ Max retries ({max_retries}) exceeded for rate limit")
+                            logger.error(f"Max retries ({max_retries}) exceeded for rate limit")
                             raise RateLimitExceededError(
                                 f"Rate limit exceeded after {max_retries} retries. "
                                 f"Please wait a few minutes and try again, or upgrade your API tier."
@@ -161,7 +140,7 @@ def with_rate_limit_handling(
                         delay = handler.calculate_delay(attempt, retry_after)
                         
                         logger.warning(
-                            f"⚠ Rate limit hit (attempt {attempt + 1}/{max_retries}). "
+                            f"Rate limit hit (attempt {attempt + 1}/{max_retries}). "
                             f"Waiting {delay:.1f}s before retry..."
                         )
                         
@@ -220,7 +199,7 @@ def handle_registry_rate_limit(func: Callable) -> Callable:
                     
                     if attempt >= max_retries:
                         logger.warning(
-                            "⚠ Registry rate limit exceeded. "
+                            "Registry rate limit exceeded. "
                             "This won't prevent Dockerfile generation, but image tag verification may be skipped."
                         )
                         # Return None (or empty list depending on usage) to indicate failure without crashing
@@ -232,7 +211,7 @@ def handle_registry_rate_limit(func: Callable) -> Callable:
                     
                     delay = base_delay * (2 ** attempt)
                     logger.warning(
-                        f"⚠ Registry API rate limit (attempt {attempt + 1}/{max_retries}). "
+                        f"Registry API rate limit (attempt {attempt + 1}/{max_retries}). "
                         f"Waiting {delay:.0f}s..."
                     )
                     time.sleep(delay)
@@ -245,25 +224,3 @@ def handle_registry_rate_limit(func: Callable) -> Callable:
     
     return wrapper
 
-
-def get_rate_limit_status() -> Dict[str, Any]:
-    """
-    Get current rate limit status information.
-    
-    This can be expanded to track API usage and provide warnings
-    before limits are hit.
-    
-    Returns:
-        Dict with rate limit information
-    """
-    # This is a placeholder for future implementation
-    # Could track:
-    # - Number of API calls made in current session
-    # - Estimated tokens used
-    # - Time until rate limits reset
-    
-    return {
-        "calls_made": 0,
-        "tokens_used": 0,
-        "status": "ok"
-    }

@@ -4,6 +4,10 @@ FROM python:3.11
 # Set the working directory
 WORKDIR /app
 
+# Install Hadolint for Dockerfile linting (as root before switching user)
+RUN wget -qO /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 && \
+    chmod +x /usr/local/bin/hadolint
+
 # Create a non-root user and switch to it
 RUN useradd -m dockai
 USER dockai

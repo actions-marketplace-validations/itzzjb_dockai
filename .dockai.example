@@ -28,7 +28,7 @@ Project-specific context:
 - Has native dependencies needing: gcc, libpq-dev, libffi-dev
 - Entry point: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-[instructions_planner]
+[instructions_blueprint]
 Dockerfile planning requirements:
 - Use multi-stage builds with at least 2 stages (builder + runtime)
 - Target final image size under 200MB
@@ -68,22 +68,6 @@ When analyzing failures:
 - Flag any deviation from company standards
 - Provide specific line numbers for fixes
 
-[instructions_health_detector]
-Application health check details:
-- Primary endpoint: GET /api/v1/health
-- Expected response: {"status": "healthy", "version": "..."}
-- Timeout: 5 seconds
-- Interval: 30 seconds
-- Database health included in response
-
-[instructions_readiness_detector]
-Application startup requirements:
-- Database migrations run on startup (~10s)
-- Redis connection must be established
-- ML model loading takes ~20 seconds
-- Recommended initial delay: 30 seconds
-- Readiness endpoint: GET /api/v1/ready
-
 [instructions_error_analyzer]
 Error handling preferences:
 - Network timeouts: retry with exponential backoff
@@ -109,7 +93,7 @@ When applying fixes:
 #   {file_tree}        - Project directory structure
 #   {file_contents}    - Contents of relevant project files  
 #   {project_analysis} - Output from analyzer agent
-#   {dockerfile_plan}  - Strategic plan from planner agent
+#   {dockerfile_plan}  - Strategic plan from blueprint agent
 #   {health_check}     - Health check configuration
 #   {readiness_probe}  - Readiness probe configuration
 #   {dockerfile}       - Generated Dockerfile content
@@ -139,19 +123,20 @@ Analyze and provide:
 7. Environment variables needed
 8. Ports to expose
 
-[prompt_planner]
-You are a DevOps architect creating a Dockerfile generation strategy.
+[prompt_blueprint]
+You are a Chief Architect creating a Dockerfile generation blueprint.
 
 PROJECT ANALYSIS:
 {project_analysis}
 
-Create a detailed plan including:
+Create a detailed blueprint including:
 1. Recommended base image with justification
 2. Build stages (name and purpose of each)
 3. Dependency installation strategy
 4. Security hardening steps
 5. Layer optimization approach
 6. Caching strategy for CI/CD
+7. Runtime configuration (health checks, readiness probes)
 
 [prompt_generator]
 You are a Docker expert generating a production-grade Dockerfile.
@@ -226,38 +211,6 @@ Analyze and provide:
 2. Classification (build/runtime/security/config)
 3. Specific fix recommendations
 4. Prevention strategies
-
-[prompt_health_detector]
-You are analyzing source code to detect health check endpoints.
-
-FILE TREE:
-{file_tree}
-
-FILE CONTENTS:
-{file_contents}
-
-Identify:
-1. Health check endpoint path
-2. HTTP method
-3. Expected response
-4. Dependencies checked
-5. Recommended HEALTHCHECK command
-
-[prompt_readiness_detector]
-You are analyzing source code to detect application readiness patterns.
-
-FILE TREE:
-{file_tree}
-
-FILE CONTENTS:
-{file_contents}
-
-Identify:
-1. Startup initialization steps
-2. Required external connections
-3. Warm-up requirements
-4. Recommended initial delay
-5. Readiness endpoint if exists
 
 [prompt_error_analyzer]
 You are a DevOps engineer classifying Docker errors.

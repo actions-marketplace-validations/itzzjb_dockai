@@ -1,16 +1,29 @@
 """Tests for GHCR and semantic sorting in registry module."""
+import pytest
 from unittest.mock import patch, MagicMock
 from dockai.utils.registry import get_docker_tags, _get_image_prefix, _sort_tags_semantically
 
+@pytest.fixture(autouse=True)
+def clear_registry_cache():
+    """Clear the lru_cache of get_docker_tags before each test."""
+    get_docker_tags.cache_clear()
+
 @patch("dockai.utils.registry.httpx.get")
 def test_get_docker_tags_ghcr(mock_get):
-    """Test fetching tags from GHCR"""
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
+    """Test fetching tags from GHCR with token auth"""
+    # GHCR now requires two API calls: one for token, one for tags
+    mock_token_response = MagicMock()
+    mock_token_response.status_code = 200
+    mock_token_response.json.return_value = {"token": "test-token"}
+    
+    mock_tags_response = MagicMock()
+    mock_tags_response.status_code = 200
+    mock_tags_response.json.return_value = {
         "tags": ["v1.0.0", "v1.0.1", "latest"]
     }
-    mock_get.return_value = mock_response
+    
+    # First call is token, second call is tags
+    mock_get.side_effect = [mock_token_response, mock_tags_response]
     
     tags = get_docker_tags("ghcr.io/owner/image")
     

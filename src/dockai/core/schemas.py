@@ -30,7 +30,18 @@ class AnalysisResult(BaseModel):
     files_to_read: List[str] = Field(description="List of critical files needed to understand dependencies, configuration, entrypoints, and build requirements")
     build_command: Optional[str] = Field(description="The command to build/compile the application, if applicable. Determined from project analysis.")
     start_command: Optional[str] = Field(description="The command to start/run the application. Determined from project analysis.")
-    suggested_base_image: str = Field(description="The most appropriate Docker Hub base image for this technology stack")
+    
+    # Version detection from project files
+    detected_runtime_version: Optional[str] = Field(
+        default=None,
+        description="The exact runtime version detected from project files (e.g., '3.11' from pyproject.toml, '20' from .nvmrc, '1.21' from go.mod). Extract from package.json engines.node, python_requires, .nvmrc, .python-version, go.mod, etc."
+    )
+    version_source: Optional[str] = Field(
+        default=None,
+        description="The file where the runtime version was detected (e.g., 'package.json', '.nvmrc', 'pyproject.toml')"
+    )
+    
+    suggested_base_image: str = Field(description="The most appropriate Docker Hub base image for this technology stack. MUST use the detected_runtime_version if available (e.g., node:20-alpine, python:3.11-slim)")
     health_endpoint: Optional[HealthEndpoint] = Field(
         default=None,
         description="Health endpoint details if explicitly defined in the codebase. Set to null if no health endpoint is detected - do NOT guess."
@@ -286,3 +297,60 @@ class IterativeDockerfileResult(BaseModel):
     )
     
     project_type: Literal["service", "script"] = Field(description="Re-confirmed project type")
+
+
+class RuntimeConfigResult(BaseModel):
+    """
+    Combined result for runtime configuration detection (health endpoints and readiness patterns).
+    
+    This model combines health detection and readiness pattern analysis into a single
+    LLM call to improve efficiency.
+    """
+    thought_process: str = Field(description="Reasoning about runtime configuration detection")
+    
+    # Health Detection
+    health_endpoints_found: List[HealthEndpoint] = Field(
+        default=[],
+        description="List of detected health endpoints with their paths and ports"
+    )
+    primary_health_endpoint: Optional[HealthEndpoint] = Field(
+        default=None,
+        description="The primary health endpoint to use for validation"
+    )
+    health_confidence: Literal["high", "medium", "low", "none"] = Field(
+        description="Confidence in the health detection"
+    )
+    
+    # Readiness Detection
+    startup_success_patterns: List[str] = Field(
+        description="Regex patterns that indicate successful startup"
+    )
+    startup_failure_patterns: List[str] = Field(
+        description="Regex patterns that indicate startup failure"
+    )
+    estimated_startup_time: int = Field(
+        description="Estimated time in seconds for the application to start",
+        ge=1,
+        le=300
+    )
+    max_wait_time: int = Field(
+        description="Maximum time to wait before considering startup failed",
+        ge=5,
+        le=600
+    )
+
+
+class BlueprintResult(BaseModel):
+    """
+    Combined result for the 'Blueprint' phase.
+    
+    This merges Planning and Runtime Configuration into a single artifact,
+    representing the complete architectural blueprint before code generation.
+    """
+    thought_process: str = Field(description="Comprehensive reasoning about build strategy and runtime configuration")
+    
+    # Plan Section
+    plan: PlanningResult = Field(description="The strategic build plan")
+    
+    # Runtime Config Section
+    runtime_config: RuntimeConfigResult = Field(description="The detected runtime configuration (health + readiness)")

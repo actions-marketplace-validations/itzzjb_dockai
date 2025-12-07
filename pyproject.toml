@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dockai-cli"
-version = "3.0.2"
+version = "4.0.0"
 description = "The Customizable AI Dockerfile Generation Framework"
 readme = "README.md"
 authors = [
@@ -30,11 +30,24 @@ dependencies = [
     "langchain-anthropic>=0.3.0",
     "mcp>=1.0.0",
     "langchain-ollama>=0.2.0",
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
+    "langsmith>=0.1.0",
+    "numpy>=1.24.0",
 ]
 
 [project.optional-dependencies]
 test = [
     "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+]
+rag = [
+    "sentence-transformers>=2.2.0",
+]
+all = [
+    "dockai-cli[test,rag]",
 ]
 
 [project.scripts]
@@ -43,3 +56,4 @@ dockai = "dockai.cli.main:app"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+

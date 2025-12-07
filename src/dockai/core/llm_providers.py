@@ -19,13 +19,11 @@ Configuration is done via environment variables:
 
 Per-Agent Model Configuration:
 - DOCKAI_MODEL_ANALYZER: Model for the analyzer agent
-- DOCKAI_MODEL_PLANNER: Model for the planner agent
+- DOCKAI_MODEL_BLUEPRINT: Model for the blueprint agent
 - DOCKAI_MODEL_GENERATOR: Model for the generator agent
 - DOCKAI_MODEL_GENERATOR_ITERATIVE: Model for iterative generation
 - DOCKAI_MODEL_REVIEWER: Model for the security reviewer
 - DOCKAI_MODEL_REFLECTOR: Model for failure reflection
-- DOCKAI_MODEL_HEALTH_DETECTOR: Model for health endpoint detection
-- DOCKAI_MODEL_READINESS_DETECTOR: Model for readiness pattern detection
 - DOCKAI_MODEL_ERROR_ANALYZER: Model for error classification
 - DOCKAI_MODEL_ITERATIVE_IMPROVER: Model for iterative improvement
 """
@@ -76,13 +74,11 @@ DEFAULT_MODELS = {
 # Agent to model type mapping (which agents need fast vs powerful models)
 AGENT_MODEL_TYPE = {
     "analyzer": "fast",
-    "planner": "fast",
+    "blueprint": "powerful", # Blueprint needs powerful model for planning
     "generator": "powerful",
     "generator_iterative": "powerful",
     "reviewer": "fast",
     "reflector": "powerful",
-    "health_detector": "fast",
-    "readiness_detector": "fast",
     "error_analyzer": "fast",
     "iterative_improver": "powerful",
 }
@@ -108,6 +104,9 @@ class LLMConfig:
 
     Ollama-specific attributes:
         ollama_base_url: Base URL for Ollama API (default: http://localhost:11434)
+        
+    Caching attributes:
+        enable_caching: Enable in-memory LLM response caching (default: True)
     """
     default_provider: LLMProvider = LLMProvider.OPENAI
     
@@ -127,10 +126,32 @@ class LLMConfig:
 
     # Ollama-specific settings
     ollama_base_url: str = "http://localhost:11434"
+    
+    # Caching settings
+    enable_caching: bool = True
 
 
 # Global LLM configuration instance
 _llm_config: Optional[LLMConfig] = None
+_cache_initialized: bool = False
+
+
+def _init_llm_cache() -> None:
+    """Initialize in-memory LLM response caching for the current run."""
+    global _cache_initialized
+    if _cache_initialized:
+        return
+    
+    try:
+        from langchain.cache import InMemoryCache
+        from langchain.globals import set_llm_cache
+        set_llm_cache(InMemoryCache())
+        _cache_initialized = True
+        logger.debug("LLM caching enabled (in-memory)")
+    except ImportError:
+        logger.debug("LangChain cache not available, skipping")
+    except Exception as e:
+        logger.debug(f"Failed to initialize LLM cache: {e}")
 
 
 def get_llm_config() -> LLMConfig:
@@ -195,13 +216,11 @@ def load_llm_config_from_env() -> LLMConfig:
     # Map of agent names to their environment variable names
     agent_env_map = {
         "analyzer": "DOCKAI_MODEL_ANALYZER",
-        "planner": "DOCKAI_MODEL_PLANNER", 
+        "blueprint": "DOCKAI_MODEL_BLUEPRINT", 
         "generator": "DOCKAI_MODEL_GENERATOR",
         "generator_iterative": "DOCKAI_MODEL_GENERATOR_ITERATIVE",
         "reviewer": "DOCKAI_MODEL_REVIEWER",
         "reflector": "DOCKAI_MODEL_REFLECTOR",
-        "health_detector": "DOCKAI_MODEL_HEALTH_DETECTOR",
-        "readiness_detector": "DOCKAI_MODEL_READINESS_DETECTOR",
         "error_analyzer": "DOCKAI_MODEL_ERROR_ANALYZER",
         "iterative_improver": "DOCKAI_MODEL_ITERATIVE_IMPROVER",
     }
@@ -229,6 +248,9 @@ def load_llm_config_from_env() -> LLMConfig:
     # Load Ollama-specific settings
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     
+    # Load caching settings (enabled by default for efficiency)
+    enable_caching = os.getenv("DOCKAI_LLM_CACHING", "true").lower() in ("true", "1", "yes")
+    
     return LLMConfig(
         default_provider=provider,
         models=models,
@@ -237,6 +259,7 @@ def load_llm_config_from_env() -> LLMConfig:
         azure_deployment_map=azure_deployment_map,
         google_project=google_project,
         ollama_base_url=ollama_base_url,
+        enable_caching=enable_caching,
     )
 
 
@@ -290,6 +313,10 @@ def create_llm(
     if config is None:
         config = get_llm_config()
     
+    # Initialize caching on first LLM creation
+    if config.enable_caching:
+        _init_llm_cache()
+    
     model_name = get_model_for_agent(agent_name, config)
     
     # Determine provider for this specific agent
@@ -323,84 +350,176 @@ def create_llm(
 
 def _create_openai_llm(model_name: str, temperature: float, **kwargs) -> Any:
     """Creates an OpenAI LLM instance."""
-    from langchain_openai import ChatOpenAI
+    try:
+        from langchain_openai import ChatOpenAI
+    except ImportError as e:
+        logger.error("Failed to import langchain_openai - is it installed?")
+        raise ImportError(
+            "The langchain_openai package is not installed. "
+            "Install it with: pip install langchain-openai"
+        ) from e
     
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise ValueError("OPENAI_API_KEY environment variable is required for OpenAI provider")
+        logger.error("OPENAI_API_KEY environment variable is missing")
+        raise ValueError(
+            "OPENAI_API_KEY environment variable is required for OpenAI provider. "
+            "Set it in your .env file or environment."
+        )
     
-    return ChatOpenAI(
-        model=model_name,
-        temperature=temperature,
-        api_key=api_key,
-        **kwargs
-    )
+    try:
+        return ChatOpenAI(
+            model=model_name,
+            temperature=temperature,
+            api_key=api_key,
+            **kwargs
+        )
+    except Exception as e:
+        logger.error(f"Failed to create OpenAI LLM: {e}")
+        raise
 
 
 def _create_azure_llm(model_name: str, temperature: float, config: LLMConfig, **kwargs) -> Any:
     """Creates an Azure OpenAI LLM instance."""
-    from langchain_openai import AzureChatOpenAI
+    try:
+        from langchain_openai import AzureChatOpenAI
+    except ImportError as e:
+        logger.error("Failed to import langchain_openai - is it installed?")
+        raise ImportError(
+            "The langchain_openai package is not installed. "
+            "Install it with: pip install langchain-openai"
+        ) from e
     
     api_key = os.getenv("AZURE_OPENAI_API_KEY")
     if not api_key:
-        raise ValueError("AZURE_OPENAI_API_KEY environment variable is required for Azure provider")
+        logger.error("AZURE_OPENAI_API_KEY environment variable is missing")
+        raise ValueError(
+            "AZURE_OPENAI_API_KEY environment variable is required for Azure provider. "
+            "Set it in your .env file or environment."
+        )
     
     if not config.azure_endpoint:
-        raise ValueError("AZURE_OPENAI_ENDPOINT environment variable is required for Azure provider")
+        logger.error("AZURE_OPENAI_ENDPOINT environment variable is missing")
+        raise ValueError(
+            "AZURE_OPENAI_ENDPOINT environment variable is required for Azure provider. "
+            "Set it to your Azure OpenAI endpoint URL."
+        )
     
     # Get deployment name from mapping or use model name
     deployment_name = config.azure_deployment_map.get(model_name, model_name)
     
-    return AzureChatOpenAI(
-        azure_deployment=deployment_name,
-        azure_endpoint=config.azure_endpoint,
-        api_version=config.azure_api_version,
-        api_key=api_key,
-        temperature=temperature,
-        **kwargs
-    )
+    try:
+        return AzureChatOpenAI(
+            azure_deployment=deployment_name,
+            azure_endpoint=config.azure_endpoint,
+            api_version=config.azure_api_version,
+            api_key=api_key,
+            temperature=temperature,
+            **kwargs
+        )
+    except Exception as e:
+        logger.error(f"Failed to create Azure OpenAI LLM: {e}")
+        raise
 
 
 def _create_gemini_llm(model_name: str, temperature: float, config: LLMConfig, **kwargs) -> Any:
     """Creates a Google Gemini LLM instance."""
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+    except ImportError as e:
+        logger.error("Failed to import langchain_google_genai - is it installed?")
+        raise ImportError(
+            "The langchain_google_genai package is not installed. "
+            "Install it with: pip install langchain-google-genai"
+        ) from e
     
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
-        raise ValueError("GOOGLE_API_KEY environment variable is required for Gemini provider")
+        logger.error("GOOGLE_API_KEY environment variable is missing")
+        raise ValueError(
+            "GOOGLE_API_KEY environment variable is required for Gemini provider. "
+            "Set it in your .env file or environment."
+        )
     
-    return ChatGoogleGenerativeAI(
-        model=model_name,
-        temperature=temperature,
-        google_api_key=api_key,
-        **kwargs
-    )
+    try:
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            temperature=temperature,
+            google_api_key=api_key,
+            **kwargs
+        )
+    except Exception as e:
+        logger.error(f"Failed to create Gemini LLM: {e}")
+        raise
 
 
 def _create_anthropic_llm(model_name: str, temperature: float, **kwargs) -> Any:
     """Creates an Anthropic Claude LLM instance."""
-    from langchain_anthropic import ChatAnthropic
+    try:
+        from langchain_anthropic import ChatAnthropic
+    except ImportError as e:
+        logger.error("Failed to import langchain_anthropic - is it installed?")
+        raise ImportError(
+            "The langchain_anthropic package is not installed. "
+            "Install it with: pip install langchain-anthropic"
+        ) from e
     
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY environment variable is required for Anthropic provider")
+        logger.error("ANTHROPIC_API_KEY environment variable is missing")
+        raise ValueError(
+            "ANTHROPIC_API_KEY environment variable is required for Anthropic provider. "
+            "Set it in your .env file or environment."
+        )
     
-    return ChatAnthropic(
-        model=model_name,
-        temperature=temperature,
-        api_key=api_key,
-        **kwargs
-    )
+    try:
+        return ChatAnthropic(
+            model=model_name,
+            temperature=temperature,
+            api_key=api_key,
+            **kwargs
+        )
+    except Exception as e:
+        logger.error(f"Failed to create Anthropic LLM: {e}")
+        raise
 
 
 def _create_ollama_llm(model_name: str, temperature: float, config: LLMConfig, **kwargs) -> Any:
-    """Creates an Ollama LLM instance."""
+    """
+    Creates an Ollama LLM instance.
+    
+    If Ollama is not available locally, this function will automatically
+    start an Ollama Docker container and use it instead.
+    """
     from langchain_ollama import ChatOllama
+    from ..utils.ollama_docker import get_ollama_url, is_ollama_available
+    
+    # Check if Ollama is available at configured URL
+    configured_url = config.ollama_base_url
+    
+    if is_ollama_available(configured_url):
+        logger.debug(f"Using Ollama at {configured_url}")
+        base_url = configured_url
+    else:
+        # Try to get Ollama URL (may start Docker container)
+        logger.info("Ollama not available at configured URL, checking alternatives...")
+        try:
+            base_url = get_ollama_url(model_name=model_name, preferred_url=configured_url)
+            logger.info(f"Using Ollama at {base_url}")
+        except RuntimeError as e:
+            raise ValueError(
+                f"Ollama is not available and could not be started via Docker.\n"
+                f"Options:\n"
+                f"  1. Install and run Ollama locally: https://ollama.ai/download\n"
+                f"  2. Install Docker to use Ollama via container\n"
+                f"  3. Use a different LLM provider (set DOCKAI_LLM_PROVIDER)\n"
+                f"\nError: {e}"
+            ) from e
     
     return ChatOllama(
         model=model_name,
         temperature=temperature,
-        base_url=config.ollama_base_url,
+        base_url=base_url,
         **kwargs
     )
 

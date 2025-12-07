@@ -17,6 +17,8 @@ This package contains tests for all DockAI modules:
 - test_state.py: State management
 - test_callbacks.py: Token usage callbacks
 - test_rate_limiter.py: Rate limiting
+- test_llm_providers.py: LLM provider configuration
+- test_ollama_docker.py: Ollama Docker fallback support
 
 Run tests with: pytest
 Run with coverage: pytest --cov=dockai --cov-report=html

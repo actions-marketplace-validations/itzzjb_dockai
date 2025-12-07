@@ -1,18 +1,65 @@
 # Configuration Reference
 
-Complete reference for all DockAI configuration options.
+This document provides a complete reference for all DockAI configuration options, explaining not just what each option does, but **when and why** you would use it.
+
+---
+
+## 📋 Table of Contents
+
+1. [Configuration Methods](#configuration-methods)
+2. [API Configuration](#api-configuration)
+3. [Per-Agent Model Configuration](#per-agent-model-configuration)
+4. [Workflow Settings](#workflow-settings)
+5. [Security & Validation Settings](#security--validation-settings)
+6. [Observability & Tracing](#observability--tracing)
+7. [Custom Instructions](#custom-instructions)
+8. [Custom Prompts (Advanced)](#custom-prompts-advanced)
+9. [The .dockai File](#the-dockai-file)
+10. [Configuration Precedence](#configuration-precedence)
+11. [Complete Examples](#complete-examples)
 
 ---
 
 ## Configuration Methods
 
-DockAI supports three configuration methods (in priority order):
+DockAI supports three configuration methods. Understanding their priority helps you structure your configuration effectively.
 
-| Priority | Method | Use Case |
+### Priority Order (Highest to Lowest)
+
+| Priority | Method | Best For |
 |----------|--------|----------|
-| 1 (Highest) | Environment Variables | Runtime overrides, CI/CD |
-| 2 | `.dockai` File | Repository-specific settings |
-| 3 (Lowest) | Built-in Defaults | Intelligent fallbacks |
+| 1 (Highest) | **Environment Variables** | Runtime overrides, CI/CD secrets, temporary changes |
+| 2 | **`.dockai` File** | Repository-specific settings, version-controlled config |
+| 3 (Lowest) | **Built-in Defaults** | Intelligent fallbacks when nothing is configured |
+
+### How Priority Works
+
+When DockAI needs a configuration value:
+
+1. **Check environment variable** → If set, use it
+2. **Check `.dockai` file** → If present and has the value, use it
+3. **Use built-in default** → Always has a sensible fallback
+
+**Example**: Generator instructions
+
+```bash
+# .dockai file says:
+[instructions_generator]
+Use Alpine base images
+
+# Environment variable says:
+export DOCKAI_GENERATOR_INSTRUCTIONS="Use Debian base images"
+
+# Result: "Use Debian base images" is used (env var wins)
+```
+
+### When to Use Each Method
+
+| Method | Use When |
+|--------|----------|
+| **Environment Variables** | CI/CD secrets, per-run overrides, sensitive data (API keys) |
+| **`.dockai` File** | Project-specific settings that should be version controlled |
+| **Defaults** | Standard projects that don't need special handling |
 
 ---
 
@@ -20,42 +67,93 @@ DockAI supports three configuration methods (in priority order):
 
 ### Provider API Keys
 
-| Variable | Provider | Required |
-|----------|----------|----------|
-| `OPENAI_API_KEY` | OpenAI | If using OpenAI |
-| `AZURE_OPENAI_API_KEY` | Azure OpenAI | If using Azure |
-| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI | If using Azure |
+Each LLM provider requires its own API key:
+
+| Variable | Provider | How to Get |
+|----------|----------|------------|
+| `OPENAI_API_KEY` | OpenAI | [platform.openai.com](https://platform.openai.com) → API Keys |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI | Azure Portal → Your OpenAI resource → Keys |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI | Azure Portal → Your OpenAI resource → Endpoint |
 | `AZURE_OPENAI_API_VERSION` | Azure OpenAI | Default: `2024-02-15-preview` |
-| `GOOGLE_API_KEY` | Google Gemini | If using Gemini |
-| `ANTHROPIC_API_KEY` | Anthropic | If using Anthropic |
+| `AZURE_OPENAI_DEPLOYMENT_*` | Azure OpenAI | Map model names to deployment names (see below) |
+| `GOOGLE_API_KEY` | Google Gemini | [ai.google.dev](https://ai.google.dev) → Get API Key |
+| `GOOGLE_CLOUD_PROJECT` | Google Gemini | Optional: GCP project ID for Vertex AI |
+| `ANTHROPIC_API_KEY` | Anthropic | [console.anthropic.com](https://console.anthropic.com) → API Keys |
 | `OLLAMA_BASE_URL` | Ollama | Default: `http://localhost:11434` |
+
+### Azure OpenAI Deployment Mapping
+
+Azure OpenAI uses deployment names instead of model names. Map model names to your deployment names:
+
+```bash
+# If your deployment is named "gpt4-deployment" for gpt-4o model
+AZURE_OPENAI_DEPLOYMENT_GPT_4O=gpt4-deployment
+AZURE_OPENAI_DEPLOYMENT_GPT_4O_MINI=gpt4mini-deployment
+```
 
 ### LLM Provider Selection
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DOCKAI_LLM_PROVIDER` | Provider selection | `openai` |
+```bash
+# Choose your provider
+DOCKAI_LLM_PROVIDER=openai  # Default
+```
 
 **Valid values**: `openai`, `azure`, `gemini`, `anthropic`, `ollama`
+
+### Provider Comparison
+
+| Provider | Pros | Cons | Best For |
+|----------|------|------|----------|
+| **OpenAI** | Best quality, fast | Pay per token | Most users, production |
+| **Azure OpenAI** | Enterprise compliance, data privacy | Requires Azure subscription | Enterprise environments |
+| **Gemini** | Free tier available, good quality | Rate limits on free tier | Cost-conscious users |
+| **Anthropic** | Excellent reasoning, large context | Pay per token | Complex projects |
+| **Ollama** | Free, private, offline | Requires local compute | Privacy-focused, offline |
+
+### Ollama Docker Fallback
+
+A unique feature: If you select Ollama but don't have it installed, DockAI automatically uses Docker to run Ollama:
+
+```bash
+# This works even without Ollama installed locally
+DOCKAI_LLM_PROVIDER=ollama
+dockai build .
+
+# DockAI will:
+# 1. Check if Ollama is running locally
+# 2. If not, pull ollama/ollama Docker image
+# 3. Start a container named 'dockai-ollama'
+# 4. Pull the required model inside the container
+# 5. Use a persistent volume for model caching
+```
+
+**Why this exists**: We want privacy-focused users to be able to use local LLMs without complex setup. If Docker is available, Ollama works automatically.
 
 ---
 
 ## Per-Agent Model Configuration
 
-Assign different models to different agents for cost optimization:
+DockAI has 8 specialized agents. You can assign different models to each for cost optimization.
 
-| Variable | Agent | Default (OpenAI) |
-|----------|-------|------------------|
-| `DOCKAI_MODEL_ANALYZER` | Project analyzer | `gpt-4o-mini` |
-| `DOCKAI_MODEL_PLANNER` | Strategic planner | `gpt-4o-mini` |
-| `DOCKAI_MODEL_GENERATOR` | Dockerfile generator | `gpt-4o` |
-| `DOCKAI_MODEL_GENERATOR_ITERATIVE` | Iterative generator | `gpt-4o` |
-| `DOCKAI_MODEL_REVIEWER` | Security reviewer | `gpt-4o-mini` |
-| `DOCKAI_MODEL_REFLECTOR` | Failure reflector | `gpt-4o` |
-| `DOCKAI_MODEL_HEALTH_DETECTOR` | Health detector | `gpt-4o-mini` |
-| `DOCKAI_MODEL_READINESS_DETECTOR` | Readiness detector | `gpt-4o-mini` |
-| `DOCKAI_MODEL_ERROR_ANALYZER` | Error analyzer | `gpt-4o-mini` |
-| `DOCKAI_MODEL_ITERATIVE_IMPROVER` | Iterative improver | `gpt-4o` |
+### The Model Variables
+
+| Variable | Agent | Default (OpenAI) | Purpose |
+|----------|-------|------------------|---------|
+| `DOCKAI_MODEL_ANALYZER` | Analyzer | `gpt-4o-mini` | Detect technology stack |
+| `DOCKAI_MODEL_BLUEPRINT` | Blueprint | `gpt-4o` | Create build strategy & runtime config |
+| `DOCKAI_MODEL_GENERATOR` | Generator | `gpt-4o` | Write Dockerfile |
+| `DOCKAI_MODEL_GENERATOR_ITERATIVE` | Iterative Generator | `gpt-4o` | Fix failed Dockerfile |
+| `DOCKAI_MODEL_REVIEWER` | Reviewer | `gpt-4o-mini` | Security audit |
+| `DOCKAI_MODEL_REFLECTOR` | Reflector | `gpt-4o` | Analyze failures |
+| `DOCKAI_MODEL_ERROR_ANALYZER` | Error Analyzer | `gpt-4o-mini` | Classify errors |
+| `DOCKAI_MODEL_ITERATIVE_IMPROVER` | Iterative Improver | `gpt-4o` | Apply specific fixes |
+
+### Why Different Models?
+
+Not all tasks require the most powerful model:
+
+- **Fast models** (`gpt-4o-mini`, `gemini-1.5-flash`, `claude-3-5-haiku`): Good for pattern matching, classification, simple analysis
+- **Powerful models** (`gpt-4o`, `gemini-1.5-pro`, `claude-sonnet-4`): Required for complex reasoning, code generation, root cause analysis
 
 ### Default Models by Provider
 
@@ -67,128 +165,371 @@ Assign different models to different agents for cost optimization:
 | Anthropic | `claude-3-5-haiku-latest` | `claude-sonnet-4-20250514` |
 | Ollama | `llama3` | `llama3` |
 
+### Cost Optimization Strategy
+
+**Quality-first approach** (recommended): Use powerful models for critical agents. Better quality upfront reduces retries, which saves more tokens overall:
+
+```bash
+# Recommended: Quality-first (fewer retries = lower total cost)
+DOCKAI_MODEL_ANALYZER=gpt-4o-mini        # Pattern matching - fast is fine
+DOCKAI_MODEL_BLUEPRINT=gpt-4o            # Planning requires reasoning (default)
+DOCKAI_MODEL_GENERATOR=gpt-4o            # Code generation - quality matters (default)
+DOCKAI_MODEL_GENERATOR_ITERATIVE=gpt-4o  # Debugging (default)
+DOCKAI_MODEL_REVIEWER=gpt-4o-mini        # Rule checking - fast is fine
+DOCKAI_MODEL_REFLECTOR=gpt-4o            # Root cause analysis (default)
+DOCKAI_MODEL_ERROR_ANALYZER=gpt-4o-mini  # Classification - fast is fine
+DOCKAI_MODEL_ITERATIVE_IMPROVER=gpt-4o   # Code modification (default)
+```
+
+**Why this saves money**: A single retry cycle costs ~3-5x more tokens than the initial generation. Investing in quality upfront typically reduces retry rate by 30-50%.
+
 ### Mixed Provider Configuration
 
-You can use different providers for different agents by prefixing the model name with `provider/`. This is useful for balancing cost, privacy, and performance.
-
-**Example**: Use local Ollama for everything, but OpenAI for the initial analysis.
+**Powerful feature**: Use different providers for different agents. Prefix the model name with `provider/`:
 
 ```bash
 # Default provider for all agents
 DOCKAI_LLM_PROVIDER=ollama
 
-# Override specifically for the analyzer agent
+# But use OpenAI for the analyzer (needs internet access anyway)
 DOCKAI_MODEL_ANALYZER=openai/gpt-4o-mini
+
+# And Anthropic for complex reflection
+DOCKAI_MODEL_REFLECTOR=anthropic/claude-sonnet-4-20250514
 ```
 
-**Supported Prefixes**:
+**Supported prefixes**:
 - `openai/`
 - `azure/`
 - `gemini/`
 - `anthropic/`
 - `ollama/`
 
+**Use cases**:
+- Use local Ollama for most tasks, cloud for complex reasoning
+- Use organization's Azure OpenAI for compliance, OpenAI for better models
+- Use free Gemini tier for simple tasks, paid OpenAI for generation
+
 ---
 
 ## Workflow Settings
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MAX_RETRIES` | Maximum retry attempts | `3` |
+### Retry Configuration
+
+| Variable | Description | Default | Recommendation |
+|----------|-------------|---------|----------------|
+| `MAX_RETRIES` | Maximum validation retry attempts | `3` | Increase for complex projects |
+
+**Why retries matter**: Most projects don't work on the first try. The retry mechanism is a key differentiator—DockAI learns from failures.
+
+```bash
+# For simple projects
+MAX_RETRIES=2
+
+# For complex projects with unusual requirements
+MAX_RETRIES=5
+
+# For debugging (see what happens without retries)
+MAX_RETRIES=1
+```
 
 ---
 
 ## Security & Validation Settings
 
-### Security Scanning
+### Linting & Security Scanning
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy vulnerability scan | `false` |
-| `DOCKAI_STRICT_SECURITY` | Fail on any vulnerability | `false` |
-| `DOCKAI_MAX_IMAGE_SIZE_MB` | Maximum image size (0 = disabled) | `500` |
-| `DOCKAI_SKIP_HEALTH_CHECK` | Skip health endpoint checks | `false` |
+| Variable | Description | Default | When to Change |
+|----------|-------------|---------|----------------|
+| `DOCKAI_SKIP_HADOLINT` | Skip Hadolint Dockerfile linting | `false` | When Hadolint not available |
+| `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy vulnerability scan | `false` | For faster iteration, non-production |
+| `DOCKAI_SKIP_SECURITY_REVIEW` | Skip AI security review | `false` | Faster generation (auto-skipped for scripts) |
+| `DOCKAI_STRICT_SECURITY` | Fail on ANY vulnerability | `false` | Production environments |
+| `DOCKAI_MAX_IMAGE_SIZE_MB` | Maximum allowed image size | `500` | Enforce size limits |
+| `DOCKAI_SKIP_HEALTH_CHECK` | Skip health endpoint verification | `false` | For scripts, not services |
+
+### Why These Matter
+
+**Hadolint**: Catches Dockerfile anti-patterns like:
+- Using `latest` tag
+- Missing `--no-cache` flags
+- Inefficient layer ordering
+
+**Trivy**: Scans the built image for:
+- Known CVEs in base image
+- Vulnerable packages
+- Exposed secrets
+
+**Strict Security**: In production, you probably want to fail if vulnerabilities are found rather than just warning.
 
 ### Validation Resource Limits
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DOCKAI_VALIDATION_MEMORY` | Memory limit for validation | `512m` |
-| `DOCKAI_VALIDATION_CPUS` | CPU limit for validation | `1.0` |
-| `DOCKAI_VALIDATION_PIDS` | Process limit for validation | `100` |
+| Variable | Description | Default | When to Change |
+|----------|-------------|---------|----------------|
+| `DOCKAI_VALIDATION_MEMORY` | Memory limit for test container | `512m` | Large apps need more |
+| `DOCKAI_VALIDATION_CPUS` | CPU limit for test container | `1.0` | Heavy computation |
+| `DOCKAI_VALIDATION_PIDS` | Process limit for test container | `100` | Fork-heavy apps |
+
+**Why resource limits?** Validation runs untrusted containers (the generated Dockerfile could do anything). Limits prevent:
+- Runaway memory usage
+- CPU hogging
+- Fork bombs
+
+```bash
+# For Java/JVM applications (need more memory)
+DOCKAI_VALIDATION_MEMORY=1g
+
+# For build-heavy projects
+DOCKAI_VALIDATION_CPUS=2.0
+```
 
 ### File Analysis Settings
 
+| Variable | Description | Default | When to Change |
+|----------|-------------|---------|----------------|
+| `DOCKAI_TRUNCATION_ENABLED` | Always truncate large files | `false` | Large monorepos |
+| `DOCKAI_TOKEN_LIMIT` | Token limit triggering auto-truncation | `100000` | Adjust for model context |
+| `DOCKAI_MAX_FILE_CHARS` | Max characters per file when truncating | `200000` | Fine-tune truncation |
+| `DOCKAI_MAX_FILE_LINES` | Max lines per file when truncating | `5000` | Fine-tune truncation |
+
+**How truncation works**:
+1. By default, files are read in full
+2. If total content exceeds `DOCKAI_TOKEN_LIMIT`, truncation auto-enables
+3. Truncation keeps the beginning and end of files (most important parts)
+
+**Token estimation**: Approximately 1 token ≈ 4 characters
+
+```bash
+# For large monorepos
+DOCKAI_TRUNCATION_ENABLED=true
+DOCKAI_MAX_FILE_CHARS=50000
+
+# For projects with large generated files
+DOCKAI_MAX_FILE_LINES=1000
+```
+
+---
+
+## Efficiency Optimizations
+
+DockAI includes several built-in optimizations for faster generation and lower token usage.
+
+### LLM Response Caching
+
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DOCKAI_TRUNCATION_ENABLED` | Enable smart file truncation | `false` |
-| `DOCKAI_TOKEN_LIMIT` | Token limit that triggers auto-truncation | `100000` |
-| `DOCKAI_MAX_FILE_CHARS` | Max characters per file (when truncating) | `200000` |
-| `DOCKAI_MAX_FILE_LINES` | Max lines per file (when truncating) | `5000` |
+| `DOCKAI_LLM_CACHING` | Enable in-memory LLM response caching | `true` |
 
-**Truncation Behavior**:
-- **Default**: Truncation is OFF - files are read in full
-- **Env Var**: Set `DOCKAI_TRUNCATION_ENABLED=true` to always truncate large files
-- **Auto-truncation**: If total content exceeds `DOCKAI_TOKEN_LIMIT`, truncation auto-enables
-- **Token Estimation**: ~1 token ≈ 4 characters
+When enabled, identical prompts within a single run are cached to avoid repeated API calls. This helps when:
+- Retrying with the same error patterns
+- Multiple agents use similar context
+
+```bash
+# Disable caching (not recommended)
+DOCKAI_LLM_CACHING=false
+```
+
+### Automatic Optimizations for Scripts
+
+For **script** projects (single-run, non-service applications), DockAI automatically:
+
+1. **Skips AI security review** - Scripts carry less security risk than long-running services
+2. **Skips health checks** - Scripts don't have HTTP endpoints
+
+This can reduce generation time by 30-40% for simple script projects.
+
+### Quality-First Model Selection
+
+DockAI uses powerful models (e.g., `gpt-4o`) for:
+- Blueprint (strategic planning)
+- Generator (Dockerfile creation)
+- Reflector (failure analysis)
+
+This reduces retry cycles by 30-50%, saving more tokens overall than using cheaper models upfront.
+
+---
+
+## Observability & Tracing
+
+DockAI supports **OpenTelemetry** for distributed tracing. This is invaluable for:
+- Debugging slow runs
+- Understanding token usage patterns
+- Integrating with observability platforms
+
+### Tracing Configuration
+
+| Variable | Description | Default | Options |
+|----------|-------------|---------|---------|
+| `DOCKAI_ENABLE_TRACING` | Enable OpenTelemetry tracing | `false` | `true`/`false` |
+| `DOCKAI_TRACING_EXPORTER` | Where to send traces | `console` | `console`, `otlp` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint URL | `http://localhost:4317` | Your collector |
+| `OTEL_SERVICE_NAME` | Service name in traces | `dockai` | Custom name |
+
+### LangSmith Observability
+
+LangSmith provides specialized observability for LLM applications.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LANGCHAIN_TRACING_V2` | Enable LangSmith tracing | `false` |
+| `LANGCHAIN_API_KEY` | LangSmith API Key | - |
+| `LANGCHAIN_PROJECT` | LangSmith Project Name | `dockai` |
+| `LANGCHAIN_ENDPOINT` | LangSmith Endpoint | `https://api.smith.langchain.com` |
+
+### What Gets Traced
+
+When tracing is enabled, spans are created for:
+
+| Span | Attributes | Purpose |
+|------|------------|---------|
+| `dockai.workflow` | Total duration, success/failure | Overall workflow |
+| `node.scan` | `files_found`, `path` | File discovery |
+| `node.analyze` | `stack`, `project_type` | Stack detection |
+| `node.plan` | `retry_count` | Strategy planning |
+| `node.generate` | `retry_count`, `project_type` | Dockerfile generation |
+| `node.review` | `is_secure`, `issues_count` | Security review |
+| `node.validate` | `success`, `error`, `image_size_mb` | Validation |
+| `node.reflect` | `root_cause`, `confidence` | Failure analysis |
+
+### Console Tracing (Debugging)
+
+For local debugging, console tracing prints spans to stdout:
+
+```bash
+DOCKAI_ENABLE_TRACING=true
+DOCKAI_TRACING_EXPORTER=console
+dockai build .
+```
+
+### OTLP Export (Production)
+
+For production observability, export to your collector:
+
+```bash
+# Jaeger
+DOCKAI_ENABLE_TRACING=true
+DOCKAI_TRACING_EXPORTER=otlp
+OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+
+# Grafana Tempo
+OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
+
+# Datadog (with OTLP collector)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://datadog-agent:4317
+```
 
 ---
 
 ## Custom Instructions
 
-Instructions are **appended** to default prompts to guide AI reasoning:
+Instructions are **appended** to default prompts. This is the recommended way to customize agent behavior.
 
-| Variable | Agent | Description |
-|----------|-------|-------------|
-| `DOCKAI_ANALYZER_INSTRUCTIONS` | Analyzer | Guide project analysis |
-| `DOCKAI_PLANNER_INSTRUCTIONS` | Planner | Guide strategic planning |
-| `DOCKAI_GENERATOR_INSTRUCTIONS` | Generator | Guide Dockerfile creation |
-| `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Generator (Iterative) | Guide iterative fixes |
-| `DOCKAI_REVIEWER_INSTRUCTIONS` | Reviewer | Guide security review |
-| `DOCKAI_REFLECTOR_INSTRUCTIONS` | Reflector | Guide failure analysis |
-| `DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS` | Health Detector | Guide health detection |
-| `DOCKAI_READINESS_DETECTOR_INSTRUCTIONS` | Readiness Detector | Guide readiness detection |
-| `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Error Analyzer | Guide error classification |
-| `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Iterative Improver | Guide fix application |
+### Why Instructions (Not Prompts)?
+
+- ✅ **Preserve base intelligence**: DockAI's prompts are carefully crafted
+- ✅ **Additive**: Add your context without removing existing guidance
+- ✅ **Maintainable**: Survives DockAI updates
+- ✅ **Safe**: Can't accidentally break core functionality
+
+### Instruction Variables
+
+| Variable | Agent | What to Include |
+|----------|-------|-----------------|
+| `DOCKAI_ANALYZER_INSTRUCTIONS` | Analyzer | Internal frameworks, project conventions |
+| `DOCKAI_BLUEPRINT_INSTRUCTIONS` | Blueprint | Approved base images, build strategies |
+| `DOCKAI_GENERATOR_INSTRUCTIONS` | Generator | Required labels, ENV vars, conventions |
+| `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Iterative Generator | Debug strategies |
+| `DOCKAI_REVIEWER_INSTRUCTIONS` | Reviewer | Compliance requirements, policies |
+| `DOCKAI_REFLECTOR_INSTRUCTIONS` | Reflector | Known issues and fixes |
+| `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Error Analyzer | Common error patterns |
+| `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Iterative Improver | Fix strategies |
+
+### Example Instructions
+
+```bash
+# Organization standards for generator
+DOCKAI_GENERATOR_INSTRUCTIONS="
+REQUIRED LABELS (always include):
+- LABEL org.company.team=\${TEAM}
+- LABEL org.company.version=\${VERSION}
+
+CONVENTIONS:
+- Use /app as WORKDIR
+- Create non-root user with UID 10000
+- Always use multi-stage builds
+"
+
+# Known issues for reflector
+DOCKAI_REFLECTOR_INSTRUCTIONS="
+KNOWN ISSUES IN OUR STACK:
+- 'pg_config not found': Install postgresql-dev (Alpine) or libpq-dev (Debian)
+- 'GLIBC not found' on Alpine: Use Debian-based image or install gcompat
+"
+```
 
 ---
 
 ## Custom Prompts (Advanced)
 
-Prompts **completely replace** the default prompt for full control:
+Prompts **completely replace** the default prompt. Use only when you need full control.
+
+### ⚠️ Warning
+
+Custom prompts:
+- Override all default behavior
+- Must handle all edge cases yourself
+- May break with DockAI updates
+- Require deep understanding of the agent's role
+
+### Prompt Variables
 
 | Variable | Agent |
 |----------|-------|
-| `DOCKAI_PROMPT_ANALYZER` | Replace analyzer prompt |
-| `DOCKAI_PROMPT_PLANNER` | Replace planner prompt |
-| `DOCKAI_PROMPT_GENERATOR` | Replace generator prompt |
-| `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | Replace iterative generator |
-| `DOCKAI_PROMPT_REVIEWER` | Replace reviewer prompt |
-| `DOCKAI_PROMPT_REFLECTOR` | Replace reflector prompt |
-| `DOCKAI_PROMPT_HEALTH_DETECTOR` | Replace health detector |
-| `DOCKAI_PROMPT_READINESS_DETECTOR` | Replace readiness detector |
-| `DOCKAI_PROMPT_ERROR_ANALYZER` | Replace error analyzer |
-| `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | Replace iterative improver |
+| `DOCKAI_PROMPT_ANALYZER` | Analyzer |
+| `DOCKAI_PROMPT_BLUEPRINT` | Blueprint |
+| `DOCKAI_PROMPT_GENERATOR` | Generator |
+| `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | Generator Iterative |
+| `DOCKAI_PROMPT_REVIEWER` | Reviewer |
+| `DOCKAI_PROMPT_REFLECTOR` | Reflector |
+| `DOCKAI_PROMPT_ERROR_ANALYZER` | Error Analyzer |
+| `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | Iterative Improver |
 
-> ⚠️ **Warning**: Custom prompts completely override defaults. Use instructions instead unless you need full control.
+### When Custom Prompts Make Sense
+
+- Industry-specific compliance (PCI-DSS, HIPAA)
+- Highly specialized internal frameworks
+- Complete organizational override of behavior
+- Research and experimentation
 
 ---
 
-## `.dockai` File Format
+## The .dockai File
 
-Create a `.dockai` file in your project root for repository-specific configuration.
+The `.dockai` file provides repository-specific configuration that can be version controlled.
+
+### File Location
+
+Create `.dockai` in your project root:
+
+```
+my-project/
+├── .dockai           ← Configuration file
+├── app.py
+├── requirements.txt
+└── ...
+```
 
 ### Basic Structure
 
 ```ini
-# Instructions (appended to defaults)
+# Instructions are appended to defaults
 [instructions_analyzer]
 Your instructions here...
 
 [instructions_generator]
 Your instructions here...
 
-# Full prompt replacements (advanced)
+# Prompts replace defaults entirely (advanced)
 [prompt_analyzer]
 Complete prompt replacement...
 ```
@@ -196,122 +537,226 @@ Complete prompt replacement...
 ### Complete Example
 
 ```ini
-# Project context for the analyzer
+# ============================================================
+# DockAI Configuration for Django Microservice
+# ============================================================
+
+# Help the analyzer understand our stack
 [instructions_analyzer]
-This is a Django application with Celery workers.
-Dependencies are managed with Poetry.
-Uses PostgreSQL for the database.
+This is a Django application with:
+- Celery for background tasks (uses Redis broker)
+- PostgreSQL database (requires psycopg2)
+- Poetry for dependency management
+- Gunicorn as the WSGI server
+
+Project structure:
+- /src contains the Django app
+- /scripts contains entrypoint scripts
+- /config contains configuration files
+
+# Guide the strategic planning
+[instructions_blueprint]
+REQUIREMENTS:
+- Use our approved base image: company-registry.io/python:3.11-slim
+- Multi-stage build is mandatory for production
+- Final image should be under 500MB
+
+BUILD CONSIDERATIONS:
+- Poetry export to requirements.txt for pip install
+- Collect static files during build
+- Do NOT include dev dependencies in final image
 
 # Dockerfile generation guidance
 [instructions_generator]
-Use gunicorn as the WSGI server.
-Run database migrations at container start.
-Use /app as WORKDIR.
-Create non-root user with UID 10000.
+REQUIRED ELEMENTS:
+- LABEL maintainer="platform-team@company.io"
+- ENV DJANGO_SETTINGS_MODULE=config.settings.production
+- Run migrations in entrypoint, not Dockerfile
+- Include our standard entrypoint from /scripts/docker-entrypoint.sh
 
-# Strategic planning constraints
-[instructions_planner]
-Use approved base images from company-registry.io only.
-Prefer multi-stage builds for all compiled languages.
+CONVENTIONS:
+- WORKDIR /app
+- Non-root user: appuser with UID 10000
+- EXPOSE 8000 for HTTP
 
-# Security requirements
+# Security requirements (we're SOC 2 compliant)
 [instructions_reviewer]
-All containers MUST run as non-root (UID >= 10000).
-Check for hardcoded API keys or secrets.
-Fail on any CRITICAL or HIGH vulnerabilities.
+MANDATORY SECURITY CHECKS:
+- Container MUST run as non-root (UID >= 10000)
+- No secrets, passwords, or API keys in Dockerfile
+- No curl/wget in final image (attack surface)
+- Base image must be pinned to SHA256 digest
 
-# Known issues and fixes
+COMPLIANCE:
+- Fail on any CRITICAL or HIGH CVE
+- All packages from approved sources only
+
+# Common issues we've encountered
 [instructions_reflector]
-Common issue: "pg_config not found"
-Solution: Install postgresql-dev (Alpine) or libpq-dev (Debian)
+KNOWN ISSUES AND SOLUTIONS:
 
-Common issue: "GLIBC not found" on Alpine
-Solution: Use Debian-based image or install gcompat
+1. "pg_config executable not found"
+   Cause: psycopg2 needs PostgreSQL headers to compile
+   Solution: Install libpq-dev in build stage, use psycopg2-binary for simpler builds
 
-# Health endpoint location
-[instructions_health_detector]
-Our health endpoint is at /api/v1/health/
-Port is always 8080 for HTTP services.
+2. "Error: static files not found"
+   Cause: collectstatic not run during build
+   Solution: Run python manage.py collectstatic --noinput
 
-# Startup pattern
-[instructions_readiness_detector]
-Look for "Application startup complete" in logs.
-Typical startup time is 5-10 seconds.
-```
+3. "Permission denied: /app/logs"
+   Cause: Log directory not writable by non-root user
+   Solution: Create /app/logs and chown to appuser
 
----
+4. "Database connection refused"
+   Cause: Migration running before DB is ready
+   Solution: Use wait-for-it.sh or similar in entrypoint
 
-## Environment File (`.env`)
-
-### Minimal Configuration
-
-```bash
-OPENAI_API_KEY=sk-your-api-key-here
-```
-
-### Full Configuration Example
-
-```bash
-# LLM Provider
-DOCKAI_LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-your-api-key-here
-
-# Per-agent model optimization
-DOCKAI_MODEL_ANALYZER=gpt-4o-mini
-DOCKAI_MODEL_PLANNER=gpt-4o-mini
-DOCKAI_MODEL_GENERATOR=gpt-4o
-DOCKAI_MODEL_REVIEWER=gpt-4o-mini
-DOCKAI_MODEL_REFLECTOR=gpt-4o
-
-# Workflow settings
-MAX_RETRIES=5
-
-# Security settings
-DOCKAI_SKIP_SECURITY_SCAN=false
-DOCKAI_STRICT_SECURITY=true
-DOCKAI_MAX_IMAGE_SIZE_MB=300
-
-# Validation resource limits
-DOCKAI_VALIDATION_MEMORY=1g
-DOCKAI_VALIDATION_CPUS=2.0
-DOCKAI_VALIDATION_PIDS=200
-
-# Custom instructions
-DOCKAI_GENERATOR_INSTRUCTIONS="Always use multi-stage builds"
+   Cause: Migration running before DB is ready
+   Solution: Use wait-for-it.sh or similar in entrypoint
 ```
 
 ---
 
 ## Configuration Precedence
 
-When the same setting is configured in multiple places:
+Understanding precedence helps avoid confusion when settings seem to not apply.
 
-```
-Environment Variable (highest priority)
-        ↓
-   .dockai file
-        ↓
-  Built-in Default (lowest priority)
+### Full Precedence Chain
+
+```mermaid
+flowchart TB
+    subgraph Priority1["🥇 Priority 1: Environment Variables"]
+        env["DOCKAI_GENERATOR_INSTRUCTIONS='Use Debian'<br/>(Set in shell, CI/CD, or .env file)"]
+    end
+    
+    subgraph Priority2["🥈 Priority 2: .dockai File"]
+        file["[instructions_generator]<br/>Use Alpine base images<br/>(In repository root)"]
+    end
+    
+    subgraph Priority3["🥉 Priority 3: Built-in Defaults"]
+        defaults["Default prompt templates<br/>(In DockAI source code)"]
+    end
+    
+    Priority1 --> Priority2 --> Priority3
+    
+    result["✅ Result: 'Use Debian' is used<br/>(env var has highest priority)"]
+    
+    Priority1 -.->|"Winner"| result
 ```
 
-### Example
+### Combining Instructions
+
+Instructions from different sources are combined:
 
 ```bash
+# Environment variable
+export DOCKAI_GENERATOR_INSTRUCTIONS="Use multi-stage builds"
+
 # .dockai file
 [instructions_generator]
-Use Alpine base images
+Use non-root user
+```
 
-# Environment variable
-export DOCKAI_GENERATOR_INSTRUCTIONS="Use Debian base images"
+Both instructions are sent to the agent—they don't override each other.
 
-# Result: "Use Debian base images" is used (env var wins)
+---
+
+## Complete Examples
+
+### Minimal Configuration
+
+For quick testing:
+
+```bash
+# .env
+OPENAI_API_KEY=sk-your-api-key-here
+```
+
+### Cost-Optimized Configuration
+
+For production with quality-first approach (recommended):
+
+```bash
+# .env
+DOCKAI_LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-your-api-key
+
+# Fast models for pattern matching tasks
+DOCKAI_MODEL_ANALYZER=gpt-4o-mini
+DOCKAI_MODEL_REVIEWER=gpt-4o-mini
+DOCKAI_MODEL_ERROR_ANALYZER=gpt-4o-mini
+
+# Powerful models for critical tasks (default - reduces retries)
+DOCKAI_MODEL_BLUEPRINT=gpt-4o
+DOCKAI_MODEL_GENERATOR=gpt-4o
+DOCKAI_MODEL_GENERATOR_ITERATIVE=gpt-4o
+DOCKAI_MODEL_REFLECTOR=gpt-4o
+DOCKAI_MODEL_ITERATIVE_IMPROVER=gpt-4o
+```
+
+### Security-Focused Configuration
+
+For production environments:
+
+```bash
+# .env
+DOCKAI_LLM_PROVIDER=azure
+AZURE_OPENAI_API_KEY=your-azure-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+
+# Strict security
+DOCKAI_STRICT_SECURITY=true
+DOCKAI_MAX_IMAGE_SIZE_MB=300
+
+# Don't skip any scans
+DOCKAI_SKIP_HADOLINT=false
+DOCKAI_SKIP_SECURITY_SCAN=false
+
+# More retries for complex compliance requirements
+MAX_RETRIES=5
+```
+
+### Privacy-Focused Configuration
+
+For sensitive codebases:
+
+```bash
+# .env
+DOCKAI_LLM_PROVIDER=ollama
+
+# Local model
+DOCKAI_MODEL_GENERATOR=llama3
+DOCKAI_MODEL_REFLECTOR=llama3
+
+# Skip external registry validation (may need local images)
+# (not currently a setting, but could add custom instructions)
+```
+
+### CI/CD Configuration (GitHub Actions)
+
+```yaml
+# .github/workflows/dockai.yml
+- uses: itzzjb/dockai@v3
+  with:
+    openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+    
+    # Cost optimization
+    model_analyzer: gpt-4o-mini
+    model_generator: gpt-4o
+    
+    # Security
+    strict_security: 'true'
+    max_image_size_mb: '400'
+    
+    # Custom instructions from secrets
+    generator_instructions: ${{ secrets.DOCKAI_GENERATOR_INSTRUCTIONS }}
 ```
 
 ---
 
 ## Next Steps
 
-- **[Customization](./customization.md)**: Strategies for effective customization
-- **[GitHub Actions](./github-actions.md)**: CI/CD configuration
-- **[MCP Server](./mcp-server.md)**: AI Agent integration guide
-
+- **[Customization Guide](./customization.md)**: Strategies for effective customization
+- **[GitHub Actions](./github-actions.md)**: CI/CD integration with full examples
+- **[MCP Server](./mcp-server.md)**: AI assistant integration
+- **[Architecture](./architecture.md)**: Understand why these options exist

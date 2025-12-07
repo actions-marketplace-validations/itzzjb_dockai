@@ -40,8 +40,8 @@ inputs:
     description: 'Model for analyzer agent (default: gpt-4o-mini for openai, gemini-1.5-flash for gemini)'
     required: false
     default: ''
-  model_planner:
-    description: 'Model for planner agent'
+  model_blueprint:
+    description: 'Model for blueprint agent (Chief Architect)'
     required: false
     default: ''
   model_generator:
@@ -60,14 +60,6 @@ inputs:
     description: 'Model for failure reflection agent'
     required: false
     default: ''
-  model_health_detector:
-    description: 'Model for health endpoint detection agent'
-    required: false
-    default: ''
-  model_readiness_detector:
-    description: 'Model for readiness pattern detection agent'
-    required: false
-    default: ''
   model_error_analyzer:
     description: 'Model for error classification agent'
     required: false
@@ -82,6 +74,10 @@ inputs:
     description: 'Max attempts to fix a failing Dockerfile'
     required: false
     default: '3'
+  skip_hadolint:
+    description: 'Skip Hadolint Dockerfile linting (true/false)'
+    required: false
+    default: 'false'
   skip_security_scan:
     description: 'Skip Trivy security scan (true/false)'
     required: false
@@ -96,6 +92,10 @@ inputs:
     default: '500'
   skip_health_check:
     description: 'Skip health checks during validation (true/false)'
+    required: false
+    default: 'false'
+  skip_security_review:
+    description: 'Skip AI security review for faster generation (auto-skipped for scripts)'
     required: false
     default: 'false'
   validation_memory:
@@ -118,6 +118,22 @@ inputs:
     description: 'Max lines to read per file (default: 5000)'
     required: false
     default: '5000'
+  truncation_enabled:
+    description: 'Force-enable smart truncation for critical files (true/false)'
+    required: false
+    default: 'false'
+  token_limit:
+    description: 'Token threshold that auto-enables truncation (default: 100000)'
+    required: false
+    default: '100000'
+  use_rag:
+    description: 'Enable RAG (Retrieval-Augmented Generation) for intelligent context retrieval (true/false)'
+    required: false
+    default: 'false'
+  read_all_files:
+    description: 'Read all source files for complete context (true/false, default: true)'
+    required: false
+    default: 'true'
   analyzer_instructions:
     description: 'Custom instructions for the analyzer (project discovery agent)'
     required: false
@@ -127,8 +143,8 @@ inputs:
     required: false
     default: ''
   # Additional Custom Instructions (all agents)
-  planner_instructions:
-    description: 'Custom instructions for the planner (strategic thinking agent)'
+  blueprint_instructions:
+    description: 'Custom instructions for the blueprint agent (Chief Architect)'
     required: false
     default: ''
   generator_iterative_instructions:
@@ -141,14 +157,6 @@ inputs:
     default: ''
   reflector_instructions:
     description: 'Custom instructions for failure analysis (detective agent)'
-    required: false
-    default: ''
-  health_detector_instructions:
-    description: 'Custom instructions for health endpoint discovery agent'
-    required: false
-    default: ''
-  readiness_detector_instructions:
-    description: 'Custom instructions for readiness pattern analysis agent'
     required: false
     default: ''
   error_analyzer_instructions:
@@ -164,8 +172,8 @@ inputs:
     description: 'Custom prompt - project discovery and deduction agent'
     required: false
     default: ''
-  prompt_planner:
-    description: 'Custom prompt - strategic planning agent (chess grandmaster)'
+  prompt_blueprint:
+    description: 'Custom prompt - blueprint agent (Chief Architect)'
     required: false
     default: ''
   prompt_generator:
@@ -184,14 +192,6 @@ inputs:
     description: 'Custom prompt - detective and post-mortem analysis agent'
     required: false
     default: ''
-  prompt_health_detector:
-    description: 'Custom prompt - evidence-based health endpoint discovery agent'
-    required: false
-    default: ''
-  prompt_readiness_detector:
-    description: 'Custom prompt - behavioral startup pattern analysis agent'
-    required: false
-    default: ''
   prompt_error_analyzer:
     description: 'Custom prompt - troubleshooter and error classification agent'
     required: false
@@ -200,6 +200,52 @@ inputs:
     description: 'Custom prompt - surgeon for precise corrections agent'
     required: false
     default: ''
+  # Provider & Runtime Settings
+  llm_caching:
+    description: 'Enable in-process LLM response caching (true/false)'
+    required: false
+    default: 'true'
+  ollama_base_url:
+    description: 'Base URL for Ollama when using llm_provider=ollama'
+    required: false
+    default: 'http://localhost:11434'
+  google_cloud_project:
+    description: 'Google Cloud project ID for Gemini (optional)'
+    required: false
+    default: ''
+  
+  # Observability & Tracing
+  enable_tracing:
+    description: 'Enable OpenTelemetry tracing (true/false)'
+    required: false
+    default: 'false'
+  tracing_exporter:
+    description: 'Tracing exporter type (console, otlp)'
+    required: false
+    default: 'console'
+  otlp_endpoint:
+    description: 'OTLP endpoint URL for trace export'
+    required: false
+    default: 'http://localhost:4317'
+  otel_service_name:
+    description: 'Service name for OpenTelemetry traces'
+    required: false
+    default: 'dockai'
+  langchain_tracing_v2:
+    description: 'Enable LangSmith/LangChain tracing (true/false)'
+    required: false
+    default: 'false'
+  langchain_api_key:
+    description: 'LangSmith API key (required when langchain_tracing_v2=true)'
+    required: false
+  langchain_project:
+    description: 'LangSmith project name'
+    required: false
+    default: 'dockai'
+  langchain_endpoint:
+    description: 'LangSmith endpoint URL'
+    required: false
+    default: 'https://api.smith.langchain.com'
 
 runs:
   using: "composite"
@@ -209,9 +255,18 @@ runs:
       with:
         python-version: '3.11'
 
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+
     - name: Install DockAI
       shell: bash
-      run: pip install dockai-cli
+      run: |
+        if [ "${{ inputs.use_rag }}" == "true" ]; then
+          echo "Installing DockAI with RAG support..."
+          uv pip install "dockai-cli[rag]" --system
+        else
+          uv pip install dockai-cli --system
+        fi
 
     - name: Run DockAI Framework
       shell: bash
@@ -226,13 +281,11 @@ runs:
         ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
         # Per-Agent Model Configuration
         DOCKAI_MODEL_ANALYZER: ${{ inputs.model_analyzer }}
-        DOCKAI_MODEL_PLANNER: ${{ inputs.model_planner }}
+        DOCKAI_MODEL_BLUEPRINT: ${{ inputs.model_blueprint }}
         DOCKAI_MODEL_GENERATOR: ${{ inputs.model_generator }}
         DOCKAI_MODEL_GENERATOR_ITERATIVE: ${{ inputs.model_generator_iterative }}
         DOCKAI_MODEL_REVIEWER: ${{ inputs.model_reviewer }}
         DOCKAI_MODEL_REFLECTOR: ${{ inputs.model_reflector }}
-        DOCKAI_MODEL_HEALTH_DETECTOR: ${{ inputs.model_health_detector }}
-        DOCKAI_MODEL_READINESS_DETECTOR: ${{ inputs.model_readiness_detector }}
         DOCKAI_MODEL_ERROR_ANALYZER: ${{ inputs.model_error_analyzer }}
         DOCKAI_MODEL_ITERATIVE_IMPROVER: ${{ inputs.model_iterative_improver }}
         # Legacy model env vars (for backward compatibility)
@@ -240,37 +293,52 @@ runs:
         MODEL_ANALYZER: ${{ inputs.model_analyzer }}
         # General Settings
         MAX_RETRIES: ${{ inputs.max_retries }}
+        DOCKAI_SKIP_HADOLINT: ${{ inputs.skip_hadolint }}
         DOCKAI_SKIP_SECURITY_SCAN: ${{ inputs.skip_security_scan }}
         DOCKAI_STRICT_SECURITY: ${{ inputs.strict_security }}
         DOCKAI_MAX_IMAGE_SIZE_MB: ${{ inputs.max_image_size_mb }}
         DOCKAI_SKIP_HEALTH_CHECK: ${{ inputs.skip_health_check }}
+        DOCKAI_SKIP_SECURITY_REVIEW: ${{ inputs.skip_security_review }}
         DOCKAI_VALIDATION_MEMORY: ${{ inputs.validation_memory }}
         DOCKAI_VALIDATION_CPUS: ${{ inputs.validation_cpus }}
         DOCKAI_VALIDATION_PIDS: ${{ inputs.validation_pids }}
         DOCKAI_MAX_FILE_CHARS: ${{ inputs.max_file_chars }}
         DOCKAI_MAX_FILE_LINES: ${{ inputs.max_file_lines }}
+        DOCKAI_TRUNCATION_ENABLED: ${{ inputs.truncation_enabled }}
+        DOCKAI_TOKEN_LIMIT: ${{ inputs.token_limit }}
+        DOCKAI_USE_RAG: ${{ inputs.use_rag }}
+        DOCKAI_READ_ALL_FILES: ${{ inputs.read_all_files }}
         # Custom Instructions
         DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
         DOCKAI_GENERATOR_INSTRUCTIONS: ${{ inputs.generator_instructions }}
-        DOCKAI_PLANNER_INSTRUCTIONS: ${{ inputs.planner_instructions }}
+        DOCKAI_BLUEPRINT_INSTRUCTIONS: ${{ inputs.blueprint_instructions }}
         DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS: ${{ inputs.generator_iterative_instructions }}
         DOCKAI_REVIEWER_INSTRUCTIONS: ${{ inputs.reviewer_instructions }}
         DOCKAI_REFLECTOR_INSTRUCTIONS: ${{ inputs.reflector_instructions }}
-        DOCKAI_HEALTH_DETECTOR_INSTRUCTIONS: ${{ inputs.health_detector_instructions }}
-        DOCKAI_READINESS_DETECTOR_INSTRUCTIONS: ${{ inputs.readiness_detector_instructions }}
         DOCKAI_ERROR_ANALYZER_INSTRUCTIONS: ${{ inputs.error_analyzer_instructions }}
         DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS: ${{ inputs.iterative_improver_instructions }}
         # Custom Prompts
         DOCKAI_PROMPT_ANALYZER: ${{ inputs.prompt_analyzer }}
-        DOCKAI_PROMPT_PLANNER: ${{ inputs.prompt_planner }}
+        DOCKAI_PROMPT_BLUEPRINT: ${{ inputs.prompt_blueprint }}
         DOCKAI_PROMPT_GENERATOR: ${{ inputs.prompt_generator }}
         DOCKAI_PROMPT_GENERATOR_ITERATIVE: ${{ inputs.prompt_generator_iterative }}
         DOCKAI_PROMPT_REVIEWER: ${{ inputs.prompt_reviewer }}
         DOCKAI_PROMPT_REFLECTOR: ${{ inputs.prompt_reflector }}
-        DOCKAI_PROMPT_HEALTH_DETECTOR: ${{ inputs.prompt_health_detector }}
-        DOCKAI_PROMPT_READINESS_DETECTOR: ${{ inputs.prompt_readiness_detector }}
         DOCKAI_PROMPT_ERROR_ANALYZER: ${{ inputs.prompt_error_analyzer }}
         DOCKAI_PROMPT_ITERATIVE_IMPROVER: ${{ inputs.prompt_iterative_improver }}
+        # Provider & Runtime
+        DOCKAI_LLM_CACHING: ${{ inputs.llm_caching }}
+        OLLAMA_BASE_URL: ${{ inputs.ollama_base_url }}
+        GOOGLE_CLOUD_PROJECT: ${{ inputs.google_cloud_project }}
+        # Observability & Tracing
+        DOCKAI_ENABLE_TRACING: ${{ inputs.enable_tracing }}
+        DOCKAI_TRACING_EXPORTER: ${{ inputs.tracing_exporter }}
+        OTEL_EXPORTER_OTLP_ENDPOINT: ${{ inputs.otlp_endpoint }}
+        OTEL_SERVICE_NAME: ${{ inputs.otel_service_name }}
+        LANGCHAIN_TRACING_V2: ${{ inputs.langchain_tracing_v2 }}
+        LANGCHAIN_API_KEY: ${{ inputs.langchain_api_key }}
+        LANGCHAIN_PROJECT: ${{ inputs.langchain_project }}
+        LANGCHAIN_ENDPOINT: ${{ inputs.langchain_endpoint }}
       run: |
-        echo "🐳 Starting DockAI Framework..."
+        echo "Starting DockAI Framework..."
         dockai build ${{ inputs.project_path }} --no-cache

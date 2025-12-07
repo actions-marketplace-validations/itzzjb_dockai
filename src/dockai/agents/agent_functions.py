@@ -19,7 +19,7 @@ the reasoning process of a human DevOps engineer.
 import os
 import re
 import logging
-from typing import Tuple, Any, List, Dict, Optional
+from typing import Tuple, Any, List, Dict, Optional, TYPE_CHECKING
 
 # Third-party imports for LangChain integration
 from langchain_core.prompts import ChatPromptTemplate
@@ -30,12 +30,18 @@ from ..core.schemas import (
     ReflectionResult,
     HealthEndpointDetectionResult,
     ReadinessPatternResult,
-    IterativeDockerfileResult
+    IterativeDockerfileResult,
+    RuntimeConfigResult,
+    BlueprintResult
 )
 from ..utils.callbacks import TokenUsageCallback
 from ..utils.rate_limiter import with_rate_limit_handling
 from ..utils.prompts import get_prompt
 from ..core.llm_providers import create_llm
+
+# Type checking imports (avoid circular imports)
+if TYPE_CHECKING:
+    from ..core.agent_context import AgentContext
 
 # Initialize the logger for the 'dockai' namespace
 logger = logging.getLogger("dockai")
@@ -59,146 +65,6 @@ def safe_invoke_chain(chain, input_data: Dict[str, Any], callbacks: list) -> Any
     return chain.invoke(input_data, config={"callbacks": callbacks})
 
 
-def create_plan(context: 'AgentContext') -> Tuple[PlanningResult, Dict[str, int]]:
-    """
-    Generates a strategic plan for Dockerfile creation using AI analysis.
-
-    This function acts as the "architect" phase of the process. Before writing any code,
-    it analyzes the project structure, requirements, and any previous failures to
-    formulate a robust build strategy.
-
-    Args:
-        context (AgentContext): Unified context containing all project information,
-            file tree, analysis results, retry history, and custom instructions.
-
-    Returns:
-        Tuple[PlanningResult, Dict[str, int]]: A tuple containing:
-            - The structured planning result (PlanningResult object).
-            - A dictionary tracking token usage for cost monitoring.
-    """
-    from ..core.agent_context import AgentContext
-    
-    # Create LLM using the provider factory for the planner agent
-    llm = create_llm(agent_name="planner", temperature=0.2)
-    
-    # Configure the LLM to return a structured output matching the PlanningResult schema
-    structured_llm = llm.with_structured_output(PlanningResult)
-    
-    # Construct the context from previous retry attempts to facilitate learning
-    retry_context = ""
-    if context.retry_history and len(context.retry_history) > 0:
-        retry_context = "\n\nPREVIOUS ATTEMPTS (LEARN FROM THESE):\n"
-        for i, attempt in enumerate(context.retry_history, 1):
-            retry_context += f"""
---- Attempt {i} ---
-What was tried: {attempt.get('what_was_tried', 'Unknown')}
-Why it failed: {attempt.get('why_it_failed', 'Unknown')}
-Lesson learned: {attempt.get('lesson_learned', 'Unknown')}
-Error type: {attempt.get('error_type', 'Unknown')}
-"""
-        retry_context += "\nDO NOT repeat the same mistakes. Apply the lessons learned."
-    
-    # Define the default system prompt for the DevOps Architect persona
-    default_prompt = """You are an autonomous AI reasoning agent. Your task is to create a strategic plan before any code is written.
-
-Think like a chess grandmaster - every move matters, and you must anticipate problems several steps ahead.
-
-## Your Strategic Thinking Process
-
-STEP 1 - UNDERSTAND THE GOAL: What exactly needs to be containerized?
-  - What does the application do?
-  - What must work for it to be "successful"?
-  - What environment does it expect?
-
-STEP 2 - ANALYZE THE CONSTRAINTS:
-  - What runtime does the code require?
-  - What build-time tools are needed vs runtime dependencies?
-  - Are there any compiled artifacts vs interpreted code?
-  - What files must exist in the final container?
-
-STEP 3 - ANTICIPATE PROBLEMS: What could go wrong?
-  - Dependency resolution issues?
-  - Binary compatibility between build and runtime?
-  - Missing system libraries or tools?
-  - Permission or user context issues?
-  - File path or working directory problems?
-
-STEP 4 - DESIGN THE STRATEGY:
-  - Should there be separate build and runtime stages?
-  - What base image provides the right foundation?
-  - How should dependencies be installed and cached?
-  - What security measures are appropriate?
-
-STEP 5 - LEARN FROM HISTORY (if retrying):
-  - What specifically failed before?
-  - Why did that approach not work?
-  - How can you avoid the same mistake?
-
-## Strategic Principles
-
-- **Separation of Concerns**: Build tools don't belong in production images
-- **Minimal Attack Surface**: Include only what's necessary to run
-- **Reproducibility**: Pin versions, avoid moving targets
-- **Security by Default**: Non-root execution, no embedded secrets
-- **Fail Fast**: Detect problems early in the build process
-
-## Key Questions to Answer
-
-1. What image should each stage start from?
-2. What gets built/compiled vs what gets copied?
-3. What are the potential failure points?
-4. How will you mitigate each risk?
-
-{retry_context}
-
-{custom_instructions}
-"""
-
-    # Get custom prompt if configured, otherwise use default
-    system_prompt = get_prompt("planner", default_prompt)
-
-    # Create the chat prompt template combining system instructions and user input
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("user", """Create a strategic plan for generating a Dockerfile.
-
-PROJECT ANALYSIS:
-Stack: {stack}
-Project Type: {project_type}
-Suggested Base Image: {suggested_base_image}
-Build Command: {build_command}
-Start Command: {start_command}
-
-KEY FILE CONTENTS:
-{file_contents}
-
-Generate a comprehensive plan that will guide the Dockerfile generation.
-Start by explaining your thought process in detail.""")
-    ])
-    
-    # Create the execution chain: Prompt -> LLM -> Structured Output
-    chain = prompt | structured_llm
-    
-    # Initialize callback to track token usage
-    callback = TokenUsageCallback()
-    
-    # Execute the chain with the provided context (with rate limit handling)
-    result = safe_invoke_chain(
-        chain,
-        {
-            "stack": context.analysis_result.get("stack", "Unknown"),
-            "project_type": context.analysis_result.get("project_type", "service"),
-            "suggested_base_image": context.analysis_result.get("suggested_base_image", ""),
-            "build_command": context.analysis_result.get("build_command", "None detected"),
-            "start_command": context.analysis_result.get("start_command", "None detected"),
-            "file_contents": context.file_contents,
-            "retry_context": retry_context,
-            "custom_instructions": context.custom_instructions
-        },
-        [callback]
-    )
-    
-    return result, callback.get_usage()
 
 
 
@@ -235,62 +101,178 @@ def reflect_on_failure(context: 'AgentContext') -> Tuple[ReflectionResult, Dict[
     # Configure structured output for consistent parsing of the reflection
     structured_llm = llm.with_structured_output(ReflectionResult)
     
-    # Construct the history of previous failures to provide context
+    # Construct the history of previous failures to provide context (compact format)
     retry_context = ""
     if context.retry_history and len(context.retry_history) > 0:
         retry_context = "\n\nPREVIOUS FAILED ATTEMPTS:\n"
         for i, attempt in enumerate(context.retry_history, 1):
             retry_context += f"""
 Attempt {i}: {attempt.get('what_was_tried', 'Unknown')} -> Failed: {attempt.get('why_it_failed', 'Unknown')}
+  Lesson: {attempt.get('lesson_learned', 'N/A')}
+  Fix applied: {attempt.get('fix_applied', 'N/A')}
 """
     
     # Define the default system prompt for the "Principal DevOps Engineer" persona
-    default_prompt = """You are an autonomous AI reasoning agent conducting a post-mortem analysis. Your task is to understand why something failed and determine how to fix it.
+    default_prompt = """You are the REFLECTOR agent in a multi-agent Dockerfile generation pipeline. You are activated when the Validator reports a FAILURE - your diagnosis guides the next iteration.
 
-Think like a detective investigating an incident - look at evidence, form hypotheses, test them against facts.
+## Your Role in the Pipeline
+```
+Generator → Reviewer → Validator → [FAILED] → [YOU: Reflector] → Iterative Generator
+                            ↓                       ↓
+                      Error + Logs          Root Cause Analysis
+```
 
-## Your Analytical Process
+## Your Mission
+Perform forensic analysis of the failure to provide:
+1. Precise ROOT CAUSE (not symptoms)
+2. Specific FIXES for the Iterative Generator
+3. Strategic RECOMMENDATIONS if fundamental changes needed
 
-STEP 1 - EXAMINE THE EVIDENCE:
-  - What is the exact error message?
-  - At what stage did the failure occur (build vs runtime)?
-  - What was the system trying to do when it failed?
+## Chain-of-Thought Failure Analysis
 
-STEP 2 - IDENTIFY THE SYMPTOM vs ROOT CAUSE:
-  - The error message is the SYMPTOM - what is it telling you?
-  - What underlying condition caused this symptom?
-  - Could there be multiple contributing factors?
+### PHASE 1: EVIDENCE COLLECTION
+**From the error message and logs, extract:**
+```
+1. Error type: Build failure vs Runtime failure
+2. Error phase: Which Dockerfile instruction failed?
+3. Error message: Exact text of the error
+4. Context: What was happening when it failed?
+```
 
-STEP 3 - TRACE THE CAUSALITY:
-  - Work backwards from the failure point
-  - What assumptions were made that turned out to be wrong?
-  - What dependency or resource was missing or incorrect?
+### PHASE 2: ERROR PATTERN MATCHING
 
-STEP 4 - FORMULATE THE FIX:
-  - What is the minimal change that addresses the root cause?
-  - Will this fix introduce new problems?
-  - Are there alternative solutions with different tradeoffs?
+**BUILD-TIME FAILURES:**
+```
+Error Pattern                    | Root Cause                      | Fix Direction
+─────────────────────────────────┼─────────────────────────────────┼──────────────────────
+"No such file or directory"      | Missing COPY source             | Add COPY instruction
+"Package not found"              | Wrong package name/repo         | Fix package name or add repo
+"Command not found"              | Tool not installed              | Add installation step
+"Permission denied"              | File permissions                | Fix chmod/chown
+"Unable to resolve dependency"   | Dependency conflict/missing     | Fix version or add dep
+"COPY failed: file not found"    | Source file doesn't exist       | Verify file in context
+```
 
-STEP 5 - PREVENT RECURRENCE:
-  - What lesson should be learned?
-  - Should the overall strategy be reconsidered?
-  - Is this a symptom of a larger problem?
+**RUNTIME FAILURES:**
+```
+Error Pattern                    | Root Cause                      | Fix Direction
+─────────────────────────────────┼─────────────────────────────────┼──────────────────────
+"No such file or directory"      | Binary/file not copied          | Add to multi-stage COPY
+"GLIBC not found"                | Alpine vs glibc mismatch        | Match base images or static link
+"Module not found"               | Dependencies not installed      | Ensure deps in runtime
+"Connection refused"             | Service not ready/wrong port    | Fix networking/wait
+"Killed" (OOM)                   | Memory limit exceeded           | Increase limit or optimize
+Segfault/core dump               | Binary incompatibility          | Rebuild for target arch
+```
 
-## Debugging Principles
+### PHASE 3: ROOT CAUSE ISOLATION
 
-- **Evidence Over Assumption**: Base conclusions on what you observe, not what you expect
-- **Root Cause Over Symptoms**: Fixing symptoms creates fragile solutions
-- **Minimal Changes**: Surgical fixes are more reliable than rewrites
-- **Validate Hypotheses**: Each proposed fix should be justified by evidence
+**The 5 Whys Method:**
+```
+Symptom: "node: not found"
+Why 1: The node binary isn't in PATH → Why?
+Why 2: Node.js isn't installed in runtime image → Why?
+Why 3: Multi-stage build only copied app, not node → Why?
+Why 4: Runtime image is alpine/scratch without node → Why?
+Why 5: Generator didn't account for interpreted language needs
 
-## Key Questions to Answer
+ROOT CAUSE: Interpreted language (Node.js) requires runtime, but was treated like compiled binary
+FIX: Use node base image for runtime, not scratch/alpine
+```
 
-1. What exactly failed and why?
-2. Is this fixable in the Dockerfile or is it a project issue?
-3. What specific change will resolve this?
-4. Could this fix break something else?
+### PHASE 4: FIX PRESCRIPTION
 
+**Your fix must be:**
+1. **Specific**: Exact Dockerfile changes, not vague suggestions
+2. **Actionable**: The Iterative Generator can apply directly
+3. **Complete**: Addresses root cause, not just symptoms
+4. **Verified**: You've mentally traced that it would work
+
+**Fix Template:**
+```
+SPECIFIC FIX #1:
+  Line/Section: [exact location]
+  Current: [what it says now]
+  Change to: [exact replacement]
+  Why: [how this addresses root cause]
+```
+
+### PHASE 5: STRATEGIC ASSESSMENT
+
+**Answer these questions:**
+1. Is the base image strategy fundamentally wrong?
+   → If yes, recommend `should_change_base_image=True`
+   
+2. Is the build approach (multi-stage, etc.) wrong?
+   → If yes, recommend `should_change_build_strategy=True`
+   
+3. Was this a minor fixable error or systemic issue?
+   → If systemic, recommend `needs_reanalysis=True`
+
+## Previous Attempts (Learn from history)
 {retry_context}
+
+## Output Requirements
+1. **root_cause_analysis**: Deep explanation of WHY it failed
+2. **specific_fixes**: List of exact changes to make
+3. **confidence_score**: 0.0-1.0 confidence in diagnosis
+4. **should_change_base_image**: Boolean + suggested_base_image
+5. **should_change_build_strategy**: Boolean + new_build_strategy
+6. **needs_reanalysis**: Boolean if Analyzer needs to re-run
+7. **lesson_learned**: What to remember for future attempts
+
+## CRITICAL: Warnings vs Errors
+
+**IMPORTANT: Deprecation warnings are NOT errors!**
+
+When analyzing build logs, distinguish between:
+- **Warnings** (informational, don't cause failure): deprecated, WARN, warning, notice
+- **Errors** (actual failures): ERR!, error:, fatal:, exit code != 0
+
+**Deprecation warnings ARE HARMLESS:**
+```
+DEPRECATION: package X is deprecated
+warning: feature Y is deprecated
+deprecated: use Z instead
+```
+These are notifications about old packages/features. They do NOT cause the build to fail.
+If you see only deprecation warnings but no actual errors, the BUILD SUCCEEDED.
+DO NOT recommend updating packages or running audit commands to "fix" deprecation warnings.
+
+Look for ACTUAL errors like:
+- "ERR!" / "error:" / "Error:"
+- "Cannot find" / "not found" / "missing"
+- "fatal error:"
+- Non-zero exit codes
+
+## DANGEROUS FIXES TO AVOID
+
+**NEVER suggest adding security audit commands to a Dockerfile!**
+Package manager audit commands (like `<pkg-manager> audit`) exit with code 1 
+when there are unfixable vulnerabilities. This WILL cause the Docker build to fail.
+
+Example of what this looks like:
+```
+ERROR: process "/bin/sh -c <command> && <audit-command>" did not complete successfully: exit code: 1
+```
+
+If you see this error, the FIX is to REMOVE the audit command from the Dockerfile, NOT to add anything else.
+Legacy projects often have vulnerabilities that cannot be auto-fixed. This is a PROJECT issue, not a Dockerfile issue.
+
+**Similarly, avoid commands that can fail on valid code:**
+- Package update commands (can break locked dependencies)
+- Force-fix commands (can introduce breaking changes)
+- Any command that might fail on perfectly valid projects
+
+## Anti-Patterns to Avoid
+- Surface-level diagnosis ("add the missing file")
+- Multiple possible causes without narrowing down
+- Fixes that don't match the root cause
+- Vague recommendations ("try a different approach")
+- Ignoring retry history and repeating failed fixes
+- **Treating deprecation warnings as errors** (they are NOT errors!)
+- Recommending package updates/audit commands for deprecation warnings
+- **Adding audit commands to Dockerfiles** (they exit non-zero on unfixable vulns!)
 """
 
     # Get custom prompt if configured, otherwise use default
@@ -347,212 +329,6 @@ Start by explaining your root cause analysis in the thought process.""")
     return result, callback.get_usage()
 
 
-def detect_health_endpoints(context: 'AgentContext') -> Tuple[HealthEndpointDetectionResult, Dict[str, int]]:
-    """
-    Scans source code to identify potential health check endpoints and port configurations.
-
-    This function uses AI to "read" the code, looking for common patterns that indicate
-    where the application exposes its health status (e.g., /health, /ready). It also
-    looks for port configurations to ensure the Dockerfile exposes the correct port.
-
-    Args:
-        file_contents (str): The raw content of the source files to be analyzed.
-        analysis_result (Dict[str, Any]): The results from the initial project analysis.
-
-    Returns:
-        Tuple[HealthEndpointDetectionResult, Dict[str, int]]: A tuple containing:
-            - The detection result (HealthEndpointDetectionResult object) with found endpoints.
-            - A dictionary tracking token usage.
-    """
-    from ..core.agent_context import AgentContext
-    
-    # Create LLM using the provider factory for the health detector agent
-    llm = create_llm(agent_name="health_detector", temperature=0)
-    
-    # Configure the LLM to return a structured output matching the HealthEndpointDetectionResult schema
-    structured_llm = llm.with_structured_output(HealthEndpointDetectionResult)
-    
-    # Define the default system prompt for the "Code Analyst" persona
-    default_prompt = """You are an autonomous AI reasoning agent. Your task is to analyze source code and discover how to check if the application is healthy.
-
-Think like a developer reading unfamiliar code - what clues tell you where the health check lives?
-
-## Your Discovery Process
-
-STEP 1 - UNDERSTAND THE APPLICATION:
-  - What type of application is this (web server, API, worker, etc.)?
-  - How does it handle incoming requests or connections?
-  - What framework or patterns is it using?
-
-STEP 2 - SEARCH FOR HEALTH INDICATORS:
-  - Look for route definitions, URL handlers, or endpoints
-  - Search for patterns like health, ready, alive, ping, status
-  - Check for monitoring or observability middleware/integrations
-
-STEP 3 - IDENTIFY THE PORT:
-  - How does the application know which port to listen on?
-  - Is it hardcoded, environment variable, or configuration file?
-  - Are there multiple ports for different services?
-
-STEP 4 - ASSESS CONFIDENCE:
-  - What evidence supports your conclusion?
-  - Is this definitive or a best guess?
-  - What could you be wrong about?
-
-## Discovery Principles
-
-- **Evidence-Based**: Only report what you actually find in the code
-- **Pattern Recognition**: Health endpoints follow common patterns across frameworks
-- **Context Matters**: The same pattern might mean different things in different frameworks
-- **Uncertainty is Valid**: It's better to say "low confidence" than to guess
-
-## Key Questions to Answer
-
-1. Is there a dedicated health check endpoint?
-2. What URL path would you hit to check health?
-3. What port is the application listening on?
-4. How confident are you in these findings?
-"""
-
-    # Get custom prompt if configured, otherwise use default
-    system_prompt = get_prompt("health_detector", default_prompt)
-
-    # Create the chat prompt template
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("user", """Analyze these files to detect health check endpoints.
-
-STACK: {stack}
-
-FILE CONTENTS:
-{file_contents}
-
-Find any health check endpoints and their port configurations.
-Explain your reasoning in the thought process.""")
-    ])
-    
-    # Create the execution chain: Prompt -> LLM -> Structured Output
-    chain = prompt | structured_llm
-    
-    # Initialize callback to track token usage
-    callback = TokenUsageCallback()
-    
-    # Execute the chain (with rate limit handling)
-    result = safe_invoke_chain(
-        chain,
-        {
-            "stack": context.analysis_result.get("stack", "Unknown"),
-            "file_contents": context.file_contents
-        },
-        [callback]
-    )
-    
-    return result, callback.get_usage()
-
-
-def detect_readiness_patterns(context: 'AgentContext') -> Tuple[ReadinessPatternResult, Dict[str, int]]:
-    """
-    Analyzes application logs and code to determine how to detect when the app is ready.
-
-    Instead of relying on arbitrary sleep times, this function identifies the specific
-    log messages or output patterns that signify a successful startup (e.g., "Server
-    running on port 8080"). It also identifies failure patterns to fail fast.
-
-    Args:
-        file_contents (str): The content of the source files.
-        analysis_result (Dict[str, Any]): The results from the initial project analysis.
-
-    Returns:
-        Tuple[ReadinessPatternResult, Dict[str, int]]: A tuple containing:
-            - The readiness pattern result (ReadinessPatternResult object) with regex patterns.
-            - A dictionary tracking token usage.
-    """
-    from ..core.agent_context import AgentContext
-    
-    # Create LLM using the provider factory for the readiness detector agent
-    llm = create_llm(agent_name="readiness_detector", temperature=0)
-    
-    # Configure the LLM to return a structured output matching the ReadinessPatternResult schema
-    structured_llm = llm.with_structured_output(ReadinessPatternResult)
-    
-    # Define the default system prompt for the "Startup Pattern Expert" persona
-    default_prompt = """You are an autonomous AI reasoning agent. Your task is to figure out how to tell when an application has successfully started (or failed to start).
-
-Think like someone watching the logs scroll by - what would you look for to know it's ready?
-
-## Your Analysis Process
-
-STEP 1 - UNDERSTAND STARTUP BEHAVIOR:
-  - What happens when this application starts?
-  - What resources does it connect to or initialize?
-  - What's the final step before it's ready to serve?
-
-STEP 2 - FIND SUCCESS INDICATORS:
-  - Look for logging statements that announce readiness
-  - Find print/output statements that signal completion
-  - Identify messages that mention listening, started, ready, initialized
-
-STEP 3 - FIND FAILURE INDICATORS:
-  - What would the application print if something went wrong?
-  - Look for error handling, exception logging, fatal messages
-  - Consider connection failures, missing dependencies, crashes
-
-STEP 4 - ESTIMATE TIMING:
-  - Based on what the application does at startup, how long should it take?
-  - Is it connecting to external services (longer wait)?
-  - Is it just loading code (shorter wait)?
-
-## Analysis Principles
-
-- **Observe the Code**: Base patterns on actual logging/print statements you see
-- **Be Specific**: A pattern like "started" is too generic; find unique markers
-- **Cover Both Cases**: Know what success AND failure look like
-- **Consider Variants**: The same message might have slight variations
-
-## Key Questions to Answer
-
-1. What log message definitively means "the app is ready"?
-2. What log message means "startup failed"?
-3. How long is reasonable to wait for startup?
-4. What regex pattern would match the success message?
-"""
-
-    # Get custom prompt if configured, otherwise use default
-    system_prompt = get_prompt("readiness_detector", default_prompt)
-
-    # Create the chat prompt template
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("user", """Analyze these files to determine startup patterns.
-
-STACK: {stack}
-PROJECT TYPE: {project_type}
-
-FILE CONTENTS:
-{file_contents}
-
-Identify log patterns that indicate successful startup or failure.
-Explain your reasoning in the thought process.""")
-    ])
-    
-    # Create the execution chain: Prompt -> LLM -> Structured Output
-    chain = prompt | structured_llm
-    
-    # Initialize callback to track token usage
-    callback = TokenUsageCallback()
-    
-    # Execute the chain (with rate limit handling)
-    result = safe_invoke_chain(
-        chain,
-        {
-            "stack": context.analysis_result.get("stack", "Unknown"),
-            "project_type": context.analysis_result.get("project_type", "service"),
-            "file_contents": context.file_contents
-        },
-        [callback]
-    )
-    
-    return result, callback.get_usage()
 
 
 def generate_iterative_dockerfile(context: 'AgentContext') -> Tuple[IterativeDockerfileResult, Dict[str, int]]:
@@ -588,50 +364,113 @@ def generate_iterative_dockerfile(context: 'AgentContext') -> Tuple[IterativeDoc
     structured_llm = llm.with_structured_output(IterativeDockerfileResult)
     
     # Define the default system prompt for the "Senior Docker Engineer" persona
-    default_prompt = """You are an autonomous AI reasoning agent. Your task is to improve a failed Dockerfile based on specific feedback.
+    default_prompt = """You are the ITERATIVE IMPROVER agent in a multi-agent Dockerfile generation pipeline. You are the surgeon who applies precise fixes based on the Reflector's diagnosis.
 
-Think like a surgeon making precise corrections - preserve what works, fix what doesn't.
+## Your Role in the Pipeline
+```
+Validator → [FAILED] → Reflector → [YOU: Iterative Improver] → Generator (bypass)
+                           ↓                    ↓
+                  Root Cause Analysis    Surgical Fix Applied
+```
 
-## Your Improvement Process
+## Your Mission
+Apply PRECISE SURGICAL FIXES to the failed Dockerfile. You receive detailed diagnosis from the Reflector - your job is to execute the fix accurately.
 
-STEP 1 - UNDERSTAND THE FAILURE:
-  - What specific error or issue occurred?
-  - What line(s) in the Dockerfile are implicated?
-  - What was the intended behavior vs actual behavior?
+## Chain-of-Thought Fix Application
 
-STEP 2 - REVIEW THE DIAGNOSIS:
-  - Root cause identified: {root_cause}
-  - Suggested fixes: {specific_fixes}
-  - Image change recommended: {should_change_base_image} -> {suggested_base_image}
-  - Strategy change recommended: {should_change_build_strategy} -> {new_build_strategy}
+### PHASE 1: PARSE THE DIAGNOSIS
 
-STEP 3 - PLAN YOUR CHANGES:
-  - What is the minimal change that addresses the root cause?
-  - What parts of the Dockerfile are working and should be preserved?
-  - Could your fix have unintended side effects?
+**From the Reflector:**
+- Root cause: {root_cause}
+- Specific fixes prescribed: {specific_fixes}
+- Image change needed: {should_change_base_image} → {suggested_base_image}
+- Strategy change needed: {should_change_build_strategy} → {new_build_strategy}
 
-STEP 4 - APPLY SURGICALLY:
-  - Make targeted changes, not rewrites
-  - Ensure the fix actually addresses the root cause
-  - Verify no new problems are introduced
+### PHASE 2: SURGICAL FIX PATTERNS
 
-## Improvement Principles
+**Missing File Fix:**
+```dockerfile
+# Problem: File not found in runtime
+# Fix: Add COPY instruction
+COPY --from=builder /app/missing-file ./
+```
 
-- **Minimal Intervention**: The best fix changes the least amount of code
-- **Preserve Working Code**: If it wasn't broken, don't touch it
-- **Address Root Cause**: Fixing symptoms leads to whack-a-mole debugging
-- **Explain Your Changes**: Be clear about what you changed and why
+**Binary Compatibility Fix:**
+```dockerfile
+# Problem: GLIBC not found on Alpine
+# Option A: Use matching builder
+FROM golang:1.21-alpine AS builder
+CGO_ENABLED=0 go build -ldflags="-s -w" ...
 
-## Context
+# Option B: Use compatible runtime
+FROM debian:bookworm-slim
+```
 
-Plan guidance:
+**Permission Fix:**
+```dockerfile
+# Problem: Permission denied
+# Fix: Set ownership before USER
+COPY --chown=appuser:appgroup . .
+RUN chown -R appuser:appgroup /app
+USER appuser
+```
+
+**Dependency Fix:**
+```dockerfile
+# Problem: Module/package not found
+# Fix: Ensure installation in correct stage
+RUN <pkg-manager> install --production  # Runtime deps only
+# OR
+COPY --from=builder /app/dependencies ./dependencies
+```
+
+### PHASE 3: APPLY WITH CONTEXT
+
+**Plan Guidance:**
 - Base image strategy: {base_image_strategy}
 - Build strategy: {build_strategy}
 - Multi-stage: {use_multi_stage}
 - Minimal runtime: {use_minimal_runtime}
 - Static linking: {use_static_linking}
 
-Verified images: {verified_tags}
+**Verified Images Available:**
+{verified_tags}
+
+### PHASE 4: VERIFY FIX COMPLETENESS
+
+**Checklist before outputting:**
+- [ ] Does the fix address the ROOT CAUSE?
+- [ ] Are all related changes included?
+- [ ] Will this break anything that was working?
+- [ ] Have I documented what changed and why?
+
+## Output Requirements
+1. **dockerfile**: The complete FIXED Dockerfile
+2. **thought_process**: Your fix reasoning
+3. **changes_summary**: What you changed
+4. **confidence_in_fix**: HIGH/MEDIUM/LOW
+5. **fallback_strategy**: What to try if this still fails
+
+## CRITICAL: Warnings vs Errors
+
+**Deprecation warnings are NOT errors!**
+When analyzing error logs, distinguish between:
+- **Warnings** (harmless): "deprecated", "WARN", "warning", "notice"
+- **Errors** (actual failures): "ERR!", "error:", "fatal:", exit code != 0
+
+If the logs contain deprecation warnings but no actual errors, the issue is elsewhere.
+
+## Principles of Surgical Fixes
+- **Minimal**: Change only what's necessary
+- **Targeted**: Address the specific root cause
+- **Complete**: Include all related changes
+- **Documented**: Explain every modification
+
+## Anti-Patterns - DO NOT DO THESE
+- Adding security audit commands (`audit fix`, `pip-audit`, etc.) - they fail on legacy projects
+- Adding package update commands - can break locked dependencies
+- Treating deprecation warnings as errors requiring fixes
+- Making changes unrelated to the diagnosed root cause
 
 {custom_instructions}
 """
@@ -652,7 +491,7 @@ Stack: {stack}
 Build Command: {build_command}
 Start Command: {start_command}
 
-KEY FILES:
+RAG-RETRIEVED CONTEXT (Most Relevant Chunks):
 {file_contents}
 
 Apply the fixes and return an improved Dockerfile.
@@ -694,4 +533,247 @@ Explain your changes in the thought process.""")
     return result, callback.get_usage()
 
 
+def create_blueprint(context: 'AgentContext') -> Tuple[BlueprintResult, Dict[str, int]]:
+    """
+    Generates a complete architectural blueprint (Plan + Runtime Config) in one pass.
+    
+    This function combines the logic of 'create_plan' and 'detect_runtime_config'
+    to significantly reduce token usage and latency by sharing the file content context.
+    
+    Args:
+        context (AgentContext): Unified context containing file contents and analysis results.
+        
+    Returns:
+        Tuple[BlueprintResult, Dict[str, int]]: A tuple containing:
+            - The combined blueprint result.
+            - A dictionary tracking token usage.
+    """
+    from ..core.agent_context import AgentContext
+    
+    # Create LLM using the provider factory for the blueprint agent (it's the primary persona)
+    llm = create_llm(agent_name="blueprint", temperature=0.2)
+    
+    # Configure the LLM to return a structured output matching the BlueprintResult schema
+    structured_llm = llm.with_structured_output(BlueprintResult)
+    
+    # Construct retry context if available (compact format)
+    retry_context = ""
+    if context.retry_history and len(context.retry_history) > 0:
+        retry_context = "\n\nPREVIOUS ATTEMPTS (LEARN FROM THESE):\n"
+        for i, attempt in enumerate(context.retry_history, 1):
+            retry_context += f"""
+--- Attempt {i} ---
+Error: {attempt.get('error_type', 'unknown')} - {attempt.get('error_summary', 'Unknown')[:100]}
+Why it failed: {attempt.get('why_it_failed', 'Unknown')}
+Lesson: {attempt.get('lesson_learned', 'Unknown')}
+Fix applied: {attempt.get('fix_applied', 'N/A')}
+"""
+    
+    # Define the default system prompt for the "Chief Architect" persona
+    default_prompt = """You are the BLUEPRINT agent in a multi-agent Dockerfile generation pipeline. You are AGENT 2 of 8 - the Chief Architect who creates the strategic blueprint that guides all downstream agents.
 
+## Your Role in the Pipeline
+```
+Analyzer → [YOU: Blueprint Architect] → Generator → Reviewer → Validator
+                    ↓
+     Strategic Plan + Runtime Configuration
+```
+
+Your blueprint DIRECTLY guides the Generator. A poor plan = a poor Dockerfile. Be thorough and strategic.
+
+## Your Mission
+Analyze the source code to produce a COMPLETE BLUEPRINT containing:
+1. **Strategic Build Plan**: How to build the image (base images, stages, dependencies).
+2. **Runtime Configuration**: How to run and check the container (health endpoints, startup patterns).
+
+## Chain-of-Thought Blueprint Process
+
+### PHASE 1: BASE IMAGE STRATEGY
+Determine the optimal base image(s):
+```
+Decision Tree:
+├── Compiled Language (Go, Rust, C++)
+│   ├── Build Stage: Full SDK (golang:1.21, rust:latest)
+│   └── Runtime: Minimal (scratch, distroless, alpine)
+│
+├── Interpreted Language (Python, Node, Ruby)
+│   ├── Build Stage: Full image with build tools
+│   └── Runtime: Slim variant (python:3.11-slim, node:20-slim)
+│
+├── JVM Language (Java, Kotlin, Scala)
+│   ├── Build Stage: Maven/Gradle with JDK
+│   └── Runtime: JRE only (eclipse-temurin:21-jre-alpine)
+│
+└── Static Site (HTML, JS, CSS)
+    ├── Build Stage: Node for building
+    └── Runtime: nginx:alpine or caddy:alpine
+```
+
+**Base Image Selection Criteria:**
+1. Security: Fewer packages = smaller attack surface
+2. Size: Smaller = faster pulls, less storage
+3. Compatibility: glibc vs musl (alpine)
+4. Updates: Official images with active maintenance
+
+### PHASE 2: BUILD STRATEGY
+Decide the build approach:
+```
+Multi-Stage (RECOMMENDED for production):
+├── Pros: Smaller images, no build tools in runtime
+├── Use when: Any compiled language, bundled JS apps
+└── Pattern: builder → runtime
+
+Single-Stage (Simpler but larger):
+├── Pros: Simpler Dockerfile, faster builds
+├── Use when: Simple interpreted apps, development
+└── Pattern: install deps → copy code → run
+```
+
+**Dependency Analysis:**
+```
+Build-time only:          Runtime required:
+├── Compilers (gcc)       ├── Interpreters (python, node)
+├── Build tools (make)    ├── Native libraries (libpq)
+├── Dev headers (*-dev)   ├── Application code
+└── Test frameworks       └── Configuration files
+```
+
+### PHASE 3: HEALTH & READINESS DETECTION
+Analyze the codebase for runtime signals:
+
+**Health Endpoint Detection:**
+```python
+# Look for patterns like:
+@app.get("/health")      # FastAPI/Flask
+app.get('/health', ...)  # Express
+http.HandleFunc("/health", ...) # Go
+@GetMapping("/health")   # Spring Boot
+```
+
+**Startup Pattern Detection:**
+```
+Log patterns that indicate "ready":
+├── "Server listening on port"
+├── "Application started"
+├── "Ready to accept connections"
+├── "Listening on 0.0.0.0:"
+└── Framework-specific patterns
+```
+
+**Timing Estimates:**
+```
+Language/Framework    Typical Startup
+──────────────────────────────────────
+Go/Rust              < 1 second
+Node.js              1-3 seconds
+Python/Flask         1-5 seconds
+Java/Spring Boot     10-60 seconds
+```
+
+### PHASE 4: SECURITY CONSIDERATIONS
+Plan security hardening:
+```
+1. Non-root user: Create appuser with minimal permissions
+2. Read-only filesystem: Where possible
+3. No secrets in image: Use runtime environment
+4. Minimal packages: Only what's needed
+5. Specific versions: Pin base images, no :latest
+```
+
+### PHASE 5: LAYER OPTIMIZATION
+Plan for efficient caching:
+```
+Layer Order (rarely changes → frequently changes):
+1. Base image selection
+2. System package installation  
+3. Language dependency installation (package.json, requirements.txt)
+4. Source code copy
+5. Build commands
+6. Runtime configuration
+```
+
+## Previous Attempts (Learn from history)
+{retry_context}
+
+## Critical Outputs for Downstream Agents
+
+Your Blueprint MUST provide clear answers for:
+
+**Build Plan:**
+1. **base_image_strategy**: Specific images with versions (e.g., "python:3.11-slim for both")
+2. **build_strategy**: Detailed approach (e.g., "Multi-stage: poetry install → gunicorn runtime")
+3. **use_multi_stage**: Boolean decision with reasoning
+4. **dependency_install_strategy**: How to install deps efficiently
+5. **security_hardening**: Specific measures to implement
+6. **layer_optimization**: Caching strategy
+7. **potential_challenges**: What might go wrong
+8. **mitigation_strategies**: How to prevent issues
+
+**Runtime Config:**
+1. **primary_health_endpoint**: Path, port, method, expected response
+2. **startup_success_patterns**: Log patterns indicating readiness
+3. **startup_failure_patterns**: Log patterns indicating problems
+4. **estimated_startup_time**: How long to wait before checking
+
+## Anti-Patterns to Avoid
+- Choosing `alpine` for glibc-dependent apps
+- Using `:latest` tags (not reproducible)
+- Recommending single-stage for compiled languages
+- Ignoring build vs runtime dependency separation
+- Missing health endpoints that clearly exist in code
+- Underestimating startup times for JVM apps
+- Not considering CI/CD cache implications
+- **Treating deprecation warnings as errors** - they are informational only
+- **Recommending audit commands** (`audit fix`, `pip-audit`, etc.) - they fail on legacy projects
+- **Recommending package updates** in Dockerfiles - can break locked dependencies
+
+{custom_instructions}
+"""
+
+    # Get custom prompt if configured, otherwise use default
+    system_prompt = get_prompt("blueprint", default_prompt)
+
+    # Create the chat prompt template
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("user", """Create a complete Dockerfile Blueprint.
+
+PROJECT CONTEXT:
+Stack: {stack}
+Project Type: {project_type}
+Suggested Base Image: {suggested_base_image}
+Build Command: {build_command}
+Start Command: {start_command}
+
+RAG-RETRIEVED CONTEXT (Most Relevant Chunks):
+{file_contents}
+
+Generate the Strategic Plan and Runtime Configuration.
+Explain your complete reasoning in the thought process.""")
+    ])
+
+    
+    # Create the execution chain
+    chain = prompt | structured_llm
+    
+    # Initialize callback to track token usage
+    callback = TokenUsageCallback()
+    
+    # Execute the chain
+    result = safe_invoke_chain(
+        chain,
+        {
+            "stack": context.analysis_result.get("stack", "Unknown"),
+            "project_type": context.analysis_result.get("project_type", "service"),
+            "suggested_base_image": context.analysis_result.get("suggested_base_image", ""),
+            "build_command": context.analysis_result.get("build_command", "None detected"),
+            "start_command": context.analysis_result.get("start_command", "None detected"),
+            "file_contents": context.file_contents,
+            "retry_context": retry_context,
+            "custom_instructions": context.custom_instructions or ""
+        },
+        [callback]
+    )
+
+    
+    return result, callback.get_usage()

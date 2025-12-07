@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 from ..workflow.graph import create_graph
 from . import ui
 from ..utils.prompts import load_prompts, set_prompt_config
+from ..utils.tracing import init_tracing, shutdown_tracing, record_workflow_start, record_workflow_end
 
 # Load environment variables from .env file
 load_dotenv()
@@ -63,7 +64,7 @@ def load_instructions(path: str):
         Tuple[str, str]: A tuple containing (analyzer_instructions, generator_instructions) for backward compatibility.
     """
     # Load and set custom prompts and instructions configuration
-    # This handles all 10 prompts and their instructions from env vars and .dockai file
+    # This handles all 8 prompts and their instructions from env vars and .dockai file
     prompt_config = load_prompts(path)
     set_prompt_config(prompt_config)
     logger.debug("Custom prompts and instructions configuration loaded")
@@ -86,6 +87,13 @@ def build(
     if verbose:
         logger.setLevel(logging.DEBUG)
         logger.debug("Verbose mode enabled")
+    
+    # Initialize OpenTelemetry tracing (if enabled via DOCKAI_ENABLE_TRACING)
+    init_tracing(service_name="dockai")
+    
+    # Check for LangSmith tracing
+    if os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true":
+        logger.info("LangSmith tracing enabled")
     
     # Note: no_cache flag is accepted for compatibility but not yet implemented
     # Docker build caching behavior is handled at the Docker daemon level
@@ -168,7 +176,13 @@ def build(
         "usage_stats": [],
         "config": {
             "analyzer_instructions": prompt_config.analyzer_instructions or "",
+            "blueprint_instructions": prompt_config.blueprint_instructions or "",
             "generator_instructions": prompt_config.generator_instructions or "",
+            "generator_iterative_instructions": prompt_config.generator_iterative_instructions or "",
+            "reviewer_instructions": prompt_config.reviewer_instructions or "",
+            "reflector_instructions": prompt_config.reflector_instructions or "",
+            "error_analyzer_instructions": prompt_config.error_analyzer_instructions or "",
+            "iterative_improver_instructions": prompt_config.iterative_improver_instructions or "",
             "no_cache": no_cache
         },
         # Adaptive agent fields for learning and planning
@@ -184,10 +198,22 @@ def build(
     # Create and compile the LangGraph workflow
     workflow = create_graph()
     
+    # Record workflow start for tracing
+    record_workflow_start(path, {"max_retries": initial_state["max_retries"]})
+    
     try:
         # Execute the workflow with a visual spinner
         with ui.get_status_spinner("[bold green]Running DockAI Framework...[/bold green]"):
-            final_state = workflow.invoke(initial_state)
+            # Prepare configuration for LangGraph/LangSmith
+            invoke_config = {
+                "metadata": {
+                    "project_path": path,
+                    "verbose": verbose,
+                    "no_cache": no_cache,
+                    "max_retries": initial_state["max_retries"]
+                }
+            }
+            final_state = workflow.invoke(initial_state, config=invoke_config)
     except Exception as e:
         # Handle unexpected errors gracefully
         error_msg = str(e)
@@ -210,9 +236,20 @@ def build(
     validation_result = final_state["validation_result"]
     output_path = os.path.join(path, "Dockerfile")
     
+    # Calculate total tokens for tracing
+    total_tokens = sum(
+        stat.get("total_tokens", 0) 
+        for stat in final_state.get("usage_stats", [])
+        if isinstance(stat, dict)
+    )
+    
     if validation_result["success"]:
+        record_workflow_end(True, final_state.get("retry_count", 0), total_tokens)
+        shutdown_tracing()
         ui.display_summary(final_state, output_path)
     else:
+        record_workflow_end(False, final_state.get("retry_count", 0), total_tokens)
+        shutdown_tracing()
         ui.display_failure(final_state)
         raise typer.Exit(code=1)
 

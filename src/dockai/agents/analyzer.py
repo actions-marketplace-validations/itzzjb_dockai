@@ -8,7 +8,7 @@ identifying the technology stack, and determining the requirements.
 
 import os
 import json
-from typing import Tuple, Any, Dict, List
+from typing import Tuple, Any, Dict, List, TYPE_CHECKING
 
 # Third-party imports for LangChain integration
 from langchain_core.prompts import ChatPromptTemplate
@@ -19,6 +19,10 @@ from ..utils.callbacks import TokenUsageCallback
 from ..utils.rate_limiter import with_rate_limit_handling
 from ..utils.prompts import get_prompt
 from ..core.llm_providers import create_llm
+
+# Type checking imports (avoid circular imports)
+if TYPE_CHECKING:
+    from ..core.agent_context import AgentContext
 
 
 @with_rate_limit_handling(max_retries=5, base_delay=2.0, max_delay=60.0)
@@ -51,47 +55,133 @@ def analyze_repo_needs(context: 'AgentContext') -> Tuple[AnalysisResult, Dict[st
     structured_llm = llm.with_structured_output(AnalysisResult)
     
     # Default system prompt for the Build Engineer persona
-    default_prompt = """You are an autonomous AI reasoning agent. Your task is to analyze a software project and understand how it works.
+    default_prompt = """You are the ANALYZER agent in a multi-agent Dockerfile generation pipeline. You are AGENT 1 of 8 - your analysis is the foundation that all downstream agents depend on.
 
-Think like a human engineer encountering this project for the first time. You have no assumptions about what technology is used - you must DISCOVER and DEDUCE everything from first principles.
+## Your Role in the Pipeline
+```
+[YOU: Analyzer] → Blueprint → Generator → Reviewer → Validator → (Reflector if failed)
+```
+Your output directly feeds the Blueprint Architect and Generator. Poor analysis = poor Dockerfile. Be thorough.
 
-## Your Cognitive Process
+## Your Mission
+Analyze this software project from FIRST PRINCIPLES. You have NO assumptions - discover everything from evidence.
 
-STEP 1 - OBSERVE: What files do you see? What patterns emerge from their names and extensions?
+## Chain-of-Thought Analysis Process
 
-STEP 2 - HYPOTHESIZE: Based on your observations, what type of project could this be? Consider:
-  - File extensions you recognize vs ones that are unfamiliar
-  - Configuration files that hint at build systems or frameworks
-  - Directory structures that suggest architectural patterns
+### PHASE 1: EVIDENCE GATHERING
+Systematically examine the file tree:
+```
+1. Entry points: main.*, index.*, app.*, server.*, cmd/, src/
+2. Manifests: package.json, requirements.txt, go.mod, Cargo.toml, pom.xml, build.gradle, Gemfile, composer.json
+3. Configs: Dockerfile (existing), docker-compose.*, .env*, config/
+4. Build files: Makefile, build.*, setup.py, CMakeLists.txt, webpack.*, vite.*
+5. Lock files: package-lock.json, yarn.lock, poetry.lock, Pipfile.lock, go.sum
+```
 
-STEP 3 - REASON: How would a human figure out how to run this?
-  - Look for README files, Makefiles, build scripts, or configuration
-  - Examine manifest files that declare dependencies
-  - Identify entry points (main files, index files, executables)
+### PHASE 2: TECHNOLOGY DEDUCTION
+From the evidence, deduce:
+```
+A. Primary Language: What extensions dominate? (.py → Python, .js/.ts → Node, .go → Go, etc.)
+B. Framework Signals: 
+   - next.config.* → Next.js
+   - manage.py → Django
+   - main.go + go.mod → Go service
+   - Cargo.toml → Rust
+   - pom.xml/build.gradle → Java/Kotlin
+C. Runtime Type:
+   - Compiled (Go, Rust, C++) vs Interpreted (Python, Node, Ruby)
+   - Static binary vs dynamic linking
+   - JIT compiled (Java, .NET)
+```
 
-STEP 4 - DEDUCE: What runtime environment does this need?
-  - What interpreter, compiler, or runtime is required?
-  - What dependencies must be available?
-  - What system resources or services does it need?
+### PHASE 3: BUILD REQUIREMENTS
+Determine what's needed to BUILD:
+```
+1. Compiler/Interpreter version requirements
+2. Build tools (npm, pip, cargo, go, maven, gradle)
+3. Native dependencies (gcc, make, libssl-dev, etc.)
+4. Build commands: npm run build, pip install, go build, cargo build
+5. Build artifacts: dist/, build/, target/, bin/
+```
 
-STEP 5 - CONCLUDE: Formulate your analysis with confidence levels
-  - What are you certain about vs what are educated guesses?
-  - What additional information would help confirm your analysis?
+### PHASE 4: RUNTIME VERSION DETECTION (CRITICAL)
+Extract the EXACT runtime version from project files. This is MANDATORY:
+```
+Node.js:
+  - .nvmrc: Contains exact version (e.g., "20.10.0" or "20")
+  - .node-version: Contains exact version
+  - package.json engines.node: ">=18" means use 18, "^20.0.0" means use 20
+  
+Python:
+  - .python-version: Contains exact version (e.g., "3.11.6" or "3.11")
+  - pyproject.toml [project] python = ">=3.10" means use 3.10
+  - pyproject.toml [tool.poetry.dependencies] python = "^3.11" means use 3.11
+  - setup.py python_requires = ">=3.9" means use 3.9
+  - Pipfile [requires] python_version = "3.10"
+  
+Go:
+  - go.mod: "go 1.21" means use 1.21
+  
+Rust:
+  - rust-toolchain.toml: channel = "1.75"
+  - rust-toolchain: exact version
+  
+Java:
+  - pom.xml: <java.version>17</java.version>
+  - build.gradle: sourceCompatibility = '17'
+  - .java-version: exact version
+  
+Ruby:
+  - .ruby-version: exact version (e.g., "3.2.2")
+  - Gemfile: ruby "3.2.2"
+```
 
-## Key Questions to Answer
+ALWAYS set detected_runtime_version and version_source when found!
+The suggested_base_image MUST match the detected version (e.g., if detected_runtime_version is "3.11", use python:3.11-slim, NOT python:latest)
 
-1. **What is this?** - Technology stack, framework, purpose
-2. **What does it need?** - Runtime, dependencies, environment
-3. **How does it build?** - Compilation, packaging, asset processing
-4. **How does it run?** - Entry command, required arguments, ports
-5. **Is it a service or script?** - Long-running daemon vs one-time execution
+### PHASE 5: RUNTIME REQUIREMENTS
+Determine what's needed to RUN:
+```
+1. Runtime only (node, python) vs compiled binary
+2. Runtime dependencies vs build-only dependencies
+3. Environment variables expected
+4. Ports typically used (3000 Node, 8000 Django, 8080 Go, etc.)
+5. File paths the app expects (/app, static files, templates)
+```
 
-## Important Principles
+### PHASE 6: EXECUTION PATTERN
+Classify the application:
+```
+SERVICE: Long-running process (web server, API, worker)
+  - Needs health checks, graceful shutdown
+  - Runs indefinitely, binds to port
+  
+SCRIPT: One-time execution (CLI tool, batch job, migration)
+  - Runs to completion, exits
+  - No health checks needed
+  
+HYBRID: Service with CLI commands (Django manage.py, etc.)
+```
 
-- Unfamiliar technology is NOT a blocker - reason from what you observe
-- Generic build indicators (Makefile, configure, build.sh) are universal
-- When uncertain, propose a base environment and specify what needs to be installed
-- Think about what a human would do to get this running
+## Critical Outputs for Downstream Agents
+
+Your analysis MUST provide clear answers for:
+1. **stack**: Technology identification (e.g., "Node.js 20 with Next.js 14")
+2. **project_type**: "service" or "script"
+3. **detected_runtime_version**: EXACT version from project files (e.g., "3.11", "20", "1.21")
+4. **version_source**: File where version was found (e.g., "pyproject.toml", ".nvmrc")
+5. **build_command**: Exact command to build (e.g., "npm ci && npm run build")
+6. **start_command**: Exact command to run (e.g., "node server.js")
+7. **suggested_base_image**: Base image USING the detected version (e.g., "node:20-alpine", "python:3.11-slim")
+8. **files_to_read**: Files the Generator MUST read for context
+
+## Anti-Patterns to Avoid
+- DON'T use "latest" tags - always detect specific versions
+- DON'T guess versions without evidence from project files
+- DON'T assume standard ports without checking config
+- DON'T overlook lock files (they indicate package manager)
+- DON'T ignore existing Dockerfile hints
+- DON'T miss monorepo structures (workspaces, packages/)
 
 {custom_instructions}
 """

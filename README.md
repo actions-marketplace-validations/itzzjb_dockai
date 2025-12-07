@@ -33,7 +33,12 @@
 DockAI is an **agentic AI framework** that analyzes your codebase and generates optimized, production-ready Dockerfiles. Unlike template-based tools, DockAI uses **first-principles reasoning** to understand your application and create Dockerfiles from scratch—handling everything from standard stacks to legacy systems.
 
 ```bash
+# Using pip
 pip install dockai-cli
+
+# Or using uv (faster)
+uv pip install dockai-cli
+
 dockai build /path/to/project
 ```
 
@@ -57,10 +62,10 @@ That's it. DockAI handles the rest.
   <tr>
     <td width="50%">
       <h3>🛡️ Security-First</h3>
-      <p>Built-in Trivy integration scans for vulnerabilities. Enforces non-root users, minimal base images, and hardened configs.</p>
+      <p>Built-in Trivy CVE scanning and Hadolint linting. Enforces non-root users, minimal base images, and hardened configs.</p>
     </td>
     <td width="50%">
-      <h3>🤖 10 Specialized Agents</h3>
+      <h3>🤖 8 Specialized Agents</h3>
       <p>Each agent handles a specific task: analysis, planning, generation, review, and more. All fully customizable.</p>
     </td>
   </tr>
@@ -73,17 +78,41 @@ That's it. DockAI handles the rest.
       <h3>🔧 Fully Customizable</h3>
       <p>Override prompts, instructions, and model selection per agent. Use <code>.dockai</code> files for repo-specific configs.</p>
     </td>
+  </tr>
   <tr>
     <td width="50%">
       <h3>📦 Smart Registry Integration</h3>
       <p>Automatically validates base images against <strong>Docker Hub, GCR, Quay, and GHCR</strong>. Prioritizes small, secure variants like <code>alpine</code> and <code>slim</code>.</p>
     </td>
     <td width="50%">
-      <h3>🚀 Performance Optimized</h3>
-      <p>Intelligent caching prevents redundant network calls. Semantic version sorting ensures you always get the latest stable releases.</p>
+      <h3>📊 Full Observability</h3>
+      <p>Built-in <strong>OpenTelemetry tracing</strong> and <strong>LangSmith</strong> support for distributed observability and LLM debugging. Export traces to console, OTLP backends, or LangSmith.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>🧠 Intelligent Context (RAG)</h3>
+      <p><strong>New in v4.0!</strong> Uses local AST analysis and semantic search to understand large codebases without token bloat. Zero API cost.</p>
+    </td>
+    <td width="50%">
+      <h3>⚡ GitHub Actions Ready</h3>
+      <p>Run entirely within CI/CD pipelines with zero-config setup. Automatically commits generated Dockerfiles back to your repo.</p>
     </td>
   </tr>
 </table>
+
+<br/>
+
+## 🛠️ Supported Code Intelligence
+
+DockAI uses advanced AST analysis for primary languages and generic heuristics for everything else.
+
+| Language | Deep Support (AST + Manifests) |
+|----------|---------------------------------|
+| **Python** | FastAPI, Flask, Django, Starlette, Litestar, Tornado, +10 more |
+| **Node.js** | Express, NestJS, Next.js, Nuxt, React, Vue, SvelteKit, Remix, Astro |
+| **Go** | Gin, Echo, Fiber, Chi, Beego, Revel, Iris |
+| **Universal** | **Any language** (Ruby, Rust, PHP, etc.) via generic analysis |
 
 ---
 
@@ -95,8 +124,9 @@ DockAI is designed to fit into any workflow, whether you are a developer, a DevO
 Perfect for running locally on your machine.
 
 ```bash
-# Install
-pip install dockai-cli
+# Install (choose one)
+pip install dockai-cli    # Using pip
+uv pip install dockai-cli # Using uv (faster)
 
 # Run
 dockai build .
@@ -160,45 +190,59 @@ dockai build /path/to/project --verbose
 ## 🏗️ How It Works
 
 ```mermaid
-graph TD
-    Start([▶ Start]) --> Scan[📂 Scanner]
-    Scan --> Analyze[🧠 Analyzer]
-    Analyze --> Read[📖 Reader]
-    Read --> Health[🏥 Health Detector]
-    Health --> Ready[⏱️ Readiness Detector]
-    Ready --> Plan[📝 Planner]
-    Plan --> Generate[⚙️ Generator]
-    Generate --> Review[🔒 Security Reviewer]
+flowchart TB
+    subgraph Discovery["📊 Discovery Phase"]
+        scan["📂 scan_node<br/>Scan directory tree"]
+        analyze["🧠 analyze_node<br/>AI: Detect stack & requirements"]
+        read["📖 read_files_node<br/>Read critical files"]
+    end
     
-    Review -- Secure --> Validate[✅ Validator]
-    Review -- Issues & Can Retry --> Reflect[🤔 Reflector]
-    Review -- Critical & Max Retries --> Fail([❌ Fail])
+    subgraph Blueprint["🏗️ Blueprint Phase"]
+        blueprint["📝 blueprint_node<br/>AI: Architect build plan & runtime config"]
+    end
     
-    Validate -- Success --> End([🏁 Finish])
-    Validate -- Failure --> Reflect
+    subgraph Generation["⚙️ Generation Phase"]
+        generate["⚙️ generate_node<br/>AI: Write Dockerfile"]
+    end
     
-    Reflect --> Increment[🔄 Increment Retry]
+    subgraph Validation["✅ Validation Phase"]
+        review["🔒 review_node<br/>AI: Security audit"]
+        validate["✅ validate_node<br/>Build, test & scan"]
+    end
     
-    Increment -- Fix Code --> Generate
-    Increment -- New Strategy --> Plan
-    Increment -- Re-Analyze --> Analyze
-    Increment -- Max Retries --> Fail
+    subgraph Feedback["🔄 Self-Correction Loop"]
+        reflect["🤔 reflect_node<br/>AI: Analyze failure"]
+        increment["🔄 increment_retry<br/>Update retry count"]
+    end
+    
+    Start([▶ Start]) --> scan
+    scan --> analyze --> read --> blueprint
+    blueprint --> generate --> review
+    
+    review -->|"check_security: pass"| validate
+    review -->|"check_security: fail"| reflect
+    
+    validate -->|"should_retry: end"| End([🏁 Done])
+    validate -->|"should_retry: reflect"| reflect
+    
+    reflect --> increment
+    increment -->|"check_reanalysis: generate"| generate
+    increment -->|"check_reanalysis: blueprint"| blueprint
+    increment -->|"check_reanalysis: analyze"| analyze
 ```
 
 ---
 
-## 🤖 The 10 AI Agents
+## 🤖 The 8 AI Agents
 
 | Agent | Role | Model Type |
 |-------|------|------------|
 | **Analyzer** | Project discovery & stack detection | Fast |
-| **Planner** | Strategic build planning | Fast |
+| **Architect (Blueprint)** | Strategic build planning & runtime config | Powerful |
 | **Generator** | Dockerfile creation | Powerful |
 | **Generator (Iterative)** | Debugging failed Dockerfiles | Powerful |
 | **Reviewer** | Security audit & hardening | Fast |
 | **Reflector** | Failure analysis & learning | Powerful |
-| **Health Detector** | Health endpoint discovery | Fast |
-| **Readiness Detector** | Startup pattern analysis | Fast |
 | **Error Analyzer** | Error classification | Fast |
 | **Iterative Improver** | Targeted fix application | Powerful |
 
@@ -208,22 +252,124 @@ graph TD
 
 ### Environment Variables
 
+#### LLM Provider Configuration
+
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `DOCKAI_LLM_PROVIDER` | Provider (`openai`, `azure`, `gemini`, `anthropic`, `ollama`) | `openai` |
 | `OPENAI_API_KEY` | OpenAI API key | Required* |
 | `GOOGLE_API_KEY` | Google Gemini API key | Required* |
 | `ANTHROPIC_API_KEY` | Anthropic Claude API key | Required* |
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI API key | Required* |
-| `OLLAMA_BASE_URL` | Ollama Base URL | `http://localhost:11434` |
-| `DOCKAI_LLM_PROVIDER` | Provider (`openai`, `azure`, `gemini`, `anthropic`, `ollama`) | `openai` |
-| `MAX_RETRIES` | Maximum retry attempts | `3` |
-| `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy scanning | `false` |
-| `DOCKAI_TRUNCATION_ENABLED` | Enable file truncation | `false` |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint URL | - |
+| `AZURE_OPENAI_API_VERSION` | Azure OpenAI API version | `2024-02-15-preview` |
+| `OLLAMA_BASE_URL` | Ollama base URL | `http://localhost:11434` |
+
+*Only one API key required for your chosen provider.
+
+#### Per-Agent Model Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_MODEL_ANALYZER` | Model for project analyzer | `gpt-4o-mini` |
+| `DOCKAI_MODEL_BLUEPRINT` | Model for build architect (blueprint) | `gpt-4o` |
+| `DOCKAI_MODEL_GENERATOR` | Model for Dockerfile generator | `gpt-4o` |
+| `DOCKAI_MODEL_GENERATOR_ITERATIVE` | Model for iterative generator | `gpt-4o` |
+| `DOCKAI_MODEL_REVIEWER` | Model for security reviewer | `gpt-4o-mini` |
+| `DOCKAI_MODEL_REFLECTOR` | Model for failure reflector | `gpt-4o` |
+| `DOCKAI_MODEL_ERROR_ANALYZER` | Model for error analyzer | `gpt-4o-mini` |
+| `DOCKAI_MODEL_ITERATIVE_IMPROVER` | Model for iterative improver | `gpt-4o` |
+
+> **Tip:** Mix providers by prefixing with `provider/`, e.g., `DOCKAI_MODEL_ANALYZER=openai/gpt-4o-mini`
+
+#### Generation Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MAX_RETRIES` | Maximum retry attempts if Dockerfile validation fails | `3` |
+
+#### Validation Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_VALIDATION_MEMORY` | Memory limit for container sandbox | `512m` |
+| `DOCKAI_VALIDATION_CPUS` | CPU limit for container validation | `1.0` |
+| `DOCKAI_VALIDATION_PIDS` | Maximum processes for validation | `100` |
+| `DOCKAI_MAX_IMAGE_SIZE_MB` | Maximum image size in MB (0 to disable) | `500` |
+| `DOCKAI_SKIP_HEALTH_CHECK` | Skip health check during validation | `false` |
+
+#### File Analysis Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_TRUNCATION_ENABLED` | Enable smart truncation of large files | `false` |
 | `DOCKAI_TOKEN_LIMIT` | Token limit for auto-truncation | `100000` |
 | `DOCKAI_MAX_FILE_CHARS` | Max chars per file (when truncating) | `200000` |
 | `DOCKAI_MAX_FILE_LINES` | Max lines per file (when truncating) | `5000` |
 
-*Only one API key required for your chosen provider.
+#### Intelligent Context (RAG) Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_USE_RAG` | Enable semantic search context retrieval | `false` |
+| `DOCKAI_READ_ALL_FILES` | Read all source files (disable for priority-only) | `true` |
+| `DOCKAI_EMBEDDING_MODEL` | HuggingFace model for local embeddings | `all-MiniLM-L6-v2` |
+
+#### Security Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_SKIP_HADOLINT` | Skip Hadolint Dockerfile linting | `false` |
+| `DOCKAI_SKIP_SECURITY_SCAN` | Skip Trivy security scan | `false` |
+| `DOCKAI_SKIP_SECURITY_REVIEW` | Skip AI security review (auto for scripts) | `false` |
+| `DOCKAI_STRICT_SECURITY` | Fail on ANY HIGH/CRITICAL vulnerabilities | `false` |
+
+#### Efficiency Settings
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_LLM_CACHING` | Enable in-memory LLM response caching | `true` |
+
+#### Observability & Tracing
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DOCKAI_ENABLE_TRACING` | Enable OpenTelemetry tracing | `false` |
+| `DOCKAI_TRACING_EXPORTER` | Tracing exporter (`console`, `otlp`) | `console` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint URL (for Jaeger/Tempo/Datadog) | `http://localhost:4317` |
+| `OTEL_SERVICE_NAME` | Service name for traces | `dockai` |
+| `LANGCHAIN_TRACING_V2` | Enable LangSmith tracing | `false` |
+| `LANGCHAIN_API_KEY` | LangSmith API Key | - |
+| `LANGCHAIN_PROJECT` | LangSmith Project Name | `dockai` |
+| `LANGCHAIN_ENDPOINT` | LangSmith Endpoint URL | `https://api.smith.langchain.com` |
+
+#### Custom Instructions (Per-Agent)
+
+| Variable | Description |
+|----------|-------------|
+| `DOCKAI_ANALYZER_INSTRUCTIONS` | Appended to analyzer prompt |
+| `DOCKAI_BLUEPRINT_INSTRUCTIONS` | Appended to blueprint prompt |
+| `DOCKAI_GENERATOR_INSTRUCTIONS` | Appended to generator prompt |
+| `DOCKAI_GENERATOR_ITERATIVE_INSTRUCTIONS` | Appended to iterative generator prompt |
+| `DOCKAI_REVIEWER_INSTRUCTIONS` | Appended to reviewer prompt |
+| `DOCKAI_REFLECTOR_INSTRUCTIONS` | Appended to reflector prompt |
+| `DOCKAI_ERROR_ANALYZER_INSTRUCTIONS` | Appended to error analyzer prompt |
+| `DOCKAI_ITERATIVE_IMPROVER_INSTRUCTIONS` | Appended to iterative improver prompt |
+
+#### Custom Prompts (Advanced)
+
+| Variable | Description |
+|----------|-------------|
+| `DOCKAI_PROMPT_ANALYZER` | Completely replaces analyzer prompt |
+| `DOCKAI_PROMPT_BLUEPRINT` | Completely replaces blueprint prompt |
+| `DOCKAI_PROMPT_GENERATOR` | Completely replaces generator prompt |
+| `DOCKAI_PROMPT_GENERATOR_ITERATIVE` | Completely replaces iterative generator prompt |
+| `DOCKAI_PROMPT_REVIEWER` | Completely replaces reviewer prompt |
+| `DOCKAI_PROMPT_REFLECTOR` | Completely replaces reflector prompt |
+| `DOCKAI_PROMPT_ERROR_ANALYZER` | Completely replaces error analyzer prompt |
+| `DOCKAI_PROMPT_ITERATIVE_IMPROVER` | Completely replaces iterative improver prompt |
+
+> **Note:** Instructions are appended to defaults; prompts completely replace them. Use `.dockai` file for repo-specific configs.
 
 ### Repository-Level Configuration
 
@@ -300,7 +446,6 @@ See [GitHub Actions Guide](./docs/github-actions.md) for all options.
 | [**API Reference**](./docs/api-reference.md) | Module and function documentation |
 | [**GitHub Actions**](./docs/github-actions.md) | CI/CD integration guide |
 | [**MCP Server**](./docs/mcp-server.md) | AI Agent integration guide |
-| [**Releases**](./docs/releases.md) | Release process and version management |
 | [**FAQ**](./docs/faq.md) | Frequently asked questions |
 
 > 💡 **MCP Support**: Expose DockAI as a [Model Context Protocol](https://modelcontextprotocol.io/) server for use in any MCP client.
@@ -310,13 +455,15 @@ See [GitHub Actions Guide](./docs/github-actions.md) for all options.
 ## 🛠️ Tech Stack
 
 | Technology | Purpose |
-|------------|---------|
+|------------|----------|
 | **Python 3.10+** | Core runtime |
 | **LangGraph** | Stateful agent workflow orchestration |
 | **LangChain** | LLM provider integration |
 | **Pydantic** | Structured output validation |
 | **Rich + Typer** | Beautiful CLI interface |
 | **Trivy** | Security vulnerability scanning |
+| **Hadolint** | Dockerfile linting and best practices |
+| **OpenTelemetry** | Distributed tracing and observability |
 
 ---
 
@@ -333,5 +480,5 @@ MIT License - see [LICENSE](./LICENSE) for details.
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/itzzjb">itzzjb</a></sub>
+  <sub>Built with ❤️ by <a href="https://github.com/itzzjb">Januda Bethmin</a></sub>
 </p>

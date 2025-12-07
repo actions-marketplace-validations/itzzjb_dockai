@@ -22,9 +22,7 @@ from .nodes import (
     scan_node,
     analyze_node,
     read_files_node,
-    detect_health_node,
-    detect_readiness_node,
-    plan_node,
+    blueprint_node,
     generate_node,
     review_node,
     validate_node,
@@ -122,20 +120,20 @@ def check_security(state: DockAIState) -> Literal["validate", "reflect", "end"]:
     return "validate"
 
 
-def check_reanalysis(state: DockAIState) -> Literal["analyze", "plan", "generate"]:
+def check_reanalysis(state: DockAIState) -> Literal["analyze", "blueprint", "generate"]:
     """
     Determines the entry point for the next iteration after reflection.
     
     Based on the insights gained during reflection, we might need to:
     - Re-analyze the project (if we misunderstood the stack).
-    - Create a new plan (if the strategy was wrong).
+    - Create a new blueprint (if the strategy was wrong).
     - Just regenerate the Dockerfile (if it was a minor syntax/config issue).
 
     Args:
         state (DockAIState): The current state of the workflow.
 
     Returns:
-        Literal["analyze", "plan", "generate"]: The next node to execute.
+        Literal["analyze", "blueprint", "generate"]: The next node to execute.
     """
     needs_reanalysis = state.get("needs_reanalysis", False)
     reflection = state.get("reflection", {})
@@ -147,8 +145,8 @@ def check_reanalysis(state: DockAIState) -> Literal["analyze", "plan", "generate
     # Check if reflection suggests major strategy change
     if reflection:
         if reflection.get("should_change_build_strategy"):
-            logger.info("Strategy change needed - creating new plan")
-            return "plan"
+            logger.info("Strategy change needed - creating new blueprint")
+            return "blueprint"
     
     # For targeted fixes, go directly to generate
     return "generate"
@@ -179,9 +177,7 @@ def create_graph():
     workflow.add_node("scan", scan_node)
     workflow.add_node("analyze", analyze_node)
     workflow.add_node("read_files", read_files_node)
-    workflow.add_node("detect_health", detect_health_node)
-    workflow.add_node("detect_readiness", detect_readiness_node)
-    workflow.add_node("plan", plan_node)
+    workflow.add_node("blueprint", blueprint_node)
     workflow.add_node("generate", generate_node)
     workflow.add_node("review", review_node)
     workflow.add_node("validate", validate_node)
@@ -194,10 +190,8 @@ def create_graph():
     # Define the main linear flow
     workflow.add_edge("scan", "analyze")
     workflow.add_edge("analyze", "read_files")
-    workflow.add_edge("read_files", "detect_health")
-    workflow.add_edge("detect_health", "detect_readiness")
-    workflow.add_edge("detect_readiness", "plan")
-    workflow.add_edge("plan", "generate")
+    workflow.add_edge("read_files", "blueprint")
+    workflow.add_edge("blueprint", "generate")
     workflow.add_edge("generate", "review")
     
     # Define conditional routing after security review
@@ -229,7 +223,7 @@ def create_graph():
         check_reanalysis,
         {
             "analyze": "analyze",
-            "plan": "plan",
+            "blueprint": "blueprint",
             "generate": "generate"
         }
     )

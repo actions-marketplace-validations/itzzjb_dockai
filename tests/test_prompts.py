@@ -22,7 +22,7 @@ class TestPromptConfig:
         """Test default config has all None values."""
         config = PromptConfig()
         assert config.analyzer is None
-        assert config.planner is None
+        assert config.blueprint is None
         assert config.generator is None
         assert config.reviewer is None
         assert config.analyzer_instructions is None
@@ -36,7 +36,7 @@ class TestPromptConfig:
         )
         assert config.analyzer == "custom analyzer"
         assert config.generator_instructions == "custom instructions"
-        assert config.planner is None
+        assert config.blueprint is None
 
 
 class TestPromptConfigGlobal:
@@ -74,7 +74,7 @@ class TestLoadPromptsFromEnv:
         
         assert config.analyzer == "env analyzer prompt"
         assert config.analyzer_instructions == "env analyzer instructions"
-        assert config.planner is None
+        assert config.blueprint is None
     
     @patch.dict(os.environ, {
         "DOCKAI_PROMPT_GENERATOR": "gen prompt",
@@ -125,16 +125,16 @@ Run as non-root
 You are a custom analyzer.
 Analyze the project.
 
-[prompt_planner]
-You are a custom planner.
+[prompt_blueprint]
+You are a custom blueprint agent.
 """)
             
             prompts = load_prompts_from_file(tmpdir)
             
             assert "analyzer" in prompts
             assert "custom analyzer" in prompts["analyzer"]
-            assert "planner" in prompts
-            assert "custom planner" in prompts["planner"]
+            assert "blueprint" in prompts
+            assert "custom blueprint agent" in prompts["blueprint"]
     
     def test_load_legacy_sections(self):
         """Test loading legacy [analyzer] and [generator] sections."""
