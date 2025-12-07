@@ -10,6 +10,7 @@ Key Features:
 - Deduplicates and ranks retrieved content
 - Generates structured summaries from code analysis
 - Respects token limits with smart truncation
+- **Dynamic Context**: Adapts search strategy based on detected project stack
 
 Architecture:
     Query → [AST Lookup] + [Semantic Search] + [Pattern Match] → Merged Context
@@ -21,7 +22,7 @@ Architecture:
 
 import os
 import logging
-from typing import List, Dict, Set, Optional
+from typing import List, Dict, Set, Optional, Any
 from dataclasses import dataclass
 
 from .indexer import ProjectIndex, FileChunk
@@ -39,7 +40,7 @@ class RetrievedContext:
         content: The actual text content.
         source: Source file path.
         relevance_score: How relevant this context is (0.0 - 1.0).
-        context_type: Type of context ("dependency", "entry_point", "config", etc.).
+        context_type: Type of context ("dependency", "entry_point", "config", "semantic_match").
     """
     content: str
     source: str
@@ -56,16 +57,16 @@ class ContextRetriever:
     
     1. **Must-Have Files**: Dependencies, existing Dockerfiles, configs
     2. **AST-Extracted**: Entry points, environment variables, ports
-    3. **Semantic Search**: Content matching Dockerfile-related queries
+    3. **Semantic Search**: Content matching Dockerfile-related queries (Stack-aware)
     
     Example Usage:
         >>> index = ProjectIndex(use_embeddings=True)
         >>> index.index_project("/path/to/project", file_tree)
-        >>> retriever = ContextRetriever(index)
+        >>> retriever = ContextRetriever(index, analysis_result)
         >>> context = retriever.get_dockerfile_context(max_tokens=50000)
     """
     
-    # Files that should always be included if present
+    # Files that should always be included if present (General)
     MUST_HAVE_FILES = {
         # Dependency files
         "package.json", "requirements.txt", "pyproject.toml",
@@ -75,29 +76,30 @@ class ContextRetriever:
         "dockerfile", "docker-compose.yml", "docker-compose.yaml",
         ".dockerignore",
         # Config files
-        ".env.example", ".env.sample", "makefile",
+        ".env.example", ".env.sample",
         # Version files
         ".nvmrc", ".python-version", ".ruby-version", ".node-version", ".tool-versions",
     }
     
-    # Queries for semantic search (Dockerfile-relevant topics)
-    DOCKERFILE_QUERIES = [
+    # Base queries for semantic search
+    BASE_QUERIES = [
         "install dependencies build requirements",
         "main entry point start server application",
         "configuration environment variables settings",
         "port listen bind http server",
         "database connection redis mongo postgres",
-        "build compile package bundle",
     ]
     
-    def __init__(self, index: ProjectIndex):
+    def __init__(self, index: ProjectIndex, analysis_result: Dict[str, Any] = None):
         """
         Initialize the context retriever.
         
         Args:
             index: A populated ProjectIndex instance.
+            analysis_result: Result from the Analysis stage (stack, project_type).
         """
         self.index = index
+        self.analysis_result = analysis_result or {}
     
     def get_dockerfile_context(self, max_tokens: int = 50000) -> str:
         """
@@ -108,7 +110,7 @@ class ContextRetriever:
         
         1. Include all must-have files (dependencies, existing Docker files)
         2. Extract and summarize AST analysis (entry points, env vars, ports)
-        3. Perform semantic search for Dockerfile-relevant content
+        3. Perform semantic search for Dockerfile-relevant content (Stack-aware)
         4. Deduplicate and merge results
         5. Truncate to fit within token limit
         
@@ -122,16 +124,36 @@ class ContextRetriever:
         seen_files: Set[str] = set()
         
         # 1. MUST-HAVE FILES: Always include these if present
+        # Enhance MUST_HAVE based on stack
+        target_files = self.MUST_HAVE_FILES.copy()
+        stack = self.analysis_result.get("stack", "").lower()
+        if "python" in stack:
+            target_files.update({"manage.py", "wsgi.py", "asgi.py", "gunicorn.conf.py", "uwsgi.ini"})
+        elif "node" in stack or "javascript" in stack:
+            target_files.update({"yarn.lock", "package-lock.json", "next.config.js", "vite.config.js", "webpack.config.js"})
+        elif "go" in stack:
+            target_files.update({"main.go"})
+            
         for chunk in self.index.chunks:
             filename = os.path.basename(chunk.file_path).lower()
-            if filename in self.MUST_HAVE_FILES:
+            if filename in target_files:
                 if chunk.file_path not in seen_files:
-                    context_parts.append(RetrievedContext(
-                        content=self._format_chunk(chunk),
-                        source=chunk.file_path,
-                        relevance_score=1.0,  # Highest priority
-                        context_type="must_have"
-                    ))
+                    # Special handling for lock files: Truncate heavily to save tokens
+                    if "lock" in filename and filename not in ("yarn.lock", "go.sum", "cargo.lock"): # Keep some lock files but maybe truncate
+                         # For massive lock files, strict limit
+                         context_parts.append(RetrievedContext(
+                            content=self._format_chunk(chunk, truncate_lines=50), 
+                            source=chunk.file_path,
+                            relevance_score=1.0, 
+                            context_type="must_have"
+                        ))
+                    else:
+                        context_parts.append(RetrievedContext(
+                            content=self._format_chunk(chunk),
+                            source=chunk.file_path,
+                            relevance_score=1.0,  # Highest priority
+                            context_type="must_have"
+                        ))
                     seen_files.add(chunk.file_path)
         
         # 2. AST-EXTRACTED INTELLIGENCE: Summarize code analysis
@@ -147,16 +169,19 @@ class ContextRetriever:
         # 3. ENTRY POINT CODE: Include actual code for detected entry points
         entry_point_code = self._get_entry_point_code()
         for code in entry_point_code:
-            context_parts.append(RetrievedContext(
-                content=code["content"],
-                source=code["source"],
-                relevance_score=0.9,
-                context_type="entry_point"
-            ))
-            seen_files.add(code["source"])
+            if code["source"] not in seen_files:
+                context_parts.append(RetrievedContext(
+                    content=code["content"],
+                    source=code["source"],
+                    relevance_score=0.9,
+                    context_type="entry_point"
+                ))
+                seen_files.add(code["source"])
         
         # 4. SEMANTIC SEARCH: Find relevant chunks
-        for query in self.DOCKERFILE_QUERIES:
+        queries = self._generate_dynamic_queries()
+        
+        for query in queries:
             results = self.index.search(query, top_k=3)
             for chunk in results:
                 if chunk.file_path not in seen_files:
@@ -182,14 +207,56 @@ class ContextRetriever:
         
         return final_context
     
-    def _format_chunk(self, chunk: FileChunk) -> str:
-        """Format a chunk for inclusion in context."""
+    def _generate_dynamic_queries(self) -> List[str]:
+        """Generate search queries based on project analysis."""
+        queries = self.BASE_QUERIES.copy()
+        stack = self.analysis_result.get("stack", "").lower()
+        
+        # Add stack-specific queries
+        if "python" in stack:
+            queries.extend([
+                "wsgi application object",
+                "asgi application object",
+                "django settings configuration",
+                "flask app instance",
+                "gunicorn configuration"
+            ])
+        elif "node" in stack or "javascript" in stack:
+            queries.extend([
+                "npm run start script",
+                "node_modules location",
+                "next.config.js export",
+                "express app listen"
+            ])
+        elif "go" in stack:
+             queries.extend([
+                "go build output",
+                "func main execution",
+                "gin router setup"
+            ])
+        
+        return queries
+
+    def _format_chunk(self, chunk: FileChunk, truncate_lines: Optional[int] = None) -> str:
+        """
+        Format a chunk for inclusion in context.
+        
+        Args:
+            chunk: The FileChunk to format.
+            truncate_lines: Optional limit on lines (useful for lockfiles).
+        """
+        content = chunk.content
+        if truncate_lines:
+             lines = content.split('\n')
+             if len(lines) > truncate_lines:
+                 content = '\n'.join(lines[:truncate_lines]) + f"\n... (truncated {len(lines)-truncate_lines} lines) ..."
+
         if chunk.chunk_type == "full":
-            return f"--- FILE: {chunk.file_path} ---\n{chunk.content}"
+            return f"--- FILE: {chunk.file_path} ---\n{content}"
         else:
             return (
                 f"--- FILE: {chunk.file_path} (lines {chunk.start_line}-{chunk.end_line}) ---\n"
-                f"{chunk.content}"
+                f"{content}"
             )
     
     def _generate_ast_summary(self) -> str:

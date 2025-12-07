@@ -351,10 +351,10 @@ def read_files_node(state: DockAIState) -> DockAIState:
     config = state.get("config", {})
     
     # --- RAG STRATEGY (v4.0 ONLY) ---
-    return _read_files_rag(path, file_tree, config)
+    return _read_files_rag(path, file_tree, config, analysis_result)
 
 
-def _read_files_rag(path: str, file_tree: list, config: dict) -> dict:
+def _read_files_rag(path: str, file_tree: list, config: dict, analysis_result: dict) -> dict:
     """
     Read files using RAG (Retrieval-Augmented Generation).
     
@@ -378,7 +378,7 @@ def _read_files_rag(path: str, file_tree: list, config: dict) -> dict:
         token_limit = config.get("token_limit") or int(os.getenv("DOCKAI_TOKEN_LIMIT", "50000"))
         
         # Retrieve optimized context
-        retriever = ContextRetriever(index)
+        retriever = ContextRetriever(index, analysis_result)
         file_contents_str = retriever.get_dockerfile_context(max_tokens=token_limit)
         
         # Get code intelligence summary for logging/debugging
