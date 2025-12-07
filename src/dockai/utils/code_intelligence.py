@@ -124,7 +124,7 @@ def analyze_python_file(filepath: str, content: str) -> FileAnalysis:
                             pass
                     args.append(arg_name)
             
-            signature = f"def {node.name}({', '.join(args)})"
+            signature = f"{'async ' if isinstance(node, ast.AsyncFunctionDef) else ''}def {node.name}({', '.join(args)})"
             if node.returns:
                 try:
                     signature += f" -> {ast.unparse(node.returns)}"
@@ -177,6 +177,14 @@ def analyze_python_file(filepath: str, content: str) -> FileAnalysis:
         elif isinstance(node, ast.If):
             if _is_main_block(node):
                 has_main_block = True
+                
+        # Detect global WSGI/ASGI app assignments (app = Flask(__name__) or app = FastAPI())
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id in ('app', 'application'):
+                    if isinstance(node.value, ast.Call):
+                         # Just a heuristic, likely an entry point
+                         analysis.entry_points.append(f"{filepath}:{target.id}")
     
     if has_main_block:
         analysis.entry_points.append(f"{filepath}:__main__")
@@ -281,8 +289,13 @@ def analyze_javascript_file(filepath: str, content: str) -> FileAnalysis:
     """
     Analyze a JavaScript/TypeScript file using regex patterns.
     
-    Note: This is a lightweight analysis without a full parser.
-    For production use, consider using tree-sitter.
+    Robustly handles:
+    - ES6 Imports (import x from 'y')
+    - CommonJS (require('y'))
+    - Dynamic Imports (import('y'))
+    - Framework detection (Express, NestJS, Next, React, etc.)
+    - Environment variables
+    - Ports
     
     Args:
         filepath: Relative path to the file.
@@ -295,16 +308,21 @@ def analyze_javascript_file(filepath: str, content: str) -> FileAnalysis:
     language = "typescript" if ext in ('.ts', '.tsx') else "javascript"
     analysis = FileAnalysis(path=filepath, language=language)
     
-    # Detect imports
-    import_patterns = [
-        r'import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]',
-        r'require\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)',
-    ]
-    for pattern in import_patterns:
+    # --- Import Detection ---
+    # 1. ES6 Imports: import ... from '...'
+    es6_pattern = r'import\s+(?:[\w\s{},*]+)\s+from\s+[\'"]([^\'"]+)[\'"]'
+    # 2. Side-effect imports: import '...'
+    side_effect_pattern = r'import\s+[\'"]([^\'"]+)[\'"]'
+    # 3. CommonJS: require('...')
+    cjs_pattern = r'require\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)'
+    # 4. Dynamic import: import('...')
+    dynamic_pattern = r'import\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)'
+    
+    for pattern in [es6_pattern, side_effect_pattern, cjs_pattern, dynamic_pattern]:
         for match in re.finditer(pattern, content):
             analysis.imports.append(match.group(1))
     
-    # Detect framework hints
+    # --- Framework Hints ---
     js_frameworks = {
         'express': 'Express',
         'fastify': 'Fastify',
@@ -315,19 +333,33 @@ def analyze_javascript_file(filepath: str, content: str) -> FileAnalysis:
         'react': 'React',
         'vue': 'Vue',
         'angular': 'Angular',
-        'nest': 'NestJS',
+        '@nestjs/core': 'NestJS',
+        '@nestjs/common': 'NestJS',
+        'svelte': 'Svelte',
+        'meteor': 'Meteor',
+        'remix': 'Remix',
     }
-    for imp in analysis.imports:
-        base = imp.split('/')[0].lower()
-        if base in js_frameworks:
-            analysis.framework_hints.append(js_frameworks[base])
     
-    # Detect ports
+    # Check imports for framework names
+    for imp in analysis.imports:
+        # Check explicit package names
+        if imp in js_frameworks:
+            analysis.framework_hints.append(js_frameworks[imp])
+        else:
+            # Check scoped/subpath (e.g., @nestjs/common -> NestJS)
+            for fw_pkg, fw_name in js_frameworks.items():
+                if imp.startswith(fw_pkg):
+                    analysis.framework_hints.append(fw_name)
+                    break
+                    
+    # --- Port Detection ---
     port_patterns = [
-        r'\.listen\s*\(\s*(\d+)',
-        r'port\s*[=:]\s*(\d+)',
-        r'PORT\s*[=:]\s*(\d+)',
-        r'\|\|\s*(\d{4,5})',  # process.env.PORT || 3000
+        r'\.listen\s*\(\s*(\d+)',            # .listen(3000)
+        r'port:\s*(\d+)',                    # port: 3000
+        r'PORT\s*=\s*(\d+)',                 # PORT = 3000
+        r'const\s+PORT\s*=\s*(\d+)',         # const PORT = 3000
+        r'process\.env\.PORT\s*\|\|\s*(\d+)', # process.env.PORT || 3000
+        r'\.listen\s*\(\s*process\.env\.PORT\s*\|\|\s*(\d+)\s*\)' # .listen(process.env.PORT || 3000)
     ]
     for pattern in port_patterns:
         for match in re.finditer(pattern, content, re.IGNORECASE):
@@ -338,18 +370,32 @@ def analyze_javascript_file(filepath: str, content: str) -> FileAnalysis:
             except:
                 pass
     
-    # Detect env vars
+    # --- Env Var Detection ---
     env_patterns = [
-        r'process\.env\.(\w+)',
-        r'process\.env\[[\'"](\w+)[\'"]\]',
+        r'process\.env\.([A-Z_][A-Z0-9_]*)',   # process.env.DB_HOST
+        r'process\.env\[[\'"]([A-Z_][A-Z0-9_]*)[\'"]\]', # process.env['DB_HOST']
+        r'ConfigService\.get\([\'"]([A-Z_][A-Z0-9_]*)[\'"]\)' # NestJS ConfigService.get('DB_HOST')
     ]
     for pattern in env_patterns:
         for match in re.finditer(pattern, content):
             analysis.env_vars.append(match.group(1))
     
-    # Detect entry points
-    if re.search(r'app\.listen|server\.listen|createServer', content):
+    # --- Entry Point Heuristics ---
+    if re.search(r'app\.listen|server\.listen|createServer|NestFactory\.create', content):
         analysis.entry_points.append(f"{filepath}:server")
+    
+    # --- Symbol Extraction (Basic) ---
+    # Extract exported functions/classes
+    class_pattern = r'export\s+class\s+(\w+)'
+    func_pattern = r'export\s+(?:async\s+)?function\s+(\w+)'
+    const_func_pattern = r'export\s+const\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[^=]+)\s*=>'
+    
+    for match in re.finditer(class_pattern, content):
+        analysis.symbols.append(CodeSymbol(match.group(1), 'class', filepath, 0, 0))
+    for match in re.finditer(func_pattern, content):
+        analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
+    for match in re.finditer(const_func_pattern, content):
+        analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
     
     # Deduplicate
     analysis.imports = list(set(analysis.imports))
@@ -364,7 +410,12 @@ def analyze_go_file(filepath: str, content: str) -> FileAnalysis:
     """
     Analyze a Go file using regex patterns.
     
-    Note: This is a lightweight analysis without a full parser.
+    Robustly handles:
+    - Package declaration (identifies main package)
+    - Multi-line Import statements
+    - Framework detection (Gin, Echo, Fiber, Chi, etc.)
+    - Env vars (os.Getenv, viper)
+    - Port detection
     
     Args:
         filepath: Relative path to the file.
@@ -375,28 +426,48 @@ def analyze_go_file(filepath: str, content: str) -> FileAnalysis:
     """
     analysis = FileAnalysis(path=filepath, language="go")
     
-    # Detect package
-    pkg_match = re.search(r'package\s+(\w+)', content)
-    if pkg_match and pkg_match.group(1) == "main":
-        # Check for main function
-        if re.search(r'func\s+main\s*\(\s*\)', content):
-            analysis.entry_points.append(f"{filepath}:main()")
-    
-    # Detect imports
+    # --- Package Detection ---
+    pkg_match = re.search(r'^\s*package\s+(\w+)', content, re.MULTILINE)
+    is_main_pkg = pkg_match and pkg_match.group(1) == "main"
+        
+    # --- Import Detection ---
+    # 1. Block imports: import ( ... )
     import_block = re.search(r'import\s*\((.*?)\)', content, re.DOTALL)
     if import_block:
+        # Extract quoted strings inside the block
+        # Handles: "fmt", _ "github.com/lib/pq", name "pkg/path"
         for match in re.finditer(r'[\'"]([^\'"]+)[\'"]', import_block.group(1)):
             analysis.imports.append(match.group(1))
     
-    single_imports = re.finditer(r'import\s+[\'"]([^\'"]+)[\'"]', content)
+    # 2. Single line imports: import "fmt"
+    single_imports = re.finditer(r'^\s*import\s+[\'"]([^\'"]+)[\'"]', content, re.MULTILINE)
     for match in single_imports:
         analysis.imports.append(match.group(1))
     
-    # Detect ports
+    # --- Framework Detection ---
+    go_frameworks = {
+        'github.com/gin-gonic/gin': 'Gin',
+        'github.com/labstack/echo': 'Echo',
+        'github.com/gofiber/fiber': 'Fiber',
+        'github.com/go-chi/chi': 'Chi',
+        'github.com/gorilla/mux': 'Gorilla Mux',
+        'github.com/kataras/iris': 'Iris',
+        'github.com/beego/beego': 'Beego',
+        'github.com/revel/revel': 'Revel',
+        'net/http': 'net/http' 
+    }
+    
+    for imp in analysis.imports:
+        for pkg, name in go_frameworks.items():
+            if pkg in imp:
+                analysis.framework_hints.append(name)
+    
+    # --- Port Detection ---
     port_patterns = [
-        r'ListenAndServe\s*\(\s*[\'"]?:(\d+)',
-        r'Listen\s*\(\s*[\'"]?:?(\d+)',
-        r':(\d+)',
+        r'ListenAndServe\s*\(\s*[\'"]?:(\d+)',     # ListenAndServe(":8080")
+        r'Run\s*\(\s*[\'"]?:(\d+)',                # router.Run(":8080")
+        r'Listen\s*\(\s*[\'"]?:(\d+)',             # app.Listen(":3000")
+        r'const\s+\w*Port\s*=\s*"?(\d+)',          # const Port = "8080"
     ]
     for pattern in port_patterns:
         for match in re.finditer(pattern, content):
@@ -404,32 +475,24 @@ def analyze_go_file(filepath: str, content: str) -> FileAnalysis:
                 port = int(match.group(1))
                 if 1000 <= port <= 65535:
                     analysis.exposed_ports.append(port)
-                    break  # Take first match
             except:
                 pass
-    
-    # Detect env vars
+                
+    # --- Env Var Detection ---
     env_patterns = [
-        r'os\.Getenv\s*\(\s*[\'"](\w+)[\'"]\s*\)',
-        r'os\.LookupEnv\s*\(\s*[\'"](\w+)[\'"]\s*\)',
+        r'os\.Getenv\s*\(\s*[\'"]([A-Z_][A-Z0-9_]*)[\'"]\s*\)',  # os.Getenv("KEY")
+        r'os\.LookupEnv\s*\(\s*[\'"]([A-Z_][A-Z0-9_]*)[\'"]\s*\)', # os.LookupEnv("KEY")
+        r'viper\.GetString\s*\(\s*[\'"]([A-Z_][A-Z0-9_]*)[\'"]\s*\)' # viper.GetString("KEY")
     ]
     for pattern in env_patterns:
         for match in re.finditer(pattern, content):
             analysis.env_vars.append(match.group(1))
-    
-    # Detect frameworks
-    go_frameworks = {
-        'gin-gonic/gin': 'Gin',
-        'labstack/echo': 'Echo',
-        'gorilla/mux': 'Gorilla',
-        'go-chi/chi': 'Chi',
-        'gofiber/fiber': 'Fiber',
-    }
-    for imp in analysis.imports:
-        for pattern, framework in go_frameworks.items():
-            if pattern in imp:
-                analysis.framework_hints.append(framework)
-    
+            
+    # --- Entry Point ---
+    if is_main_pkg:
+        if re.search(r'func\s+main\s*\(\s*\)', content):
+             analysis.entry_points.append(f"{filepath}:main()")
+             
     # Deduplicate
     analysis.imports = list(set(analysis.imports))
     analysis.env_vars = list(set(analysis.env_vars))
