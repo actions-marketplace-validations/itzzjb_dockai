@@ -63,43 +63,56 @@ class FileChunk:
     metadata: Dict = field(default_factory=dict)
 
 
+@dataclass
+class FileChunk:
+    """
+    Represents a chunk of a file for embedding and retrieval.
+    """
+    file_path: str
+    content: str
+    start_line: int
+    end_line: int
+    chunk_type: str = "chunk"
+    metadata: Dict = field(default_factory=dict)
+
+
 class ProjectIndex:
     """
-    In-memory semantic index of a project for smart context retrieval.
+    Persistent semantic index using ChromaDB.
     
     The index combines:
-    1. Vector embeddings for semantic similarity search
+    1. ChromaDB vector store for persistent embeddings
     2. AST analysis for code understanding
     
-    All processing is local - no external API calls for indexing.
-    
     Attributes:
-        use_embeddings: Whether to use semantic embeddings (requires sentence-transformers).
-        chunks: List of all file chunks.
-        embeddings: NumPy array of chunk embeddings.
+        use_embeddings: Whether to use semantic embeddings.
         code_analysis: Dictionary mapping file paths to their AST analysis.
-    
-    Example Usage:
-        >>> index = ProjectIndex(use_embeddings=True)
-        >>> index.index_project("/path/to/project", ["app.py", "server.py"])
-        >>> relevant = index.search("database connection", top_k=5)
     """
     
     def __init__(self, use_embeddings: bool = True):
-        """
-        Initialize the project index.
-        
-        Args:
-            use_embeddings: Whether to use semantic embeddings.
-                           If False or sentence-transformers unavailable,
-                           falls back to keyword search.
-        """
         self.use_embeddings = use_embeddings
-        self.chunks: List[FileChunk] = []
-        self.embeddings: Optional[Any] = None  # np.ndarray when numpy is available
         self.code_analysis: Dict[str, FileAnalysis] = {}
-        self.embedder = None
+        self.chunks: List[FileChunk] = []  # Keep in-memory mirror for easy access
+        
+        # Initialize persistent ChromaDB client (Lazy Import)
+        try:
+            import chromadb
+            cache_dir = os.path.join(os.getcwd(), ".dockai", "cache", "chroma")
+            os.makedirs(cache_dir, exist_ok=True)
+            
+            self.client = chromadb.PersistentClient(path=cache_dir)
+            self.collection = self.client.get_or_create_collection(
+                name="project_embeddings",
+                metadata={"hnsw:space": "cosine"}
+            )
+            logger.info(f"Initialized persistent indexing at {cache_dir}")
+        except Exception as e:
+            logger.error(f"Failed to initialize ChromaDB: {e}. Fallback to memory-only.")
+            self.use_embeddings = False
+            self.client = None
+            self.collection = None
         self._model_name = os.getenv("DOCKAI_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+        self.embedder = None
         
         if use_embeddings:
             self._init_embedder()
@@ -266,74 +279,133 @@ class ProjectIndex:
         return os.path.basename(path).lower() in [f.lower() for f in dep_files]
     
     def _build_embeddings(self) -> None:
-        """Build embeddings for all chunks using the local model."""
-        if not self.embedder or not self.chunks:
+        """Build and store embeddings in ChromaDB."""
+        if not self.use_embeddings or not self.chunks or not self.embedder:
             return
+
+        logger.info(f"Processing {len(self.chunks)} chunks for persistent index...")
         
-        logger.info(f"Creating embeddings for {len(self.chunks)} chunks...")
+        # Prepare data for ChromaDB
+        ids = []
+        documents = []
+        metadatas = []
         
-        # Extract text from chunks
-        texts = [chunk.content for chunk in self.chunks]
+        for i, chunk in enumerate(self.chunks):
+            # Create a unique ID for each chunk
+            # Using hash of content + path ensures we don't duplicate indentical chunks
+            chunk_id = f"{chunk.file_path}_{chunk.start_line}_{chunk.end_line}"
+            
+            ids.append(chunk_id)
+            documents.append(chunk.content)
+            
+            # Clean metadata for ChromaDB (must be str, int, float, bool)
+            clean_meta = {
+                "file_path": chunk.file_path,
+                "start_line": chunk.start_line,
+                "end_line": chunk.end_line,
+                "chunk_type": chunk.chunk_type,
+                "is_config": bool(chunk.metadata.get("is_config", False)),
+                "is_dependency": bool(chunk.metadata.get("is_dependency", False)),
+                "is_dockerfile": bool(chunk.metadata.get("is_dockerfile", False))
+            }
+            metadatas.append(clean_meta)
+
+        # Check which chunks already exist to avoid re-embedding
+        # This is a naive check; in production, you'd check file hashes
+        try:
+            existing = self.collection.get(ids=ids, include=[])
+            existing_ids = set(existing['ids'])
+        except Exception:
+            existing_ids = set()
+            
+        # Filter out chunks that are already indexed
+        new_ids = []
+        new_docs = []
+        new_metas = []
         
-        # Create embeddings in batches to manage memory
+        for i, cid in enumerate(ids):
+            if cid not in existing_ids:
+                new_ids.append(cid)
+                new_docs.append(documents[i])
+                new_metas.append(metadatas[i])
+                
+        if not new_ids:
+            logger.info("All chunks already indexed in ChromaDB. utilizing cache.")
+            return
+            
+        logger.info(f"Embedding {len(new_ids)} new chunks...")
+        
+        # Generate embeddings in batches
         batch_size = 32
-        all_embeddings = []
-        
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            batch_embeddings = self.embedder.encode(batch, show_progress_bar=False)
-            all_embeddings.append(batch_embeddings)
-        
-        self.embeddings = np.vstack(all_embeddings)
-        logger.info(f"Created {len(self.embeddings)} embeddings (shape: {self.embeddings.shape})")
-    
+        for i in range(0, len(new_ids), batch_size):
+            end = min(i + batch_size, len(new_ids))
+            batch_docs = new_docs[i:end]
+            batch_ids = new_ids[i:end]
+            batch_metas = new_metas[i:end]
+            
+            # Embed
+            embeddings = self.embedder.encode(batch_docs).tolist()
+            
+            # Add to ChromaDB
+            self.collection.add(
+                ids=batch_ids,
+                documents=batch_docs,
+                embeddings=embeddings,
+                metadatas=batch_metas
+            )
+            
+        logger.info(f"Successfully added {len(new_ids)} chunks to persistent index")
+
     def search(self, query: str, top_k: int = 10) -> List[FileChunk]:
         """
         Search for chunks most relevant to the query.
-        
-        Uses semantic similarity if embeddings are available,
-        otherwise falls back to keyword matching.
-        
-        Args:
-            query: Search query string.
-            top_k: Number of top results to return.
-            
-        Returns:
-            List of FileChunk objects sorted by relevance.
         """
         if not self.chunks:
             return []
         
-        if self.use_embeddings and self.embeddings is not None and self.embedder:
+        if self.use_embeddings and self.collection:
             return self._semantic_search(query, top_k)
         else:
             return self._keyword_search(query, top_k)
     
     def _semantic_search(self, query: str, top_k: int) -> List[FileChunk]:
-        """Perform semantic similarity search using embeddings."""
+        """Perform semantic similarity search using ChromaDB."""
         # Embed the query
-        query_embedding = self.embedder.encode([query], show_progress_bar=False)[0]
+        query_embedding = self.embedder.encode([query]).tolist()
         
-        # Calculate cosine similarity
-        # Normalize vectors for cosine similarity
-        query_norm = query_embedding / np.linalg.norm(query_embedding)
-        embeddings_norm = self.embeddings / np.linalg.norm(self.embeddings, axis=1, keepdims=True)
+        # Query ChromaDB
+        results = self.collection.query(
+            query_embeddings=query_embedding,
+            n_results=top_k,
+            include=["metadatas", "documents", "distances"]
+        )
         
-        similarities = np.dot(embeddings_norm, query_norm)
+        # Reconstruct FileChunk objects from results
+        retrieved_chunks = []
         
-        # Boost scores for important files
-        for i, chunk in enumerate(self.chunks):
-            if chunk.metadata.get("is_dependency"):
-                similarities[i] *= 1.3
-            if chunk.metadata.get("is_dockerfile"):
-                similarities[i] *= 1.5
-            if chunk.metadata.get("is_config"):
-                similarities[i] *= 1.1
-        
-        # Get top-k indices
-        top_indices = np.argsort(similarities)[-top_k:][::-1]
-        
-        return [self.chunks[i] for i in top_indices]
+        if not results['ids']:
+            return []
+            
+        # Results are a list of lists (one list per query)
+        for i in range(len(results['ids'][0])):
+            meta = results['metadatas'][0][i]
+            doc = results['documents'][0][i]
+            
+            chunk = FileChunk(
+                file_path=meta['file_path'],
+                content=doc,
+                start_line=meta['start_line'],
+                end_line=meta['end_line'],
+                chunk_type=meta['chunk_type'],
+                metadata={
+                    "is_config": meta['is_config'],
+                    "is_dependency": meta['is_dependency'],
+                    "is_dockerfile": meta['is_dockerfile']
+                }
+            )
+            retrieved_chunks.append(chunk)
+            
+        return retrieved_chunks
     
     def _keyword_search(self, query: str, top_k: int) -> List[FileChunk]:
         """Fallback keyword-based search."""
@@ -395,7 +467,7 @@ class ProjectIndex:
         return {
             "total_chunks": len(self.chunks),
             "total_files_analyzed": len(self.code_analysis),
-            "embeddings_available": self.embeddings is not None,
+            "embeddings_available": self.collection is not None,
             "embedding_model": self._model_name if self.use_embeddings else None,
             "entry_points": len(self.get_entry_points()),
             "env_vars_detected": len(self.get_all_env_vars()),

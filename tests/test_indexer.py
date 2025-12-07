@@ -298,33 +298,49 @@ class TestProjectIndexWithEmbeddings:
     
     @patch('dockai.utils.indexer.ProjectIndex._init_embedder')
     def test_semantic_search(self, mock_init):
-        """Test semantic search with mocked embeddings."""
-        try:
-            import numpy as np
-        except ImportError:
-            pytest.skip("numpy not available")
-        
+        """Test semantic search with mocked ChromaDB collection."""
         index = ProjectIndex(use_embeddings=True)
         index.use_embeddings = True
         index.embedder = Mock()
+        index.collection = Mock()
         
-        # Setup mock embeddings
-        index.chunks = [
-            FileChunk("app.py", "start the server application", 1, 1, "full", metadata={}),
-            FileChunk("db.py", "connect to database postgres", 1, 1, "full", metadata={}),
-        ]
+        # Mock embedding generation (simulate numpy array with .tolist())
+        mock_embedding = MagicMock()
+        mock_embedding.tolist.return_value = [[0.1, 0.2, 0.3]]
+        index.embedder.encode = Mock(return_value=mock_embedding) 
         
-        # Mock embeddings (2 chunks, 3 dimensions)
-        index.embeddings = np.array([
-            [0.8, 0.1, 0.1],  # app.py - similar to "server"
-            [0.1, 0.8, 0.1],  # db.py - similar to "database"
-        ])
-        
-        # Mock query embedding
-        index.embedder.encode = Mock(return_value=np.array([[0.9, 0.05, 0.05]]))  # Query similar to app.py
+        # Mock ChromaDB query results
+        index.collection.query = Mock(return_value={
+            'ids': [['id1', 'id2']],
+            'documents': [['doc1', 'doc2']],
+            'metadatas': [[
+                {
+                    'file_path': 'app.py', 
+                    'start_line': 1, 
+                    'end_line': 10, 
+                    'chunk_type': 'full',
+                    'is_config': False,
+                    'is_dependency': False,
+                    'is_dockerfile': False
+                },
+                {
+                    'file_path': 'db.py', 
+                    'start_line': 1, 
+                    'end_line': 20, 
+                    'chunk_type': 'full',
+                    'is_config': False,
+                    'is_dependency': False,
+                    'is_dockerfile': False
+                }
+            ]],
+            'distances': [[0.1, 0.2]]
+        })
         
         results = index._semantic_search("start server", top_k=2)
         
         assert len(results) == 2
-        # app.py should be more relevant
         assert results[0].file_path == "app.py"
+        assert results[1].file_path == "db.py"
+        
+        # Verify collection was queried
+        index.collection.query.assert_called_once()
