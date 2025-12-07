@@ -1023,16 +1023,16 @@ def validate_node(state: DockAIState) -> DockAIState:
         no_cache = config.get("no_cache", False)
         
         success, message, image_size, classified_error = validate_docker_build_and_run(
-            path, 
-            project_type, 
-            stack, 
-            health_endpoint, 
-            recommended_wait_time,
-            readiness_patterns=readiness_patterns,
-            failure_patterns=failure_patterns,
-            no_cache=no_cache
+            directory=path,
+            project_type=project_type,
+            stack=stack,
+            health_endpoint=health_endpoint,
+            recommended_wait_time=recommended_wait_time,
+            readiness_patterns=analysis_result.get("readiness_patterns"),
+            failure_patterns=analysis_result.get("failure_patterns"),
+            no_cache=True if state.get("retry_count", 0) > 0 else False,
+            analysis_result=analysis_result
         )
-        
         # Store classified error details for better error handling
         error_details = None
         

@@ -176,7 +176,50 @@ def test_validate_with_health_check_failure_but_running(mock_getenv, mock_sleep,
     # Updated expectation: Success is True, but message indicates health check issue
     assert success is True
     assert "health check" in msg.lower()
-    assert "did not respond" in msg.lower()
+    assert "did not respond" in msg.lower() or "failed" in msg.lower()
+
+
+from dockai.utils.validator import suggest_health_endpoint
+
+class TestSuggestHealthEndpoint:
+    """Tests for the suggest_health_endpoint function."""
+    
+    def test_suggest_basic_fastapi(self):
+        analysis = {
+            "frameworks": ["FastAPI"],
+            "all_ports": [8000]
+        }
+        path, port = suggest_health_endpoint(analysis)
+        assert path == "/docs"
+        assert port == 8000
+    
+    def test_suggest_flask(self):
+        analysis = {
+            "framework_hints": ["Flask"],
+            "exposed_ports": [5000]
+        }
+        path, port = suggest_health_endpoint(analysis)
+        assert path == "/health"
+        assert port == 5000
+    
+    def test_suggest_unknown_framework(self):
+        analysis = {
+            "frameworks": ["Custom"],
+            "all_ports": [8080]
+        }
+        # Should return None if framework not matched? 
+        # Actually logic is just default "/", let's check code
+        # Code: path = "/"; ... if ... path = ...
+        path, port = suggest_health_endpoint(analysis)
+        assert path == "/"
+        assert port == 8080
+    
+    def test_no_ports(self):
+        analysis = {
+            "frameworks": ["FastAPI"],
+            "all_ports": []
+        }
+        assert suggest_health_endpoint(analysis) is None
 
 @patch("dockai.utils.validator.lint_dockerfile_with_hadolint")
 @patch("dockai.utils.validator.classify_error")

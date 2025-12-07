@@ -232,6 +232,56 @@ def check_health_endpoint(container_name: str, endpoint: str, port: int, max_att
     return False
 
 
+    return False
+    
+    
+def suggest_health_endpoint(analysis_result: dict) -> Optional[Tuple[str, int]]:
+    """
+    Infer a likely health endpoint based on stack and ports.
+    
+    This function uses expert knowledge about frameworks to guess where 
+    the health check or documentation endpoint might be.
+    """
+    if not analysis_result:
+        return None
+        
+    frameworks = analysis_result.get("frameworks", []) or analysis_result.get("framework_hints", [])
+    ports = analysis_result.get("all_ports", []) or analysis_result.get("exposed_ports", [])
+    
+    # If explicit exposed_ports didn't find anything, try parsing logic from code intelligence
+    # But usually analysis_result comes from analyzer.py which aggregates it
+    
+    if not ports:
+        return None
+        
+    port = int(ports[0]) # Pick first port
+    
+    path = "/" # Default root
+    
+    # Framework-specific heuristics
+    # Normalize frameworks to lower case for check
+    fw_lower = [str(f).lower() for f in frameworks]
+    
+    if any("fastapi" in f for f in fw_lower):
+        path = "/docs" # FastAPI docs are reliable 200 OK
+    elif any("flask" in f for f in fw_lower):
+        path = "/health" # Common convention
+    elif any("django" in f for f in fw_lower):
+        path = "/admin/login/" # Redirects (302) or 200
+    elif any("spring" in f for f in fw_lower) and "boot" in str(frameworks).lower():
+        path = "/actuator/health"
+    elif any("express" in f for f in fw_lower):
+        path = "/"
+    elif any("nest" in f for f in fw_lower):
+        path = "/"
+    elif any("next" in f for f in fw_lower):
+        path = "/"
+    elif any("gin" in f for f in fw_lower):
+        path = "/ping" # Common gin example
+        
+    return (path, port)
+
+
 def validate_docker_build_and_run(
     directory: str, 
     project_type: str = "service",
@@ -240,7 +290,8 @@ def validate_docker_build_and_run(
     recommended_wait_time: int = 5,
     readiness_patterns: List[str] = None,
     failure_patterns: List[str] = None,
-    no_cache: bool = False
+    no_cache: bool = False,
+    analysis_result: dict = None
 ) -> Tuple[bool, str, int, Optional[ClassifiedError]]:
     """
     Builds and runs the Dockerfile in the given directory to verify it works.
@@ -416,9 +467,23 @@ def validate_docker_build_and_run(
                 if skip_health_check:
                     logger.info("Health check skipped (DOCKAI_SKIP_HEALTH_CHECK=true)")
                 else:
-                    logger.info("No health endpoint configured - skipping health check")
-                success = True
-                message = "Service is running successfully."
+                    # Auto-suggest phase
+                    suggested = suggest_health_endpoint(analysis_result)
+                    if suggested:
+                        s_path, s_port = suggested
+                        logger.info(f"No explicit health endpoint, but auto-detected stack. Trying derived endpoint: {s_path}:{s_port}")
+                        if check_health_endpoint(container_name, s_path, s_port):
+                            success = True
+                            message = f"Service is running and auto-detected health check passed ({s_path})."
+                        else:
+                             # Don't fail if auto-detected one misses, just warn
+                             logger.warning(f"Auto-detected health check at {s_path} failed, but service is running.")
+                             success = True
+                             message = f"Service is running. (Auto-check at {s_path} failed, verify endpoint)."
+                    else:
+                        logger.info("No health endpoint configured or auto-detected - skipping health check")
+                        success = True
+                        message = "Service is running successfully."
         else:
             success = False
             from ..core.agent_context import AgentContext
