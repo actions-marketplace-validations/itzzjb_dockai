@@ -102,7 +102,7 @@ def get_docker_tags(image_name: str, limit: int = 5, target_version: Optional[st
             
         else:
             logger.debug(f"Fetching tags from Docker Hub for: {base_image}")
-            tags = _fetch_docker_hub_tags(base_image)
+            tags = _fetch_docker_hub_tags(base_image, target_version)
 
         if not tags:
             logger.debug(f"No tags found for {base_image} - will use AI-suggested tags without verification")
@@ -119,15 +119,26 @@ def get_docker_tags(image_name: str, limit: int = 5, target_version: Optional[st
         return []
 
 
-def _fetch_docker_hub_tags(image_name: str) -> List[str]:
+def _fetch_docker_hub_tags(image_name: str, target_version: Optional[str] = None) -> List[str]:
     """
-    Fetch tags from Docker Hub using both v2 Registry API and Hub API.
+    Fetch tags from Docker Hub using Hub API (with filter) and Registry v2 API (fallback).
     
     Docker Hub has two APIs:
-    1. Registry API (registry-1.docker.io) - OCI standard, requires token
-    2. Hub API (hub.docker.com) - Docker's proprietary API
+    1. Hub API (hub.docker.com) - Supports name= filter, efficient for targeted searches
+    2. Registry API (registry-1.docker.io) - Returns ALL tags, comprehensive fallback
     
-    We try the Hub API first (simpler), then fall back to Registry API if needed.
+    Strategy:
+    - If target_version is provided (from AI suggestion), use Hub API with name= filter
+      This is efficient and returns only relevant tags (~100 filtered results)
+    - If Hub API fails or returns no results, fall back to Registry v2 API which
+      returns ALL tags (comprehensive but returns thousands)
+    
+    This approach minimizes token waste by leveraging the AI's version suggestion
+    to filter at the API level.
+    
+    Args:
+        image_name: The image name (e.g., 'node', 'python')
+        target_version: Optional version to filter for (e.g., '18', '3.11')
     """
     # Handle official images (e.g., 'node' -> 'library/node')
     hub_image_name = image_name
@@ -136,26 +147,62 @@ def _fetch_docker_hub_tags(image_name: str) -> List[str]:
     elif hub_image_name.startswith("docker.io/"):
         hub_image_name = hub_image_name.replace("docker.io/", "")
     
-    # Try Docker Hub API first (easier, no auth needed for public images)
-    tags = _fetch_docker_hub_api(hub_image_name)
+    # Try Hub API first with name= filter (efficient when target_version is known)
+    tags = _fetch_docker_hub_api(hub_image_name, target_version)
     if tags:
         return tags
     
-    # Fallback to Registry v2 API with token auth
-    logger.debug(f"Hub API failed for {hub_image_name}, trying Registry API...")
+    # Fallback to Registry v2 API (returns ALL tags - comprehensive but larger response)
+    logger.debug(f"Hub API returned no results for {hub_image_name}, trying Registry v2 API...")
     return _fetch_docker_registry_v2_tags(hub_image_name)
 
 
-def _fetch_docker_hub_api(hub_image_name: str) -> List[str]:
-    """Fetch tags using Docker Hub's proprietary API."""
+def _fetch_docker_hub_api(hub_image_name: str, target_version: Optional[str] = None) -> List[str]:
+    """
+    Fetch tags using Docker Hub's proprietary API.
+    
+    The Docker Hub API supports a 'name' query parameter to filter tags.
+    This is critical for finding older LTS versions like Node 18 that may
+    not appear in the first 100 most recent tags.
+    
+    Strategy:
+    - If target_version is provided, use name= filter to get matching tags
+    - If filter returns nothing (AI suggested non-existent version), return empty
+      so the caller can fall back to Registry v2 for ALL tags
+    - The AI can then pick the correct version from the complete tag list
+    
+    Args:
+        hub_image_name: The full image name (e.g., 'library/node')
+        target_version: Optional version to filter for (e.g., '18', '3.11')
+    """
     url = f"https://hub.docker.com/v2/repositories/{hub_image_name}/tags"
     
+    # Build query params - use 'name' filter if target_version is specified
+    params = {"page_size": 100}
+    if target_version:
+        # Filter tags containing the target version (e.g., '18' matches '18-alpine', '18.20.8')
+        params["name"] = target_version
+        logger.debug(f"Docker Hub: Filtering tags with name={target_version}")
+    
     try:
-        response = httpx.get(url, params={"page_size": 100}, timeout=10.0)
+        response = httpx.get(url, params=params, timeout=10.0)
         
         if response.status_code == 200:
             results = response.json().get("results", [])
-            return [r["name"] for r in results]
+            tags = [r["name"] for r in results]
+            
+            # If we filtered by version and got results, we're done
+            if target_version and tags:
+                logger.debug(f"Docker Hub: Found {len(tags)} tags matching '{target_version}'")
+                return tags
+            
+            # If filtered search returned nothing, return empty to trigger Registry v2 fallback
+            # This happens when AI suggests a non-existent version
+            if target_version and not tags:
+                logger.info(f"Docker Hub: No tags found matching '{target_version}' - will fetch ALL tags")
+                return []  # Caller will fall back to Registry v2 for complete tag list
+            
+            return tags
         elif response.status_code == 404:
             logger.debug(f"Docker Hub: Image '{hub_image_name}' not found (404)")
         elif response.status_code == 429:
@@ -237,28 +284,54 @@ def _fetch_gcr_tags(image_name: str) -> List[str]:
 
 
 def _fetch_quay_tags(image_name: str) -> List[str]:
-    """Fetch tags from Quay.io."""
+    """
+    Fetch tags from Quay.io.
+    
+    Quay.io uses pagination (50 tags per page). We fetch all pages to get
+    the complete tag list, similar to how we handle Docker Hub.
+    """
     # Format: quay.io/namespace/image
     repo_path = image_name.split("/", 1)[1] if "/" in image_name else image_name
-    url = f"https://quay.io/api/v1/repository/{repo_path}/tag"
+    base_url = f"https://quay.io/api/v1/repository/{repo_path}/tag/"
+    
+    all_tags = []
+    page = 1
+    max_pages = 20  # Safety limit to prevent infinite loops
     
     try:
-        response = httpx.get(url, timeout=10.0)
-        if response.status_code == 200:
-            data = response.json().get("tags", [])
-            return [t["name"] for t in data]
-        elif response.status_code == 404:
-            logger.debug(f"Quay: Image '{image_name}' not found (404)")
-        elif response.status_code == 401:
-            logger.debug(f"Quay: Authentication required for '{image_name}' (401)")
-        else:
-            logger.debug(f"Quay API returned {response.status_code} for {image_name}")
+        while page <= max_pages:
+            params = {"page": page}
+            response = httpx.get(base_url, params=params, timeout=10.0, follow_redirects=True)
+            
+            if response.status_code == 200:
+                data = response.json()
+                tags = data.get("tags", [])
+                all_tags.extend([t["name"] for t in tags])
+                
+                # Check if there are more pages
+                if not data.get("has_additional", False):
+                    break
+                page += 1
+            elif response.status_code == 404:
+                logger.debug(f"Quay: Image '{image_name}' not found (404)")
+                break
+            elif response.status_code == 401:
+                logger.debug(f"Quay: Authentication required for '{image_name}' (401)")
+                break
+            else:
+                logger.debug(f"Quay API returned {response.status_code} for {image_name}")
+                break
+                
+        if all_tags:
+            logger.debug(f"Quay: Fetched {len(all_tags)} tags across {page} page(s)")
+        return all_tags
+        
     except httpx.TimeoutException:
         logger.debug(f"Quay API timeout for {image_name}")
     except Exception as e:
         logger.debug(f"Quay API error for {image_name}: {e}")
     
-    return []
+    return all_tags if all_tags else []
 
 
 def _fetch_ghcr_tags(image_name: str) -> List[str]:

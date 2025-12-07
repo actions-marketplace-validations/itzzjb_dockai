@@ -695,16 +695,42 @@ else:
 
 ### `dockai.utils.registry`
 
+#### `get_docker_tags(image_name: str, limit: int = 5, target_version: str = None) -> List[str]`
+
+Fetches valid tags for a Docker image from supported registries.
+
+**Supported registries**:
+- Docker Hub (with smart filtering)
+- Google Container Registry (GCR)
+- GitHub Container Registry (GHCR)
+- Quay.io (with full pagination)
+- AWS ECR (limited - requires AWS credentials)
+
+**Smart Tag Fetching Strategy**:
+
+DockAI uses an intelligent approach to fetch tags efficiently:
+
+1. **Docker Hub**: Uses the `name=` filter parameter when `target_version` is specified (e.g., AI suggests "node:18"), returning only matching tags (~100 filtered results). If no matches found, falls back to Registry v2 API which returns ALL tags (8,000+).
+
+2. **Quay.io**: Paginates through all pages (50 tags/page) to get the complete tag list.
+
+3. **GCR/GHCR**: Uses OCI v2 API which returns all tags in a single request.
+
+```python
+from dockai.utils.registry import get_docker_tags
+
+# Get tags for Node.js, filtering for version 18
+tags = get_docker_tags("node", target_version="18")
+# Returns: ["node:18-alpine", "node:18.20.8-alpine", "node:18-slim", ...]
+
+# Get tags for Python without filtering
+tags = get_docker_tags("python")
+# Returns most recent tags with alpine/slim prioritized
+```
+
 #### `verify_image_tag(image: str, tag: str) -> bool`
 
 Verifies a Docker image tag exists in the registry.
-
-**Supported registries**:
-- Docker Hub
-- Google Container Registry (GCR)
-- GitHub Container Registry (GHCR)
-- Quay.io
-- AWS ECR (limited)
 
 ```python
 from dockai.utils.registry import verify_image_tag

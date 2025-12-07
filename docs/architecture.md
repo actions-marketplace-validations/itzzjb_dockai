@@ -643,15 +643,27 @@ Script projects automatically skip expensive steps:
 
 **Time Savings**: 30-40% for script projects.
 
-### 5. Registry Tag Caching
+### 5. Smart Registry Tag Fetching
 
-Docker tag lookups are cached with `@lru_cache`:
+Docker tag lookups use intelligent filtering to minimize token usage:
 
 ```python
 @lru_cache(maxsize=128)
-def get_docker_tags(image: str) -> List[str]:
-    # Cached for the duration of the run
+def get_docker_tags(image: str, target_version: str = None) -> List[str]:
+    # 1. If target_version provided (e.g., "18" for Node), use API filter
+    # 2. If filter returns nothing (wrong version), fetch ALL tags
+    # 3. Cache results for the duration of the run
 ```
+
+**Registry-Specific Strategies**:
+
+| Registry | Strategy |
+|----------|----------|
+| **Docker Hub** | `name=` filter for ~100 targeted results, falls back to ALL tags (8,000+) if needed |
+| **Quay.io** | Full pagination through all pages (50/page) |
+| **GCR/GHCR** | OCI v2 API returns all tags in single request |
+
+**Token Savings**: Only passes ~100 filtered tags to AI instead of thousands.
 
 ---
 
