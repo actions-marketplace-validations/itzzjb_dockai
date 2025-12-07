@@ -12,6 +12,7 @@ from dockai.utils.code_intelligence import (
     analyze_python_file,
     analyze_javascript_file,
     analyze_go_file,
+    analyze_generic_file,
     analyze_project,
     get_project_summary,
     CodeSymbol,
@@ -266,9 +267,48 @@ port := os.Getenv("PORT")
 dbUrl, exists := os.LookupEnv("DATABASE_URL")
 '''
         analysis = analyze_go_file("config.go", code)
-        
+
         assert "PORT" in analysis.env_vars
         assert "DATABASE_URL" in analysis.env_vars
+
+
+class TestGenericAnalysis:
+    """Tests for Generic fallback analysis."""
+    
+    def test_ruby_file(self):
+        """Test generic analysis on a Ruby file."""
+        code = """
+        ENV['DATABASE_URL']
+        port = 4567
+        """
+        analysis = analyze_generic_file("app.rb", code)
+        assert analysis.language == "rb"
+        assert "DATABASE_URL" in analysis.env_vars
+        assert 4567 in analysis.exposed_ports
+        
+    def test_shell_script_shebang(self):
+        """Test language detection from shebang."""
+        code = "#!/bin/bash\nexport API_KEY=123"
+        analysis = analyze_generic_file("script.sh", code)
+        assert analysis.language == "shell"
+        assert "API_KEY" in analysis.env_vars
+        
+    def test_rust_file(self):
+        """Test generic analysis on a Rust file."""
+        code = """
+        let port: u16 = 8080;
+        let db = std::env::var("POSTGRES_DB").unwrap();
+        """
+        analysis = analyze_generic_file("main.rs", code)
+        assert analysis.language == "rs"
+        assert "POSTGRES_DB" in analysis.env_vars
+        assert 8080 in analysis.exposed_ports
+        
+    def test_noise_filtering(self):
+        """Test that common keywords are not picked up as env vars."""
+        code = "JSON HTTP HTML TODO STDOUT"
+        analysis = analyze_generic_file("test.txt", code)
+        assert not analysis.env_vars  # Should be empty
 
 
 class TestAnalyzeFile:
@@ -299,9 +339,11 @@ class TestAnalyzeFile:
         assert analysis.language == "go"
     
     def test_unsupported_file(self):
-        """Test that unsupported files return None."""
-        analysis = analyze_file("styles.css", "body { color: red; }")
-        assert analysis is None
+        """Test generic analysis fallback."""
+        analysis = analyze_file("config.custom", "PORT_NUM = 8080")
+        assert analysis is not None
+        assert analysis.language == "custom"
+        assert 8080 in analysis.exposed_ports
     
     def test_jsx_file(self):
         """Test JSX file dispatch."""
@@ -309,6 +351,49 @@ class TestAnalyzeFile:
         assert analysis is not None
         assert analysis.language == "javascript"
 
+
+class TestManifestAnalysis:
+    """Tests for manifest file analysis (package.json, go.mod, etc)."""
+
+    def test_package_json(self):
+        content = """{
+  "dependencies": {
+    "express": "^4.17.1",
+    "react": "^17.0.2"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}"""
+        analysis = analyze_file("package.json", content)
+        assert "Express" in analysis.framework_hints
+        assert "React" in analysis.framework_hints
+        assert any("node server.js" in ep for ep in analysis.entry_points)
+
+    def test_go_mod(self):
+        content = """
+        module example.com/app
+        
+        go 1.16
+        
+        require (
+            github.com/gin-gonic/gin v1.7.2
+            github.com/davecgh/go-spew v1.1.1
+        )
+        """
+        analysis = analyze_file("go.mod", content)
+        assert "Gin" in analysis.framework_hints
+
+    def test_requirements_txt(self):
+        content = """
+        flask==2.0.1
+        gunicorn
+        Django>=3.2
+        psycopg2
+        """
+        analysis = analyze_file("requirements.txt", content)
+        assert "Flask" in analysis.framework_hints
+        assert "Django" in analysis.framework_hints
 
 class TestProjectAnalysis:
     """Tests for project-wide analysis."""

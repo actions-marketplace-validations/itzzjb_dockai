@@ -454,6 +454,7 @@ def analyze_file(filepath: str, content: str) -> Optional[FileAnalysis]:
         FileAnalysis object if the file type is supported, None otherwise.
     """
     ext = os.path.splitext(filepath)[1].lower()
+    filename = os.path.basename(filepath)
     
     # Python
     if ext == ".py":
@@ -466,9 +467,187 @@ def analyze_file(filepath: str, content: str) -> Optional[FileAnalysis]:
     # Go
     if ext == ".go":
         return analyze_go_file(filepath, content)
+        
+    # Manifest Files (Better Framework Detection)
+    if filename == "package.json":
+        return analyze_package_json(filepath, content)
+    if filename == "go.mod":
+        return analyze_go_mod(filepath, content)
+    if filename == "requirements.txt":
+        return analyze_requirements_txt(filepath, content)
+    if filename == "pyproject.toml":
+        return analyze_pyproject_toml(filepath, content)
     
-    # Unsupported file type
-    return None
+    # Generic analysis for all other text-based files
+    return analyze_generic_file(filepath, content)
+
+
+def analyze_package_json(filepath: str, content: str) -> FileAnalysis:
+    """Analyze package.json for JS/TS frameworks."""
+    analysis = FileAnalysis(path=filepath, language="json")
+    try:
+        # Simple string matching to avoid json parse errors on loose files
+        # framework_map key: (dependency_name, Display Name)
+        frameworks = {
+            '"express"': "Express",
+            '"@nestjs/core"': "NestJS",
+            '"next"': "Next.js",
+            '"nuxt"': "Nuxt.js",
+            '"react"': "React",
+            '"vue"': "Vue",
+            '"svelte"': "Svelte",
+            '"@sveltejs/kit"': "SvelteKit",
+            '"fastify"': "Fastify",
+            '"koa"': "Koa",
+            '"hapi"': "Hapi",
+            '"@remix-run/node"': "Remix",
+            '"astro"': "Astro",
+            '"adonis"': "AdonisJS",
+            '"meteor"': "Meteor"
+        }
+        
+        for key, name in frameworks.items():
+            if key in content:
+                analysis.framework_hints.append(name)
+                
+        # Also Extract scripts as "entry points" hints
+        if '"start":' in content:
+            # simple extraction
+            start_script = re.search(r'"start":\s*"([^"]+)"', content)
+            if start_script:
+                analysis.entry_points.append(f"npm run start ({start_script.group(1)})")
+                
+    except Exception as e:
+        logger.debug(f"Error parsing package.json: {e}")
+        
+    return analysis
+
+
+def analyze_go_mod(filepath: str, content: str) -> FileAnalysis:
+    """Analyze go.mod for Go frameworks."""
+    analysis = FileAnalysis(path=filepath, language="go-mod")
+    
+    frameworks = {
+        'github.com/gin-gonic/gin': 'Gin',
+        'github.com/labstack/echo': 'Echo',
+        'github.com/gofiber/fiber': 'Fiber',
+        'github.com/go-chi/chi': 'Chi',
+        'github.com/beego/beego': 'Beego',
+        'github.com/revel/revel': 'Revel',
+        'github.com/kataras/iris': 'Iris',
+        'github.com/gorilla/mux': 'Gorilla Mux'
+    }
+    
+    for pkg, name in frameworks.items():
+        if pkg in content:
+            analysis.framework_hints.append(name)
+            
+    return analysis
+
+
+def analyze_requirements_txt(filepath: str, content: str) -> FileAnalysis:
+    """Analyze requirements.txt for Python frameworks."""
+    analysis = FileAnalysis(path=filepath, language="pip-requirements")
+    
+    frameworks = {
+        'fastapi': 'FastAPI',
+        'flask': 'Flask',
+        'django': 'Django',
+        'pyramid': 'Pyramid',
+        'bottle': 'Bottle',
+        'tornado': 'Tornado',
+        'falcon': 'Falcon',
+        'sanic': 'Sanic',
+        'starlette': 'Starlette',
+        'litestar': 'Litestar',
+        'quart': 'Quart',
+        'streamlit': 'Streamlit',
+        'dash': 'Dash'
+    }
+    
+    # Case insensitive search
+    content_lower = content.lower()
+    for pkg, name in frameworks.items():
+        # Match start of line, optional whitespace, package name, boundary
+        if re.search(rf'^\s*{pkg}\b', content_lower, re.MULTILINE):
+            analysis.framework_hints.append(name)
+            
+    return analysis
+
+
+def analyze_pyproject_toml(filepath: str, content: str) -> FileAnalysis:
+    """Analyze pyproject.toml for Python frameworks."""
+    # Similar to requirements but looks for key names
+    analysis = FileAnalysis(path=filepath, language="toml")
+    
+    # Re-use logic mostly
+    return analyze_requirements_txt(filepath, content)
+
+
+
+
+def analyze_generic_file(filepath: str, content: str) -> FileAnalysis:
+    """
+    Perform generic analysis on any text file using universal patterns.
+    
+    This ensures DockAI supports "every language there was and will be"
+    by falling back to identifying common concepts like:
+    - Environment variables (caps with underscores)
+    - Port numbers
+    - Framework hints (based on common keywords)
+    
+    Args:
+        filepath: Relative path to the file.
+        content: File content as string.
+        
+    Returns:
+        FileAnalysis object with generic metadata.
+    """
+    ext = os.path.splitext(filepath)[1].lower().replace('.', '') or "unknown"
+    analysis = FileAnalysis(path=filepath, language=ext)
+    
+    # Generic Env Var detection (SCREAMING_SNAKE_CASE)
+    # Matches words with at least one underscore, all caps, length > 3
+    # e.g., DATABASE_URL, API_KEY_V1
+    env_pattern = r'\b[A-Z][A-Z0-9_]*_[A-Z0-9_]+\b'
+    potential_envs = re.findall(env_pattern, content)
+    
+    # Filter out common noise
+    noise = {'STDIN', 'STDOUT', 'STDERR', 'UTF8', 'UUID', 'JSON', 'HTML', 'HTTP', 'HTTPS', 'TODO', 'FIXME'}
+    analysis.env_vars = list(set([e for e in potential_envs if e not in noise]))
+    
+    # Generic Port detection (1024-65535)
+    # Look for assignment-like patterns: port = 8080, port: 8080, port: u16 = 8080
+    # We allow some characters between 'port' and the number to handle type hints
+    port_pattern = r'(?i)port.{0,20}[=:]\s*(\d{4,5})'
+    for match in re.finditer(port_pattern, content):
+        try:
+            port = int(match.group(1))
+            if 1024 <= port <= 65535:
+                # Avoid year-like numbers if possible (2020-2030), though hard to distinguish
+                analysis.exposed_ports.append(port)
+        except:
+            pass
+            
+    analysis.exposed_ports = list(set(analysis.exposed_ports))
+    
+    # Simple Framework/Language Hinting based on Shebang
+    if content.startswith('#!'):
+        first_line = content.split('\n')[0]
+        if 'python' in first_line:
+            analysis.language = 'python'
+        elif 'node' in first_line:
+            analysis.language = 'javascript'
+        elif 'bash' in first_line or 'sh' in first_line:
+            analysis.language = 'shell'
+        elif 'ruby' in first_line:
+            analysis.language = 'ruby'
+        elif 'perl' in first_line:
+            analysis.language = 'perl'
+        elif 'php' in first_line:
+            analysis.language = 'php'
+            
+    return analysis
 
 
 def analyze_project(root_path: str, file_tree: List[str]) -> Dict[str, FileAnalysis]:

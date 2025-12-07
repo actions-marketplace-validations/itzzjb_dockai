@@ -697,7 +697,7 @@ flowchart TB
 
 | Module | Purpose | Cost |
 |--------|---------|------|
-| `code_intelligence.py` | AST parsing for Python, JS, Go | FREE (local) |
+| `code_intelligence.py` | AST parsing (Python, JS, Go) + Generic Fallback | FREE (local) |
 | `indexer.py` | Semantic search with embeddings | FREE (local HuggingFace model) |
 | `context_retriever.py` | Combines AST + search for optimal context | FREE |
 

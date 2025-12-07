@@ -101,6 +101,19 @@ That's it. DockAI handles the rest.
   </tr>
 </table>
 
+<br/>
+
+## 🛠️ Supported Code Intelligence
+
+DockAI uses advanced AST analysis for primary languages and generic heuristics for everything else.
+
+| Language | Deep Support (AST + Manifests) |
+|----------|---------------------------------|
+| **Python** | FastAPI, Flask, Django, Starlette, Litestar, Tornado, +10 more |
+| **Node.js** | Express, NestJS, Next.js, Nuxt, React, Vue, SvelteKit, Remix, Astro |
+| **Go** | Gin, Echo, Fiber, Chi, Beego, Revel, Iris |
+| **Universal** | **Any language** (Ruby, Rust, PHP, etc.) via generic analysis |
+
 ---
 
 ## 🚀 Three Ways to Use DockAI
