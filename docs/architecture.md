@@ -102,22 +102,23 @@ flowchart TD
     ReadFiles --> Blueprint[blueprint_node<br/>Chief Architect<br/><i>Plans build strategy</i>]
     Blueprint --> Generate[generate_node<br/>Dockerfile Builder<br/><i>Creates Dockerfile</i>]
     
-    Generate --> ShouldReview{Should<br/>Review?}
-    ShouldReview -->|security_review_needed| Review[review_node<br/>Security Auditor]
-    ShouldReview -->|skip_review| Validate
+    Generate --> Review[review_node<br/>Security Auditor]
     
-    Review --> Validate[validate_node<br/>Test Engineer<br/><i>Docker build + validation</i>]
+    Review --> CheckSecurity{Check<br/>Security}
+    CheckSecurity -->|security_passed| Validate
+    CheckSecurity -->|security_failed| Reflect
+    CheckSecurity -->|max_retries| Stop([END<br/>✗ Max Retries])
     
-    Validate --> ShouldRetry{Should<br/>Retry?}
+    Validate[validate_node<br/>Test Engineer<br/><i>Docker build + validation</i>] --> ShouldRetry{Should<br/>Retry?}
     ShouldRetry -->|success| End([END<br/>✓ Dockerfile Ready])
     ShouldRetry -->|failure| Reflect[reflect_node<br/>Post-Mortem Analyst<br/><i>Analyzes failure</i>]
-    ShouldRetry -->|max_retries| Stop([END<br/>✗ Max Retries])
+    ShouldRetry -->|max_retries| Stop
     
-    Reflect --> NeedsReanalysis{Needs<br/>Reanalysis?}
+    Reflect --> Increment[increment_retry<br/>Update retry count]
+    Increment --> NeedsReanalysis{Needs<br/>Reanalysis?}
     NeedsReanalysis -->|fundamental_issue| Analyze
-    NeedsReanalysis -->|fixable_error| Increment[increment_retry<br/>Update retry count]
-    
-    Increment --> Generate
+    NeedsReanalysis -->|strategy_change| Blueprint
+    NeedsReanalysis -->|fixable_error| Generate
     
     style Start stroke:#333,stroke-width:2px
     style End stroke:#333,stroke-width:2px
@@ -131,7 +132,7 @@ flowchart TD
     style Validate stroke:#333,stroke-width:2px
     style Reflect stroke:#333,stroke-width:2px
     style Increment stroke:#333,stroke-width:2px
-    style ShouldReview stroke:#333,stroke-width:2px,stroke-dasharray:5 5
+    style CheckSecurity stroke:#333,stroke-width:2px,stroke-dasharray:5 5
     style ShouldRetry stroke:#333,stroke-width:2px,stroke-dasharray:5 5
     style NeedsReanalysis stroke:#333,stroke-width:2px,stroke-dasharray:5 5
 ```
