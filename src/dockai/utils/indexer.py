@@ -95,6 +95,11 @@ class ProjectIndex:
         # Initialize embedding model immediately since it's a core dependency
         if use_embeddings:
             try:
+                # Suppress HuggingFace tokenizers fork warning
+                # This warning appears because we fork Docker processes after loading the model
+                # Setting this to "false" prevents warnings without affecting functionality
+                os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+                
                 self.embedder = SentenceTransformer(self._model_name)
                 logger.info(f"Loaded local embedding model: {self._model_name}")
             except Exception as e:
