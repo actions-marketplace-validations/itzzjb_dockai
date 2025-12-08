@@ -536,7 +536,8 @@ def analyze_package_json(filepath: str, content: str) -> FileAnalysis:
     for fw in JS_CONFIG.frameworks:
         for pattern in fw.import_patterns:
             # Search for dependency names
-            dep_pattern = f'"{pattern.replace(r"\\b", "")}"'
+            clean_pattern = pattern.replace(r"\\b", "")
+            dep_pattern = f'"{clean_pattern}"'
             if re.search(dep_pattern, content):
                 analysis.framework_hints.append(fw.name)
     
