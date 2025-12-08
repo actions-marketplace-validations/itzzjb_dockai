@@ -189,7 +189,7 @@ Claude: [Uses DockAI MCP] I'll generate a Dockerfile for your project...
 - Integration with Claude Desktop, VSCode, and other MCP clients
 - Conversational containerization workflow
 
-**Learn more:** Check the [MCP documentation](https://modelcontextprotocol.io) and DockAI's MCP integration
+**Learn more:** [MCP Integration Guide](docs/mcp-integration.md)
 
 ---
 
@@ -284,6 +284,7 @@ Comprehensive documentation is available in the [`docs/`](docs/) directory:
 - **[Configuration](docs/configuration.md)** - All environment variables and customization options
 - **[LLM Providers](docs/llm-providers.md)** - Setting up different LLM providers
 - **[GitHub Actions](docs/github-actions.md)** - Using DockAI in CI/CD pipelines
+- **[MCP Integration](docs/mcp-integration.md)** - Using DockAI with Model Context Protocol
 - **[API Reference](docs/api-reference.md)** - Code-level documentation
 - **[FAQ](docs/faq.md)** - Common questions and troubleshooting
 
@@ -382,15 +383,6 @@ pytest --cov=src/dockai --cov-report=html
 ## 🤝 Contributing
 
 Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-## 📊 Performance
-
-DockAI v4.0 has been tested on hundreds of real-world projects:
-
-- **Success Rate**: ~95% on first attempt
-- **Average Generation Time**: 30-90 seconds
-- **Token Efficiency**: 70% reduction via RAG (vs. v3.x)
-- **Security**: 100% Hadolint compliance, 98% Trivy pass rate
 
 ## 🗺️ Roadmap
 

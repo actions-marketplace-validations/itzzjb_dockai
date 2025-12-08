@@ -123,7 +123,7 @@ export DOCKAI_SKIP_SECURITY_SCAN="true"
 **RAG (Retrieval-Augmented Generation)** is a technique where relevant context is retrieved from a knowledge base before sending it to the LLM.
 
 **Why DockAI uses RAG:**
-- **Token Efficiency**: Only send relevant files (70% reduction vs. v3.x)
+- **Precision**: Better Dockerfiles due to relevant context
 - **Better Quality**: LLM gets focused context, not 10,000 lines of irrelevant code
 - **Scalability**: Works on large projects (1000+ files)
 

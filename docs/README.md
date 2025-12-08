@@ -15,6 +15,7 @@ Welcome to the DockAI documentation! This guide will help you understand and use
 
 ### Integration & Advanced
 - **[GitHub Actions](github-actions.md)** - Using DockAI in CI/CD pipelines
+- **[MCP Integration](mcp-integration.md)** - Using DockAI with Model Context Protocol (Claude Desktop, VSCode, etc.)
 - **[API Reference](api-reference.md)** - Code-level documentation for developers
 
 ## 🚀 Quick Links
@@ -111,7 +112,7 @@ For more: [Full FAQ](faq.md)
 ## 🏗️ Architecture Highlights
 
 ### v4.0 Improvements
-- **RAG-Based Context**: 70% token reduction vs. v3.x
+- **RAG-Based Context**: Intelligent semantic search for targeted context retrieval
 - **Multi-Agent System**: 8 specialized agents for different tasks
 - **Adaptive Learning**: AI analyzes failures and tries new strategies
 - **LangGraph Orchestration**: Sophisticated workflow with conditional routing

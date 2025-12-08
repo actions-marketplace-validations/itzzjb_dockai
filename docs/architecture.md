@@ -24,7 +24,6 @@ DockAI v4.0 represents a complete architectural overhaul from v3.x, transitionin
 2. **Multi-Agent Orchestration**: LangGraph manages 8 specialized agents with conditional routing
 3. **Adaptive Failure Recovery**: AI-powered reflection and reanalysis loops
 4. **Modular Design**: Clean separation between agents, workflow, and utilities
-5. **Token Efficiency**: 70% reduction in LLM token usage via targeted context retrieval
 
 ## System Architecture
 
@@ -209,7 +208,6 @@ The DockAI workflow is implemented as a LangGraph `StateGraph` with conditional 
   3. Semantic search based on analysis result
   4. Rerank by dependency/config priority
   5. Return top-k chunks
-- **Performance**: 70% token reduction vs. v3.x
 
 #### 4. **blueprint_node** (Chief Architect)
 - **Purpose**: High-level architectural planning
@@ -690,35 +688,6 @@ DockAI tracks token usage per agent:
 ```
 
 Displayed at the end of each run.
-
-## Performance Characteristics
-
-### Token Efficiency (v4.0 vs v3.x)
-
-| Metric | v3.x | v4.0 | Improvement |
-|--------|------|------|-------------|
-| Avg Input Tokens | ~25,000 | ~7,500 | **70% reduction** |
-| Avg Total Cost | $0.15 | $0.05 | **67% savings** |
-| Context Quality | Low (all files) | High (relevant only) | **Qualitative** |
-
-### Execution Time
-
-| Phase | Typical Time | Bottleneck |
-|-------|-------------|-----------|
-| Scanning | 100-500ms | Large repos |
-| RAG Indexing | 2-5s | Embeddings |
-| Analysis | 3-8s | LLM call |
-| Blueprint | 5-12s | LLM call |
-| Generation | 8-20s | LLM call |
-| Validation | 20-60s | Docker build |
-| **Total** | **40-100s** | Docker + LLM |
-
-### Scalability
-
-- **Small Projects** (\< 50 files): ~30s total
-- **Medium Projects** (50-500 files): ~60s total
-- **Large Projects** (500-2000 files): ~90s total
-- **Huge Projects** (\> 2000 files): RAG indexing may take 10-15s
 
 ## Future Architectural Improvements
 
