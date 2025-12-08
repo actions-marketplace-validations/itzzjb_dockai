@@ -440,7 +440,7 @@ def _fallback_read_simple(path: str, file_tree: list, config: dict) -> dict:
         except Exception:
             continue
             
-    return {"file_content": "".join(content_buffer)}
+    return {"file_contents": "".join(content_buffer)}
     
 
 
