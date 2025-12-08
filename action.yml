@@ -130,6 +130,10 @@ inputs:
     description: 'Enable RAG (Retrieval-Augmented Generation) for intelligent context retrieval (true/false)'
     required: false
     default: 'false'
+  embedding_model:
+    description: 'HuggingFace embedding model for RAG (default: all-MiniLM-L6-v2)'
+    required: false
+    default: 'all-MiniLM-L6-v2'
   read_all_files:
     description: 'Read all source files for complete context (true/false, default: true)'
     required: false

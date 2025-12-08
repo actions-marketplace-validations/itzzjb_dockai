@@ -321,22 +321,13 @@ from ..utils.file_utils import smart_truncate, read_critical_files
 
 def read_files_node(state: DockAIState) -> DockAIState:
     """
-    Reads project files for LLM context with optional RAG support.
+    Reads project files for LLM context using RAG.
     
-    This node supports two modes:
-    
-    1. **Standard Mode** (DOCKAI_USE_RAG=false, default):
-       - Reads ALL source files with smart truncation
-       - Simple but effective for most projects
-    
-    2. **RAG Mode** (DOCKAI_USE_RAG=true):
-       - Uses semantic search + AST analysis
-       - Retrieves only the most relevant context
-       - Better for large projects with many files
-       - Detects entry points, env vars, ports automatically
-    
+    This node uses semantic search and AST analysis to retrieve only the 
+    most relevant context for Dockerfile generation, ensuring high quality
+    output even for large repositories.
+
     Environment Variables:
-        DOCKAI_USE_RAG: Enable RAG mode (default: false)
         DOCKAI_READ_ALL_FILES: In standard mode, read all vs priority files (default: true)
     
     Args:
@@ -350,7 +341,7 @@ def read_files_node(state: DockAIState) -> DockAIState:
     file_tree = state.get("file_tree", [])
     config = state.get("config", {})
     
-    # --- RAG STRATEGY (v4.0 ONLY) ---
+    # --- RAG STRATEGY ---
     return _read_files_rag(path, file_tree, config, analysis_result)
 
 
@@ -364,7 +355,7 @@ def _read_files_rag(path: str, file_tree: list, config: dict, analysis_result: d
         from ..utils.indexer import ProjectIndex
         from ..utils.context_retriever import ContextRetriever
     except ImportError as e:
-        logger.error(f"Critical RAG dependencies missing: {e}. Please install dockai-cli[rag].")
+        logger.error(f"Critical RAG dependencies missing: {e}. Please reinstall dockai-cli.")
         return _fallback_read_simple(path, file_tree, config)
     
     logger.info("Using RAG mode for intelligent context retrieval...")

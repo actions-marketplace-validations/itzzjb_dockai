@@ -198,9 +198,6 @@ OPENAI_API_KEY=sk-...
 
 ### 🧠 RAG & Context Settings (New in v4!)
 ```bash
-# Enable RAG (Semantic Search) - Recommended for large repos > 50 files
-DOCKAI_USE_RAG=true
-
 # Model for local embeddings (Free, runs locally)
 DOCKAI_EMBEDDING_MODEL=all-MiniLM-L6-v2
 

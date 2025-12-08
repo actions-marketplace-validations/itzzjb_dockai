@@ -17,7 +17,7 @@ Architecture:
                          Query → Similar Chunks Retrieved
 
 Environment Variables:
-- DOCKAI_USE_RAG: Enable/disable RAG (default: false)
+
 - DOCKAI_EMBEDDING_MODEL: HuggingFace model name (default: all-MiniLM-L6-v2)
 """
 
@@ -26,13 +26,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple, Any
 
-# Lazy import for numpy - only required when using embeddings
-try:
-    import numpy as np
-    NUMPY_AVAILABLE = True
-except ImportError:
-    np = None  # type: ignore
-    NUMPY_AVAILABLE = False
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
 from .code_intelligence import analyze_file, FileAnalysis
 
@@ -78,10 +73,10 @@ class FileChunk:
 
 class ProjectIndex:
     """
-    Persistent semantic index using ChromaDB.
+    Persistent semantic index using in-memory embeddings.
     
     The index combines:
-    1. ChromaDB vector store for persistent embeddings
+    1. In-memory vector store for fast semantic search
     2. AST analysis for code understanding
     
     Attributes:
@@ -92,48 +87,21 @@ class ProjectIndex:
     def __init__(self, use_embeddings: bool = True):
         self.use_embeddings = use_embeddings
         self.code_analysis: Dict[str, FileAnalysis] = {}
-        self.chunks: List[FileChunk] = []  # Keep in-memory mirror for easy access
+        self.chunks: List[FileChunk] = []
+        self.chunk_embeddings: Optional[np.ndarray] = None
         
-        # Initialize persistent ChromaDB client (Lazy Import)
-        try:
-            import chromadb
-            cache_dir = os.path.join(os.getcwd(), ".dockai", "cache", "chroma")
-            os.makedirs(cache_dir, exist_ok=True)
-            
-            self.client = chromadb.PersistentClient(path=cache_dir)
-            self.collection = self.client.get_or_create_collection(
-                name="project_embeddings",
-                metadata={"hnsw:space": "cosine"}
-            )
-            logger.info(f"Initialized persistent indexing at {cache_dir}")
-        except Exception as e:
-            logger.error(f"Failed to initialize ChromaDB: {e}. Fallback to memory-only.")
-            self.use_embeddings = False
-            self.client = None
-            self.collection = None
         self._model_name = os.getenv("DOCKAI_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-        self.embedder = None
         
+        # Initialize embedding model immediately since it's a core dependency
         if use_embeddings:
-            self._init_embedder()
-    
-    def _init_embedder(self) -> None:
-        """Initialize the embedding model (lazy loading)."""
-        try:
-            from sentence_transformers import SentenceTransformer
-            self.embedder = SentenceTransformer(self._model_name)
-            logger.info(f"Loaded local embedding model: {self._model_name}")
-        except ImportError:
-            logger.warning(
-                "sentence-transformers could not be imported. "
-                "It should be installed by default. "
-                "Falling back to keyword search."
-            )
-            self.use_embeddings = False
-            self.embedder = None
-        except Exception as e:
-            logger.warning(f"Could not load embedding model: {e}. Falling back to keyword search.")
-            self.use_embeddings = False
+            try:
+                self.embedder = SentenceTransformer(self._model_name)
+                logger.info(f"Loaded local embedding model: {self._model_name}")
+            except Exception as e:
+                logger.warning(f"Could not load embedding model: {e}. Falling back to keyword search.")
+                self.use_embeddings = False
+                self.embedder = None
+        else:
             self.embedder = None
     
     def index_project(
@@ -279,82 +247,28 @@ class ProjectIndex:
         return os.path.basename(path).lower() in [f.lower() for f in dep_files]
     
     def _build_embeddings(self) -> None:
-        """Build and store embeddings in ChromaDB."""
+        """Build and store embeddings in memory."""
         if not self.use_embeddings or not self.chunks or not self.embedder:
             return
 
-        logger.info(f"Processing {len(self.chunks)} chunks for persistent index...")
+        logger.info(f"Processing {len(self.chunks)} chunks for semantic index...")
         
-        # Prepare data for ChromaDB
-        ids = []
-        documents = []
-        metadatas = []
+        documents = [chunk.content for chunk in self.chunks]
         
-        for i, chunk in enumerate(self.chunks):
-            # Create a unique ID for each chunk
-            # Using hash of content + path ensures we don't duplicate indentical chunks
-            chunk_id = f"{chunk.file_path}_{chunk.start_line}_{chunk.end_line}"
-            
-            ids.append(chunk_id)
-            documents.append(chunk.content)
-            
-            # Clean metadata for ChromaDB (must be str, int, float, bool)
-            clean_meta = {
-                "file_path": chunk.file_path,
-                "start_line": chunk.start_line,
-                "end_line": chunk.end_line,
-                "chunk_type": chunk.chunk_type,
-                "is_config": bool(chunk.metadata.get("is_config", False)),
-                "is_dependency": bool(chunk.metadata.get("is_dependency", False)),
-                "is_dockerfile": bool(chunk.metadata.get("is_dockerfile", False))
-            }
-            metadatas.append(clean_meta)
-
-        # Check which chunks already exist to avoid re-embedding
-        # This is a naive check; in production, you'd check file hashes
         try:
-            existing = self.collection.get(ids=ids, include=[])
-            existing_ids = set(existing['ids'])
-        except Exception:
-            existing_ids = set()
+            # Generate embeddings for all documents at once
+            # SentenceTransformers handles batching internally
+            embeddings = self.embedder.encode(documents, convert_to_numpy=True)
             
-        # Filter out chunks that are already indexed
-        new_ids = []
-        new_docs = []
-        new_metas = []
-        
-        for i, cid in enumerate(ids):
-            if cid not in existing_ids:
-                new_ids.append(cid)
-                new_docs.append(documents[i])
-                new_metas.append(metadatas[i])
-                
-        if not new_ids:
-            logger.info("All chunks already indexed in ChromaDB. utilizing cache.")
-            return
+            # Normalize embeddings for cosine similarity
+            norm = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            self.chunk_embeddings = embeddings / norm
             
-        logger.info(f"Embedding {len(new_ids)} new chunks...")
-        
-        # Generate embeddings in batches
-        batch_size = 32
-        for i in range(0, len(new_ids), batch_size):
-            end = min(i + batch_size, len(new_ids))
-            batch_docs = new_docs[i:end]
-            batch_ids = new_ids[i:end]
-            batch_metas = new_metas[i:end]
-            
-            # Embed
-            embeddings = self.embedder.encode(batch_docs).tolist()
-            
-            # Add to ChromaDB
-            self.collection.add(
-                ids=batch_ids,
-                documents=batch_docs,
-                embeddings=embeddings,
-                metadatas=batch_metas
-            )
-            
-        logger.info(f"Successfully added {len(new_ids)} chunks to persistent index")
+            logger.info(f"Successfully generated embeddings for {len(documents)} chunks")
+        except Exception as e:
+            logger.error(f"Failed to generate embeddings: {e}")
+            self.use_embeddings = False
+            self.chunk_embeddings = None
 
     def search(self, query: str, top_k: int = 10) -> List[FileChunk]:
         """
@@ -363,49 +277,43 @@ class ProjectIndex:
         if not self.chunks:
             return []
         
-        if self.use_embeddings and self.collection:
+        if self.use_embeddings:
             return self._semantic_search(query, top_k)
         else:
             return self._keyword_search(query, top_k)
     
     def _semantic_search(self, query: str, top_k: int) -> List[FileChunk]:
-        """Perform semantic similarity search using ChromaDB."""
-        # Embed the query
-        query_embedding = self.embedder.encode([query]).tolist()
-        
-        # Query ChromaDB
-        results = self.collection.query(
-            query_embeddings=query_embedding,
-            n_results=top_k,
-            include=["metadatas", "documents", "distances"]
-        )
-        
-        # Reconstruct FileChunk objects from results
-        retrieved_chunks = []
-        
-        if not results['ids']:
+        """Perform semantic similarity search using in-memory cosine similarity."""
+        if self.chunk_embeddings is None or not self.chunks:
             return []
             
-        # Results are a list of lists (one list per query)
-        for i in range(len(results['ids'][0])):
-            meta = results['metadatas'][0][i]
-            doc = results['documents'][0][i]
+        try:
+            # Embed the query
+            query_embedding = self.embedder.encode([query], convert_to_numpy=True)
             
-            chunk = FileChunk(
-                file_path=meta['file_path'],
-                content=doc,
-                start_line=meta['start_line'],
-                end_line=meta['end_line'],
-                chunk_type=meta['chunk_type'],
-                metadata={
-                    "is_config": meta['is_config'],
-                    "is_dependency": meta['is_dependency'],
-                    "is_dockerfile": meta['is_dockerfile']
-                }
-            )
-            retrieved_chunks.append(chunk)
+            # Normalize query embedding
+            query_norm = np.linalg.norm(query_embedding, axis=1, keepdims=True)
+            query_embedding = query_embedding / query_norm
             
-        return retrieved_chunks
+            # Calculate cosine similarity (dot product of normalized vectors)
+            # shape: (1, embedding_dim) x (num_chunks, embedding_dim).T -> (1, num_chunks)
+            scores = np.dot(query_embedding, self.chunk_embeddings.T)[0]
+            
+            # Get top k indices
+            top_indices = np.argsort(scores)[-top_k:][::-1]
+            
+            # Retrieve chunks
+            retrieved_chunks = []
+            for idx in top_indices:
+                # Optional: Filter out low relevance scores (e.g. < 0.3) if needed
+                if scores[idx] > 0.0:  # Just keeping all positive matches for now
+                     retrieved_chunks.append(self.chunks[idx])
+            
+            return retrieved_chunks
+            
+        except Exception as e:
+            logger.error(f"Semantic search failed: {e}")
+            return []
     
     def _keyword_search(self, query: str, top_k: int) -> List[FileChunk]:
         """Fallback keyword-based search."""
@@ -467,7 +375,7 @@ class ProjectIndex:
         return {
             "total_chunks": len(self.chunks),
             "total_files_analyzed": len(self.code_analysis),
-            "embeddings_available": self.collection is not None,
+            "embeddings_available": self.chunk_embeddings is not None,
             "embedding_model": self._model_name if self.use_embeddings else None,
             "entry_points": len(self.get_entry_points()),
             "env_vars_detected": len(self.get_all_env_vars()),
