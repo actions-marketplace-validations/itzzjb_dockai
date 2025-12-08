@@ -2,7 +2,7 @@
 
 **The Customizable AI Dockerfile Generation Framework**
 
-[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/itzzjb/dockai)
+[![Version](https://img.shields.io/badge/version-4.0.2-blue.svg)](https://github.com/itzzjb/dockai)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![LangGraph](https://img.shields.io/badge/powered%20by-LangGraph-purple.svg)](https://github.com/langchain-ai/langgraph)
