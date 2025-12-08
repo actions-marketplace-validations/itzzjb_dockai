@@ -354,7 +354,8 @@ Analyze for security vulnerabilities and provide:
     # Execute the chain
     result = chain.invoke(
         {
-            "dockerfile": context.dockerfile_content
+            "dockerfile": context.dockerfile_content,
+            "custom_instructions": context.custom_instructions or ""
         },
         config={"callbacks": [callback]}
     )

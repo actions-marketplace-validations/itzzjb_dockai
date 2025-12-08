@@ -473,7 +473,8 @@ def blueprint_node(state: DockAIState) -> DockAIState:
             file_tree=state.get("file_tree", []),
             file_contents=file_contents,
             analysis_result=analysis_result,
-            retry_history=retry_history
+            retry_history=retry_history,
+            custom_instructions=state.get("config", {}).get("blueprint_instructions", "")
         )
         
         blueprint, usage = create_blueprint(context=context)
@@ -856,7 +857,8 @@ def review_node(state: DockAIState) -> DockAIState:
                 file_tree=state.get("file_tree", []),
                 file_contents=state.get("file_contents", ""),
                 analysis_result=state.get("analysis_result", {}),
-                dockerfile_content=dockerfile_content
+                dockerfile_content=dockerfile_content,
+                custom_instructions=state.get("config", {}).get("reviewer_instructions", "")
             )
             
             review_result, usage = review_dockerfile(context=reviewer_context)
@@ -1176,7 +1178,8 @@ def reflect_node(state: DockAIState) -> DockAIState:
                 error_message=error_message,
                 error_details=error_details,
                 retry_history=retry_history,
-                container_logs=container_logs
+                container_logs=container_logs,
+                custom_instructions=state.get("config", {}).get("reflector_instructions", "")
             )
             
             reflection_result, usage = reflect_on_failure(context=reflect_context)

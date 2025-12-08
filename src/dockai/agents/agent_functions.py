@@ -321,7 +321,8 @@ Start by explaining your root cause analysis in the thought process.""")
             "stack": context.analysis_result.get("stack", "Unknown"),
             "project_type": context.analysis_result.get("project_type", "service"),
             "container_logs": context.container_logs[:3000] if context.container_logs else "No logs available",
-            "retry_context": retry_context
+            "retry_context": retry_context,
+            "custom_instructions": context.custom_instructions or ""
         },
         [callback]
     )
