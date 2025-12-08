@@ -221,8 +221,9 @@ flowchart TD
 - **AI Model**: Strong reasoning model (gemini-1.5-pro, o1-mini)
 - **Decisions**:
   - **Retry**: Fix Dockerfile and try again
+  - **Revert**: Revert to last functional Dockerfile (if available) when max retries reached
   - **Reanalyze**: Re-examine project (misunderstood architecture)
-  - **Give Up**: Max retries reached
+  - **Give Up**: Max retries reached (and no fallback)
 
 ## RAG Context Engine
 
@@ -502,7 +503,8 @@ hadolint Dockerfile
 - Checks for common mistakes
 - Enforces style guidelines
 - **Rules**: DL3000-DL4000 series
-- **Auto-Skip**: If not installed
+- **Strict Mode**: Warnings are treated as errors to force AI fixes
+- **Fallback**: If linting fails but build succeeds, it counts as "partial success" for fallback purposes
 
 #### 3. Trivy (Security Scan)
 ```bash

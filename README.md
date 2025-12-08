@@ -28,11 +28,12 @@ DockAI v4.0 features a sophisticated multi-agent system orchestrated by LangGrap
 ### 🔄 **Adaptive & Self-Improving**
 - **Automatic Validation**: Builds and tests the Docker image locally
 - **Iterative Refinement**: Learns from failures and auto-fixes issues (up to configurable retries)
+- **Smart Fallback**: Reverts to the last working Dockerfile if fixes fail (ignoring non-critical warnings)
 - **Smart Reflection**: AI analyzes build/runtime errors and adjusts strategy
 - **Reanalysis**: Detects when fundamental assumptions are wrong and pivots
 
 ### 🔒 **Security & Best Practices**
-- **Hadolint Integration**: Dockerfile linting for best practices
+- **Hadolint Integration**: Strict Dockerfile linting (warnings are treated as errors and auto-fixed)
 - **Trivy Security Scanning**: Container vulnerability detection
 - **AI Security Review**: Identifies security anti-patterns (root users, exposed secrets, etc.)
 - **Multi-Stage Builds**: Optimizes for smaller, more secure images

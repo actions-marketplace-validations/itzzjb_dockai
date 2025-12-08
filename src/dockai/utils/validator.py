@@ -110,19 +110,19 @@ def lint_dockerfile_with_hadolint(dockerfile_path: str) -> Tuple[bool, List[dict
         
         # Determine pass/fail based on severity
         # error = fail, warning/info/style = pass with warnings
-        has_errors = any(i["severity"] == "error" for i in issues)
+        # UPDATED: Treat warnings as errors so the AI fixes them as requested
+        has_errors = any(i["severity"] in ["error", "warning"] for i in issues)
         
         if has_errors:
-            error_count = sum(1 for i in issues if i["severity"] == "error")
-            logger.warning(f"Hadolint found {error_count} error(s) in Dockerfile")
+            error_count = sum(1 for i in issues if i["severity"] in ["error", "warning"])
+            logger.warning(f"Hadolint found {error_count} issue(s) (errors/warnings) in Dockerfile")
             for issue in issues:
-                if issue["severity"] == "error":
+                if issue["severity"] in ["error", "warning"]:
                     logger.error(f"  Line {issue['line']}: [{issue['code']}] {issue['message']}")
         elif issues:
-            warning_count = len(issues)
-            logger.info(f"Hadolint found {warning_count} warning(s) (non-blocking)")
-            for issue in issues[:5]:  # Show first 5 warnings
-                logger.debug(f"  Line {issue['line']}: [{issue['code']}] {issue['message']}")
+             # Handle info/style if any remaining
+            info_count = len(issues)
+            logger.info(f"Hadolint found {info_count} info/style issue(s) (non-blocking)")
         else:
             logger.info("Hadolint passed - no issues found")
         
@@ -327,21 +327,19 @@ def validate_docker_build_and_run(
     dockerfile_path = os.path.join(directory, "Dockerfile")
     hadolint_passed, hadolint_issues, _ = lint_dockerfile_with_hadolint(dockerfile_path)
     
-    if not hadolint_passed:
-        # Hadolint found errors - return early with actionable feedback
-        error_messages = [f"Line {i['line']}: [{i['code']}] {i['message']}" 
-                         for i in hadolint_issues if i['severity'] == 'error']
-        error_summary = "; ".join(error_messages[:3])  # First 3 errors
-        
-        classified = ClassifiedError(
-            error_type=ErrorType.DOCKERFILE_ERROR,
-            message=f"Dockerfile lint errors: {error_summary}",
-            suggestion="Fix the Hadolint errors. Common fixes: use specific package versions, avoid deprecated instructions",
-            original_error="\n".join(error_messages),
-            should_retry=True
-        )
-        return False, f"Hadolint found {len(error_messages)} error(s)", 0, classified
+    hadolint_msg = ""
+    hadolint_failed = False
     
+    if not hadolint_passed:
+        # Hadolint found errors - but we continue to verify if it BUILDS
+        # This allows us to have a "best available" fallback
+        hadolint_failed = True
+        error_messages = [f"Line {i['line']}: [{i['code']}] {i['message']}" 
+                         for i in hadolint_issues if i['severity'] in ['error', 'warning']]
+        error_summary = "; ".join(error_messages[:3])  # First 3 errors
+        hadolint_msg = f"Hadolint found {len(error_messages)} issue(s): {error_summary}"
+        logger.warning(f"Hadolint checks failed, but proceeding to build validation: {hadolint_msg}")
+        
     # 1. Build Phase
     logger.info("Building Docker image (with resource limits)...")
     # Use 2GB memory limit for build to prevent OOM on host
@@ -525,7 +523,23 @@ def validate_docker_build_and_run(
             classified_error = classify_error(container_logs, logs=container_logs, stack=stack)
             message = f"Container failed (Exit Code: {exit_code}): {classified_error.message}"
 
-    if success:
+    if success and hadolint_failed:
+        # Special case: Build/Run worked, but linting failed (and we treat warnings as errors)
+        # We return success=False so the agent tries to fix lint issues, 
+        # BUT the message indicates the build passed.
+        success = False
+        message = f"Build/Run passed, BUT validation failed due to Hadolint issues. {hadolint_msg}"
+        
+        # Create a lint-specific classified error
+        classified_error = ClassifiedError(
+            error_type=ErrorType.DOCKERFILE_ERROR,
+            message=f"Dockerfile lint errors: {hadolint_msg}",
+            suggestion="Fix the Hadolint warnings/errors while keeping the build functional.",
+            original_error=hadolint_msg,
+            should_retry=True
+        )
+        logger.warning(f"Partial success: {message}")
+    elif success:
         logger.info(message)
     else:
         logger.error(f"Problem: {message}")

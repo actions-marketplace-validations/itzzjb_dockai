@@ -1071,11 +1071,29 @@ def validate_node(state: DockAIState) -> DockAIState:
                 span.set_attribute("validation.success", False)
                 span.set_attribute("validation.error", message[:200] if message else "")
 
-        return {
+        # FALLBACK STRATEGY: 
+        # If the build/run passed (success=True OR message contains "Build/Run passed"), 
+        # we consider this a "functional" Dockerfile and save it as a fallback.
+        # This handles the case where lint warnings cause failure, but the Dockerfile works.
+        is_functional = success or (message and "Build/Run passed" in message)
+        
+        updated_state_updates = {
             "validation_result": {"success": success, "message": message},
             "error": message if not success else None,
             "error_details": error_details
         }
+        
+        if is_functional:
+            logger.info("Current Dockerfile verified as functional (saved as fallback candidate).")
+            # We overwrite the best_dockerfile because this one is newer and also functional
+            # (Assuming newer is better closer to perfect)
+            # OR logic: If current has NO lint errors (success=True), it's definitely best.
+            # If current HAS lint errors but works, it replaces previous only if previous didn't exist?
+            # Let's say: always update best if it works. The goal is "last working version".
+            updated_state_updates["best_dockerfile"] = dockerfile_content
+            updated_state_updates["best_dockerfile_source"] = f"Attempt {state.get('retry_count', 0) + 1}"
+            
+        return updated_state_updates
 
 
 def reflect_node(state: DockAIState) -> DockAIState:
@@ -1104,10 +1122,47 @@ def reflect_node(state: DockAIState) -> DockAIState:
         error_message = state.get("error", "Unknown error")
         error_details = state.get("error_details", {})
         analysis_result = state.get("analysis_result", {})
+        analysis_result = state.get("analysis_result", {})
         retry_history = state.get("retry_history", [])
+        max_retries = state.get("max_retries", 3)
+        best_dockerfile = state.get("best_dockerfile")
+        best_source = state.get("best_dockerfile_source", "unknown")
         
         logger.info("Reflecting on failure...")
         
+        # FINAL RETRY CHECK: If we are out of retries, maybe revert?
+        # Note: The 'retry_count' here is 0-indexed. If current retry_count is 2 and max is 3,
+        # we have tried 3 times (0, 1, 2). The next move would be increment to 3 -> check limit.
+        # However, the graph logic usually checks limit BEFORE generating next attempt.
+        # Typically: Reflect -> Loop decision -> (Increment -> Check) or (Check -> Increment).
+        # We'll make the reversion logic robust: If we recommend NOT retrying (needs_reanalysis=False and out of luck)
+        # OR if we know the loop will end.
+        
+        # Typically the loop ends if retry_count >= max_retries. 
+        # Since we are in reflect node, we just finished attempt 'retry_count + 1'.
+        # If retry_count + 1 >= max_retries, this was the last shot.
+        
+        if (retry_count + 1) >= max_retries:
+            logger.warning(f"Max retries ({max_retries}) reached.")
+            
+            if best_dockerfile and best_dockerfile != dockerfile_content:
+                logger.info(f"Reverting to last working version from {best_source} (ignoring lint warnings)...")
+                
+                # Write the fallback to disk
+                output_path = os.path.join(state["path"], "Dockerfile")
+                try:
+                    with open(output_path, "w") as f:
+                        f.write(best_dockerfile)
+                    
+                    # Update state to reflect reversion
+                    # We still return the reflection in case the graph wants it, 
+                    # but we modify the 'error' to indicate reversion.
+                    error_message = f"Max retries reached. Reverted to last working version from {best_source}. (Validation failed: {error_message})"
+                    state["error"] = error_message
+                    
+                except Exception as e:
+                    logger.error(f"Failed to revert Dockerfile: {e}")
+
         try:
             # Get container logs from error details if available
             container_logs = error_details.get("original_error", "") if error_details else ""
