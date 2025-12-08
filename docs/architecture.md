@@ -29,66 +29,64 @@ DockAI v4.0 represents a complete architectural overhaul from v3.x, transitionin
 
 DockAI follows a layered architecture pattern:
 
+```mermaid
+graph TB
+    subgraph Layer1["Layer 1: CLI Interface"]
+        CLI[Typer CLI<br/>Argument Parser]
+        ENV[Environment<br/>Config Validation]
+        UI[Rich UI & Logging<br/>Progress Bars & Errors]
+    end
+    
+    subgraph Layer2["Layer 2: Workflow Orchestration"]
+        LG[LangGraph State Graph<br/>- Conditional Routing<br/>- State Management<br/>- Node Execution<br/>- Retry Logic]
+    end
+    
+    subgraph Layer3["Layer 3: AI Agent Layer"]
+        A1[Analyzer<br/>Agent]
+        A2[Blueprint<br/>Agent]
+        A3[Generator<br/>Agent]
+        A4[Reviewer<br/>Agent]
+        A5[Reflector<br/>Agent]
+        A6[Error<br/>Analyzer]
+        A7[Iterative<br/>Improver]
+        A8[Generator<br/>Iterative]
+    end
+    
+    subgraph Layer4["Layer 4: Context & Intelligence"]
+        RAG[RAG Engine<br/>• Indexer<br/>• Embeddings<br/>• Vector Store<br/>• Semantic Search]
+        AST[AST Code Analyzer<br/>• Entry Points<br/>• Port Detection<br/>• Env Variables<br/>• Framework ID]
+        FR[Smart File Reader<br/>• Truncation<br/>• Chunking]
+    end
+    
+    subgraph Layer5["Layer 5: Validation & Tools"]
+        DB[Docker Build<br/>Engine]
+        HL[Hadolint<br/>Linter]
+        TV[Trivy<br/>Scanner]
+        HC[Health Check<br/>Validator]
+    end
+    
+    subgraph Layer6["Layer 6: LLM Provider Layer"]
+        OAI[OpenAI]
+        GEM[Google<br/>Gemini]
+        ANT[Anthropic<br/>Claude]
+        AZ[Azure<br/>OpenAI]
+        OL[Ollama<br/>local]
+    end
+    
+    Layer1 --> Layer2
+    Layer2 --> Layer3
+    Layer3 --> Layer4
+    Layer4 --> Layer5
+    Layer3 --> Layer6
+    
+    style Layer1 fill:#E6F3FF,stroke:#333,stroke-width:2px
+    style Layer2 fill:#FFE4B5,stroke:#333,stroke-width:2px
+    style Layer3 fill:#F0E68C,stroke:#333,stroke-width:2px
+    style Layer4 fill:#98FB98,stroke:#333,stroke-width:2px
+    style Layer5 fill:#FFB6C1,stroke:#333,stroke-width:2px
+    style Layer6 fill:#DDA0DD,stroke:#333,stroke-width:2px
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        Layer 1: CLI Interface                           │
-│  ┌───────────────┐  ┌──────────────┐  ┌──────────────────────────┐    │
-│  │ Typer CLI     │  │ Environment  │  │ Rich UI & Logging        │    │
-│  │ Argument      │  │ Config       │  │ Progress Bars, Spinners  │    │
-│  │ Parser        │  │ Validation   │  │ Error Formatting         │    │
-│  └───────────────┘  └──────────────┘  └──────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                   Layer 2: Workflow Orchestration                       │
-│  ┌────────────────────────────────────────────────────────────────┐    │
-│  │                    LangGraph State Graph                       │    │
-│  │  • Conditional Routing (routing.py)                           │    │
-│  │  • State Management (DockAIState)                             │    │
-│  │  • Node Execution (nodes.py)                                  │    │
-│  │  • Retry Logic & Error Handling                               │    │
-│  └────────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      Layer 3: AI Agent Layer                            │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐    │
-│  │ Analyzer │ │Blueprint │ │Generator │ │ Reviewer │ │Reflector │    │
-│  │  Agent   │ │  Agent   │ │  Agent   │ │  Agent   │ │  Agent   │    │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘    │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐                               │
-│  │  Error   │ │Iterative │ │Generator │                               │
-│  │ Analyzer │ │ Improver │ │Iterative │                               │
-│  └──────────┘ └──────────┘ └──────────┘                               │
-└─────────────────────────────────────────────────────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│              Layer 4: Context & Intelligence Layer                      │
-│  ┌────────────────────┐  ┌────────────────────┐  ┌────────────────┐   │
-│  │  RAG Engine        │  │  AST Code Analyzer │  │  Smart File    │   │
-│  │  • Indexer         │  │  • Entry Points    │  │  Reader        │   │
-│  │  • Embeddings      │  │  • Port Detection  │  │  • Truncation  │   │
-│  │  • Vector Store    │  │  • Env Variables   │  │  • Chunking    │   │
-│  │  • Semantic Search │  │  • Framework ID    │  │                │   │
-│  └────────────────────┘  └────────────────────┘  └────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                Layer 5: Validation & Tools Layer                        │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐  │
-│  │ Docker Build │ │  Hadolint    │ │    Trivy     │ │ Health Check │  │
-│  │   Engine     │ │   Linter     │ │   Scanner    │ │  Validator   │  │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    Layer 6: LLM Provider Layer                          │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐    │
-│  │  OpenAI  │ │  Google  │ │Anthropic │ │  Azure   │ │  Ollama  │    │
-│  │          │ │  Gemini  │ │  Claude  │ │  OpenAI  │ │  (local) │    │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘    │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+
 
 ## Agent Workflow
 
@@ -96,87 +94,48 @@ The DockAI workflow is implemented as a LangGraph `StateGraph` with conditional 
 
 ### Workflow Diagram
 
+```mermaid
+flowchart TD
+    Start([START]) --> Scan[scan_node<br/>File Tree Scanner]
+    Scan --> Analyze[analyze_node<br/>AI Analyzer<br/><i>Detects project type & stack</i>]
+    Analyze --> ReadFiles[read_files_node<br/>RAG Retrieval<br/><i>Semantic search for context</i>]
+    ReadFiles --> Blueprint[blueprint_node<br/>Chief Architect<br/><i>Plans build strategy</i>]
+    Blueprint --> Generate[generate_node<br/>Dockerfile Builder<br/><i>Creates Dockerfile</i>]
+    
+    Generate --> ShouldReview{Should<br/>Review?}
+    ShouldReview -->|security_review_needed| Review[review_node<br/>Security Auditor]
+    ShouldReview -->|skip_review| Validate
+    
+    Review --> Validate[validate_node<br/>Test Engineer<br/><i>Docker build + validation</i>]
+    
+    Validate --> ShouldRetry{Should<br/>Retry?}
+    ShouldRetry -->|success| End([END<br/>✓ Dockerfile Ready])
+    ShouldRetry -->|failure| Reflect[reflect_node<br/>Post-Mortem Analyst<br/><i>Analyzes failure</i>]
+    ShouldRetry -->|max_retries| Stop([END<br/>✗ Max Retries])
+    
+    Reflect --> NeedsReanalysis{Needs<br/>Reanalysis?}
+    NeedsReanalysis -->|fundamental_issue| Analyze
+    NeedsReanalysis -->|fixable_error| Increment[increment_retry<br/>Update retry count]
+    
+    Increment --> Generate
+    
+    style Start fill:#90EE90,stroke:#333,stroke-width:2px
+    style End fill:#90EE90,stroke:#333,stroke-width:2px
+    style Stop fill:#FFB6C1,stroke:#333,stroke-width:2px
+    style Scan fill:#E6F3FF,stroke:#333,stroke-width:2px
+    style Analyze fill:#87CEEB,stroke:#333,stroke-width:2px
+    style ReadFiles fill:#FFE4B5,stroke:#333,stroke-width:2px
+    style Blueprint fill:#DDA0DD,stroke:#333,stroke-width:2px
+    style Generate fill:#F0E68C,stroke:#333,stroke-width:2px
+    style Review fill:#98FB98,stroke:#333,stroke-width:2px
+    style Validate fill:#FFB6C1,stroke:#333,stroke-width:2px
+    style Reflect fill:#FFA07A,stroke:#333,stroke-width:2px
+    style Increment fill:#D3D3D3,stroke:#333,stroke-width:2px
+    style ShouldReview fill:#F0F0F0,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+    style ShouldRetry fill:#F0F0F0,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+    style NeedsReanalysis fill:#F0F0F0,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
 ```
-                              ┌─────────────┐
-                              │   START     │
-                              └──────┬──────┘
-                                     │
-                                     ▼
-                              ┌─────────────┐
-                              │  scan_node  │
-                              │ (File Tree) │
-                              └──────┬──────┘
-                                     │
-                                     ▼
-                            ┌────────────────┐
-                            │  analyze_node  │
-                            │ (AI Analysis)  │
-                            └────────┬───────┘
-                                     │
-                                     ▼
-                          ┌──────────────────┐
-                          │  read_files_node │
-                          │  (RAG Retrieval) │
-                          └────────┬─────────┘
-                                   │
-                                   ▼
-                          ┌─────────────────┐
-                          │ blueprint_node  │
-                          │ (Architecture)  │
-                          └────────┬────────┘
-                                   │
-                                   ▼
-                          ┌─────────────────┐
-                          │ generate_node   │
-                          │ (Dockerfile)    │
-                          └────────┬────────┘
-                                   │
-                                   ▼
-                      ┌────────────────────────┐
-                      │  should_review?        │
-                      │  (security review)     │
-                      └──┬─────────────────┬───┘
-                         │ YES             │ NO
-                         ▼                 │
-                  ┌─────────────┐          │
-                  │ review_node │          │
-                  └──────┬──────┘          │
-                         │                 │
-                         └────────┬────────┘
-                                  ▼
-                          ┌─────────────────┐
-                          │ validate_node   │
-                          │ (Docker Build)  │
-                          └────────┬────────┘
-                                   │
-                                   ▼
-                      ┌────────────────────────┐
-                      │  should_retry?         │
-                      │  (check errors)        │
-                      └──┬─────────────────┬───┘
-                         │ YES             │ NO
-                         ▼                 ▼
-                  ┌─────────────┐    ┌─────────┐
-                  │ reflect_node│    │   END   │
-                  └──────┬──────┘    └─────────┘
-                         │
-                         ▼
-              ┌───────────────────────────┐
-              │ needs_reanalysis?         │
-              │ (check reflection)        │
-              └──┬──────────────────────┬─┘
-                 │ YES                  │ NO
-                 │                      │
-                 ▼                      ▼
-        ┌─────────────────┐    ┌─────────────────┐
-        │  analyze_node   │    │ generate_node   │
-        │  (Re-analyze)   │    │ (Retry Fix)     │
-        └─────────────────┘    └─────────────────┘
-                 │                      │
-                 └──────────┬───────────┘
-                            │
-                            └─── (back to read_files or blueprint)
-```
+
 
 ### Workflow Nodes
 

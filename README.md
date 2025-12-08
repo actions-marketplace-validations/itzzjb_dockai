@@ -54,33 +54,33 @@ DockAI v4.0 features a sophisticated multi-agent system orchestrated by LangGrap
 
 DockAI v4.0 is built on a modern, agent-based architecture using LangGraph for workflow orchestration:
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          DockAI v4.0 Workflow                       │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌──────────┐      ┌──────────┐      ┌──────────┐      ┌──────────┐
-│  Scanner │─────▶│   RAG    │─────▶│ Analyzer │─────▶│   Read   │
-│   Node   │      │ Indexer  │      │   Node   │      │  Files   │
-└──────────┘      └──────────┘      └──────────┘      └──────────┘
-                       │                                     │
-                       ▼                                     ▼
-              Semantic Embeddings                   Context Retrieval
-              (sentence-transformers)                (Top-K Chunks)
-                                                           │
-┌──────────┐      ┌──────────┐      ┌──────────┐         │
-│  Output  │◀─────│ Validate │◀─────│ Generate │◀────────┘
-│   Done   │      │   Node   │      │   Node   │
-└──────────┘      └──────────┘      └──────────┘
-                       │                  ▲
-                       │ Failure          │ Retry
-                       ▼                  │
-                  ┌──────────┐      ┌──────────┐
-                  │  Reflect │─────▶│  Review  │
-                  │   Node   │      │   Node   │
-                  └──────────┘      └──────────┘
-                       │
-                       └──▶ Reanalysis (if needed)
+```mermaid
+flowchart TD
+    Start([START]) --> Scan[scan_node<br/>File Scanner]
+    Scan --> RAG[RAG Indexer<br/>Semantic Embeddings]
+    RAG --> Analyze[analyze_node<br/>AI Analyzer]
+    Analyze --> Read[read_files_node<br/>Context Retrieval]
+    Read --> Blueprint[blueprint_node<br/>Chief Architect]
+    Blueprint --> Generate[generate_node<br/>Dockerfile Builder]
+    Generate --> Review{should_review?}
+    Review -->|Yes| ReviewNode[review_node<br/>Security Auditor]
+    Review -->|No| Validate
+    ReviewNode --> Validate[validate_node<br/>Docker Build & Test]
+    Validate --> Success{Validation<br/>Success?}
+    Success -->|Yes| Done([DONE])
+    Success -->|No| Reflect[reflect_node<br/>Post-Mortem Analysis]
+    Reflect --> Decision{needs_reanalysis?}
+    Decision -->|Yes| Analyze
+    Decision -->|No| Generate
+    
+    style Start fill:#90EE90
+    style Done fill:#90EE90
+    style RAG fill:#FFE4B5
+    style Analyze fill:#87CEEB
+    style Blueprint fill:#DDA0DD
+    style Generate fill:#F0E68C
+    style Validate fill:#FFB6C1
+    style Reflect fill:#FFA07A
 ```
 
 ### Core Components
