@@ -71,7 +71,7 @@ pip install dockai-cli
 Verify installation:
 ```bash
 dockai version
-# Should output: DockAI version 4.0.0
+# Should output: DockAI version 4.0.3
 ```
 
 ### Option 2: Install from Source

@@ -399,7 +399,7 @@ uses: itzzjb/dockai@main
 uses: itzzjb/dockai@v4
 
 # ✅ Better (specific patch version)
-uses: itzzjb/dockai@v4.0.0
+uses: itzzjb/dockai@v4.0.3
 ```
 
 ### 3. Enable Security Scanning
