@@ -283,11 +283,11 @@ Extract the EXACT runtime version from project files. This is MANDATORY for ALL 
   - .ruby-gemset: can indicate version context
 
 **PHP:**
-  - composer.json: "require": {"php": "^8.1"} means use 8.1
+  - composer.json: "require": {{"php": "^8.1"}} means use 8.1
   - .php-version: exact version
   
 **C# / .NET:**
-  - global.json: {"sdk": {"version": "7.0.100"}}
+  - global.json: {{"sdk": {{"version": "7.0.100"}}}}
   - *.csproj: <TargetFramework>net7.0</TargetFramework>
   - .dotnet-version or .tool-versions
 

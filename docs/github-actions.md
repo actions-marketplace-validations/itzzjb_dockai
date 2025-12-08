@@ -461,24 +461,89 @@ The generated Dockerfile is invalid. Check:
 
 ### "Rate limit exceeded"
 
-**Solutions:**
-1. Use Gemini (higher free tier)
-2. Reduce concurrent jobs
-3. Add retry with backoff:
+This is the most common issue when using OpenAI's free or lower-tier API in GitHub Actions.
+
+**Root Causes:**
+- OpenAI free tier has very strict rate limits (especially for GPT-4o)
+- Multiple concurrent workflow runs hitting the API simultaneously
+- RAG embedding generation adds to request count
+- Retries amplify the problem (5 retries = 5x requests)
+
+**Solutions (in order of effectiveness):**
+
+#### 1. Switch to Gemini (Recommended) 🌟
 
 ```yaml
 - uses: itzzjb/dockai@v4
   with:
+    llm_provider: 'gemini'
+    google_api_key: ${{ secrets.GOOGLE_API_KEY }}
+    model_analyzer: 'gemini-1.5-flash'
+    model_generator: 'gemini-1.5-pro'
+```
+
+**Why this works:**
+- Gemini free tier: 1,500 requests/day
+- OpenAI free tier: Much lower limits (varies by tier)
+- Gemini has similar quality to GPT-4o for Dockerfile generation
+
+#### 2. Add Concurrency Control
+
+Prevent multiple workflow runs from hitting the API at once:
+
+```yaml
+concurrency:
+  group: dockai-${{ github.ref }}
+  cancel-in-progress: false  # Queue, don't cancel
+```
+
+Add this to your job or workflow level.
+
+#### 3. Reduce Retries
+
+Fail fast instead of retrying 5 times:
+
+```yaml
+with:
+  max_retries: '1'  # Default is 3
+```
+
+#### 4. Upgrade OpenAI Tier
+
+If you must use OpenAI, upgrade to Tier 1 or higher for better rate limits.
+
+#### 5. Conditional Execution
+
+Only run on specific file changes:
+
+```yaml
+on:
+  push:
+    paths:
+      - 'package.json'
+      - 'requirements.txt'
+      - 'src/**'
+```
+
+#### 6. Add Manual Retry Logic (Last Resort)
+
+```yaml
+- uses: itzzjb/dockai@v4
+  id: dockai_attempt1
+  continue-on-error: true
+  with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
   timeout-minutes: 15
-  continue-on-error: true
 
-- name: Retry on failure
+- name: Wait and retry if failed
+  if: failure()
+  run: sleep 60
+
+- name: Retry DockAI
   if: failure()
   uses: itzzjb/dockai@v4
   with:
     openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-```
 
 ### "Permission denied" when pushing
 
