@@ -79,12 +79,12 @@ graph TB
     Layer4 --> Layer5
     Layer3 --> Layer6
     
-    style Layer1 fill:#E6F3FF,stroke:#333,stroke-width:2px
-    style Layer2 fill:#FFE4B5,stroke:#333,stroke-width:2px
-    style Layer3 fill:#F0E68C,stroke:#333,stroke-width:2px
-    style Layer4 fill:#98FB98,stroke:#333,stroke-width:2px
-    style Layer5 fill:#FFB6C1,stroke:#333,stroke-width:2px
-    style Layer6 fill:#DDA0DD,stroke:#333,stroke-width:2px
+    style Layer1 fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Layer2 fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Layer3 fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Layer4 fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Layer5 fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Layer6 fill:#f5f5f5,stroke:#333,stroke-width:2px
 ```
 
 
@@ -119,21 +119,21 @@ flowchart TD
     
     Increment --> Generate
     
-    style Start fill:#90EE90,stroke:#333,stroke-width:2px
-    style End fill:#90EE90,stroke:#333,stroke-width:2px
-    style Stop fill:#FFB6C1,stroke:#333,stroke-width:2px
-    style Scan fill:#E6F3FF,stroke:#333,stroke-width:2px
-    style Analyze fill:#87CEEB,stroke:#333,stroke-width:2px
-    style ReadFiles fill:#FFE4B5,stroke:#333,stroke-width:2px
-    style Blueprint fill:#DDA0DD,stroke:#333,stroke-width:2px
-    style Generate fill:#F0E68C,stroke:#333,stroke-width:2px
-    style Review fill:#98FB98,stroke:#333,stroke-width:2px
-    style Validate fill:#FFB6C1,stroke:#333,stroke-width:2px
-    style Reflect fill:#FFA07A,stroke:#333,stroke-width:2px
-    style Increment fill:#D3D3D3,stroke:#333,stroke-width:2px
-    style ShouldReview fill:#F0F0F0,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
-    style ShouldRetry fill:#F0F0F0,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
-    style NeedsReanalysis fill:#F0F0F0,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+    style Start fill:#e0e0e0,stroke:#333,stroke-width:2px
+    style End fill:#e0e0e0,stroke:#333,stroke-width:2px
+    style Stop fill:#d0d0d0,stroke:#333,stroke-width:2px
+    style Scan fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Analyze fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style ReadFiles fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Blueprint fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Generate fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Review fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Validate fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Reflect fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Increment fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style ShouldReview fill:#ffffff,stroke:#333,stroke-width:2px,stroke-dasharray:5 5
+    style ShouldRetry fill:#ffffff,stroke:#333,stroke-width:2px,stroke-dasharray:5 5
+    style NeedsReanalysis fill:#ffffff,stroke:#333,stroke-width:2px,stroke-dasharray:5 5
 ```
 
 

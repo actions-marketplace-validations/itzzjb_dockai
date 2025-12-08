@@ -73,14 +73,14 @@ flowchart TD
     Decision -->|Yes| Analyze
     Decision -->|No| Generate
     
-    style Start fill:#90EE90
-    style Done fill:#90EE90
-    style RAG fill:#FFE4B5
-    style Analyze fill:#87CEEB
-    style Blueprint fill:#DDA0DD
-    style Generate fill:#F0E68C
-    style Validate fill:#FFB6C1
-    style Reflect fill:#FFA07A
+    style Start fill:#e0e0e0
+    style Done fill:#e0e0e0
+    style RAG fill:#f5f5f5
+    style Analyze fill:#f5f5f5
+    style Blueprint fill:#f5f5f5
+    style Generate fill:#f5f5f5
+    style Validate fill:#f5f5f5
+    style Reflect fill:#f5f5f5
 ```
 
 ### Core Components

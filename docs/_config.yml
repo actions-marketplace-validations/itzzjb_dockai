@@ -1,0 +1,41 @@
+theme: jekyll-theme-cayman
+title: DockAI Documentation
+description: The Customizable AI Dockerfile Generation Framework
+show_downloads: false
+
+# Enable Mermaid support
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# Plugins
+plugins:
+  - jekyll-mermaid
+
+# Navigation
+nav_links:
+  - title: Home
+    url: /
+  - title: Getting Started
+    url: /getting-started
+  - title: Architecture
+    url: /architecture
+  - title: Configuration
+    url: /configuration
+  - title: LLM Providers
+    url: /llm-providers
+  - title: GitHub Actions
+    url: /github-actions
+  - title: MCP Integration
+    url: /mcp-integration
+  - title: API Reference
+    url: /api-reference
+  - title: FAQ
+    url: /faq
+
+# Google Analytics (optional - add your tracking ID)
+# google_analytics: UA-XXXXXXXXX-X
+
+# SEO
+lang: en
