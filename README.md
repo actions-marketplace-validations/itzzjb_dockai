@@ -72,15 +72,6 @@ flowchart TD
     Reflect --> Decision{needs_reanalysis?}
     Decision -->|Yes| Analyze
     Decision -->|No| Generate
-    
-    style Start fill:#e0e0e0
-    style Done fill:#e0e0e0
-    style RAG fill:#f5f5f5
-    style Analyze fill:#f5f5f5
-    style Blueprint fill:#f5f5f5
-    style Generate fill:#f5f5f5
-    style Validate fill:#f5f5f5
-    style Reflect fill:#f5f5f5
 ```
 
 ### Core Components
