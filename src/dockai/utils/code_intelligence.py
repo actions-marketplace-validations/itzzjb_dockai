@@ -1,21 +1,19 @@
 """
 DockAI Code Intelligence Module.
 
-This module provides AST-based code analysis to extract structured information
-from source files. It identifies entry points, imports, environment variables,
-and other metadata crucial for accurate Dockerfile generation.
+This module provides configuration-driven AST-based code analysis.
+Instead of hardcoded patterns, it uses the language_configs module for
+extensible, maintainable code intelligence.
 
-The analysis is 100% local and free - no LLM calls required.
-
-Supported Languages:
-- Python (via built-in ast module)
-- JavaScript/TypeScript (basic pattern matching)
-- Go (basic pattern matching)
+Key Features:
+- Configuration-driven (no hardcoded framework lists)
+- Pattern-based matching (easier to extend)
+- Support for 15+ languages (Python, JS, TS, Go, Rust, Ruby, PHP, Java, C#, Kotlin, Scala, Elixir, Haskell, Dart, Swift)
+- Pluggable architecture for custom analyzers
+- Better error handling and fallbacks
 
 Architecture:
-    Source File → AST Parser → FileAnalysis
-                      ↓
-    Extracted: functions, classes, imports, entry points, env vars, ports
+    Source File → Language Detection → Config Lookup → Pattern Matching → FileAnalysis
 """
 
 import ast
@@ -24,6 +22,13 @@ import re
 import logging
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Set
+
+from .language_configs import (
+    get_language_config,
+    get_all_supported_extensions,
+    FrameworkPattern,
+    LanguageConfig
+)
 
 logger = logging.getLogger("dockai")
 
@@ -56,9 +61,6 @@ class FileAnalysis:
     """
     Complete analysis result for a single source file.
     
-    This dataclass contains all extracted metadata that helps
-    the Dockerfile generator understand how the application works.
-    
     Attributes:
         path: Relative file path.
         language: Detected programming language.
@@ -67,7 +69,7 @@ class FileAnalysis:
         entry_points: Detected entry points (main functions, etc.).
         exposed_ports: Ports detected from code (e.g., app.listen(3000)).
         env_vars: Environment variable names referenced in code.
-        framework_hints: Detected frameworks (e.g., "fastapi", "express").
+        framework_hints: Detected frameworks (e.g., "FastAPI", "Express").
     """
     path: str
     language: str
@@ -79,40 +81,78 @@ class FileAnalysis:
     framework_hints: List[str] = field(default_factory=list)
 
 
-def analyze_python_file(filepath: str, content: str) -> FileAnalysis:
+# ============================================================================
+# PATTERN-BASED ANALYZERS
+# ============================================================================
+
+def analyze_file(filepath: str, content: str) -> Optional[FileAnalysis]:
     """
-    Analyze a Python file using the built-in ast module.
+    Analyze a source file using configuration-driven pattern matching.
     
-    Extracts:
-    - Function and class definitions
-    - Import statements
-    - Entry points (main(), if __name__ == "__main__")
-    - Environment variable usage (os.getenv, os.environ)
-    - Port bindings (common patterns)
-    - Framework detection (FastAPI, Flask, Django, etc.)
+    This is the main entry point. It automatically detects the language
+    and applies the appropriate analyzer.
     
     Args:
         filepath: Relative path to the file.
         content: File content as string.
         
     Returns:
-        FileAnalysis object with extracted metadata.
+        FileAnalysis object if supported, None otherwise.
     """
-    analysis = FileAnalysis(path=filepath, language="python")
+    ext = os.path.splitext(filepath)[1].lower()
+    filename = os.path.basename(filepath).lower()
+    
+    # Check for manifest files first (special handling)
+    if filename == "package.json":
+        return analyze_package_json(filepath, content)
+    if filename == "go.mod":
+        return analyze_go_mod(filepath, content)
+    if filename in ("requirements.txt", "requirements.in"):
+        return analyze_requirements_txt(filepath, content)
+    if filename == "pyproject.toml":
+        return analyze_pyproject_toml(filepath, content)
+    if filename == "cargo.toml":
+        return analyze_cargo_toml(filepath, content)
+    if filename == "gemfile":
+        return analyze_gemfile(filepath, content)
+    if filename == "composer.json":
+        return analyze_composer_json(filepath, content)
+    
+    # Get language configuration
+    lang_config = get_language_config(ext)
+    
+    if not lang_config:
+        # Fallback to generic analysis
+        return analyze_generic_file(filepath, content)
+    
+    # Use Python's built-in AST for Python files (most accurate)
+    if ext == ".py":
+        return analyze_python_file(filepath, content, lang_config)
+    
+    # Use pattern-based analysis for other languages
+    return analyze_with_patterns(filepath, content, lang_config)
+
+
+def analyze_python_file(filepath: str, content: str, config: LanguageConfig) -> FileAnalysis:
+    """
+    Analyze Python files using the built-in AST module.
+    
+    This is more accurate than regex for Python since we can parse the syntax tree.
+    """
+    analysis = FileAnalysis(path=filepath, language=config.name)
     
     try:
         tree = ast.parse(content)
     except SyntaxError as e:
         logger.debug(f"Could not parse {filepath}: {e}")
-        return analysis
+        # Fallback to pattern-based analysis
+        return analyze_with_patterns(filepath, content, config)
     
-    # Track detected patterns
     has_main_block = False
     
     for node in ast.walk(tree):
         # Extract function definitions
-        if isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
-            # Build signature
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             args = []
             if hasattr(node, 'args') and node.args:
                 for arg in node.args.args:
@@ -124,7 +164,8 @@ def analyze_python_file(filepath: str, content: str) -> FileAnalysis:
                             pass
                     args.append(arg_name)
             
-            signature = f"{'async ' if isinstance(node, ast.AsyncFunctionDef) else ''}def {node.name}({', '.join(args)})"
+            prefix = 'async ' if isinstance(node, ast.AsyncFunctionDef) else ''
+            signature = f"{prefix}def {node.name}({', '.join(args)})"
             if node.returns:
                 try:
                     signature += f" -> {ast.unparse(node.returns)}"
@@ -141,7 +182,7 @@ def analyze_python_file(filepath: str, content: str) -> FileAnalysis:
                 docstring=ast.get_docstring(node)
             ))
             
-            # Check for main entry point
+            # Entry point detection
             if node.name == "main":
                 analysis.entry_points.append(f"{filepath}:main()")
         
@@ -161,41 +202,302 @@ def analyze_python_file(filepath: str, content: str) -> FileAnalysis:
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 analysis.imports.append(alias.name)
-                _detect_framework(alias.name, analysis)
         
         elif isinstance(node, ast.ImportFrom):
             if node.module:
                 analysis.imports.append(node.module)
-                _detect_framework(node.module, analysis)
         
-        # Detect environment variable usage
+        # Detect env vars and ports from function calls
         elif isinstance(node, ast.Call):
-            _extract_env_vars(node, analysis)
-            _extract_ports(node, analysis)
+            _extract_from_call_node(node, analysis, config)
         
         # Detect if __name__ == "__main__"
         elif isinstance(node, ast.If):
             if _is_main_block(node):
                 has_main_block = True
-                
-        # Detect global WSGI/ASGI app assignments (app = Flask(__name__) or app = FastAPI())
+        
+        # Detect app assignments (app = FastAPI(), etc.)
         elif isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name) and target.id in ('app', 'application'):
                     if isinstance(node.value, ast.Call):
-                         # Just a heuristic, likely an entry point
-                         analysis.entry_points.append(f"{filepath}:{target.id}")
+                        analysis.entry_points.append(f"{filepath}:{target.id}")
     
     if has_main_block:
         analysis.entry_points.append(f"{filepath}:__main__")
     
+    # Detect frameworks from imports
+    analysis.framework_hints = _detect_frameworks_from_content(
+        content, 
+        analysis.imports, 
+        config.frameworks
+    )
+    
     # Deduplicate
-    analysis.imports = list(set(analysis.imports))
-    analysis.env_vars = list(set(analysis.env_vars))
-    analysis.exposed_ports = list(set(analysis.exposed_ports))
-    analysis.framework_hints = list(set(analysis.framework_hints))
+    _deduplicate_analysis(analysis)
     
     return analysis
+
+
+def analyze_with_patterns(filepath: str, content: str, config: LanguageConfig) -> FileAnalysis:
+    """
+    Analyze a file using regex pattern matching based on language configuration.
+    
+    This works for any language defined in language_configs.py.
+    """
+    analysis = FileAnalysis(path=filepath, language=config.name)
+    
+    # Extract imports
+    for pattern in config.import_patterns:
+        for match in re.finditer(pattern, content, re.MULTILINE):
+            # Get the captured group (the import path)
+            if match.groups():
+                analysis.imports.append(match.group(1))
+    
+    # Detect frameworks
+    analysis.framework_hints = _detect_frameworks_from_content(
+        content,
+        analysis.imports,
+        config.frameworks
+    )
+    
+    # Extract environment variables
+    for pattern in config.env_var_patterns:
+        for match in re.finditer(pattern, content):
+            if match.groups():
+                env_var = match.group(1)
+                if env_var and len(env_var) > 1:  # Avoid single-char false positives
+                    analysis.env_vars.append(env_var)
+    
+    # Extract ports
+    for pattern in config.port_patterns:
+        for match in re.finditer(pattern, content, re.IGNORECASE):
+            try:
+                port = int(match.group(1))
+                if 1000 <= port <= 65535:
+                    analysis.exposed_ports.append(port)
+            except (ValueError, IndexError):
+                pass
+    
+    # Detect entry points
+    for pattern in config.entry_point_patterns:
+        if re.search(pattern, content, re.MULTILINE):
+            analysis.entry_points.append(f"{filepath}:detected")
+    
+    # Extract symbols (basic pattern matching for classes/functions)
+    _extract_symbols_with_patterns(filepath, content, analysis, config)
+    
+    _deduplicate_analysis(analysis)
+    
+    return analysis
+
+
+def _detect_frameworks_from_content(
+    content: str, 
+    imports: List[str], 
+    frameworks: List[FrameworkPattern]
+) -> List[str]:
+    """
+    Detect frameworks using both imports and content patterns.
+    """
+    detected = set()
+    
+    # Sort frameworks by priority (higher first)
+    sorted_frameworks = sorted(frameworks, key=lambda f: f.priority, reverse=True)
+    
+    for fw in sorted_frameworks:
+        # Check import patterns
+        for pattern in fw.import_patterns:
+            if any(re.search(pattern, imp, re.IGNORECASE) for imp in imports):
+                detected.add(fw.name)
+                break
+        
+        # Check content patterns
+        if fw.name not in detected:
+            for pattern in fw.content_patterns:
+                if re.search(pattern, content, re.MULTILINE):
+                    detected.add(fw.name)
+                    break
+    
+    return list(detected)
+
+
+def _extract_symbols_with_patterns(
+    filepath: str, 
+    content: str, 
+    analysis: FileAnalysis,
+    config: LanguageConfig
+) -> None:
+    """
+    Extract basic symbol information using regex patterns.
+    """
+    # Language-specific symbol patterns
+    if config.name == "JavaScript" or config.name == "TypeScript":
+        # Functions
+        func_patterns = [
+            r'export\s+(?:async\s+)?function\s+(\w+)',
+            r'function\s+(\w+)\s*\(',
+            r'const\s+(\w+)\s*=\s*(?:async\s*)?\(',
+        ]
+        for pattern in func_patterns:
+            for match in re.finditer(pattern, content):
+                analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
+        
+        # Classes
+        class_pattern = r'(?:export\s+)?class\s+(\w+)'
+        for match in re.finditer(class_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'class', filepath, 0, 0))
+    
+    elif config.name == "Go":
+        # Functions
+        func_pattern = r'func\s+(\w+)\s*\('
+        for match in re.finditer(func_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
+        
+        # Structs (Go's version of classes)
+        struct_pattern = r'type\s+(\w+)\s+struct'
+        for match in re.finditer(struct_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'struct', filepath, 0, 0))
+    
+    elif config.name == "Rust":
+        # Functions
+        func_pattern = r'fn\s+(\w+)\s*\('
+        for match in re.finditer(func_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
+        
+        # Structs
+        struct_pattern = r'struct\s+(\w+)'
+        for match in re.finditer(struct_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'struct', filepath, 0, 0))
+    
+    elif config.name in ("Ruby", "PHP", "Java"):
+        # Classes
+        class_pattern = r'class\s+(\w+)'
+        for match in re.finditer(class_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'class', filepath, 0, 0))
+    
+    elif config.name == "C#":
+        # Classes
+        class_pattern = r'(?:public\s+|private\s+|internal\s+)?class\s+(\w+)'
+        for match in re.finditer(class_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'class', filepath, 0, 0))
+        
+        # Methods
+        method_pattern = r'(?:public\s+|private\s+|protected\s+)?(?:static\s+)?(?:async\s+)?[\w<>]+\s+(\w+)\s*\('
+        for match in re.finditer(method_pattern, content):
+            if match.group(1) not in ('if', 'for', 'while', 'switch'):  # Filter out keywords
+                analysis.symbols.append(CodeSymbol(match.group(1), 'method', filepath, 0, 0))
+    
+    elif config.name == "Kotlin":
+        # Functions
+        func_pattern = r'fun\s+(\w+)\s*\('
+        for match in re.finditer(func_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
+        
+        # Classes
+        class_pattern = r'class\s+(\w+)'
+        for match in re.finditer(class_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'class', filepath, 0, 0))
+    
+    elif config.name == "Scala":
+        # Functions/Methods
+        func_pattern = r'def\s+(\w+)\s*[\[\(]'
+        for match in re.finditer(func_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
+        
+        # Classes and Objects
+        class_pattern = r'(?:case\s+)?class\s+(\w+)'
+        for match in re.finditer(class_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'class', filepath, 0, 0))
+        
+        object_pattern = r'object\s+(\w+)'
+        for match in re.finditer(object_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'object', filepath, 0, 0))
+    
+    elif config.name == "Elixir":
+        # Functions
+        func_pattern = r'def\s+(\w+)(?:\s*\(|,|\s+do)'
+        for match in re.finditer(func_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
+        
+        # Modules
+        module_pattern = r'defmodule\s+([\w.]+)'
+        for match in re.finditer(module_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'module', filepath, 0, 0))
+    
+    elif config.name == "Haskell":
+        # Functions
+        func_pattern = r'^(\w+)\s*::'
+        for match in re.finditer(func_pattern, content, re.MULTILINE):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
+        
+        # Data types
+        data_pattern = r'data\s+(\w+)'
+        for match in re.finditer(data_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'type', filepath, 0, 0))
+    
+    elif config.name == "Dart":
+        # Functions
+        func_pattern = r'(?:Future<\w+>|void|[\w<>]+)\s+(\w+)\s*\('
+        for match in re.finditer(func_pattern, content):
+            if match.group(1) not in ('if', 'for', 'while', 'switch'):
+                analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
+        
+        # Classes
+        class_pattern = r'class\s+(\w+)'
+        for match in re.finditer(class_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'class', filepath, 0, 0))
+    
+    elif config.name == "Swift":
+        # Functions
+        func_pattern = r'func\s+(\w+)\s*\('
+        for match in re.finditer(func_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
+        
+        # Classes and Structs
+        class_pattern = r'class\s+(\w+)'
+        for match in re.finditer(class_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'class', filepath, 0, 0))
+        
+        struct_pattern = r'struct\s+(\w+)'
+        for match in re.finditer(struct_pattern, content):
+            analysis.symbols.append(CodeSymbol(match.group(1), 'struct', filepath, 0, 0))
+
+
+
+def _extract_from_call_node(node: ast.Call, analysis: FileAnalysis, config: LanguageConfig) -> None:
+    """Extract environment variables and ports from AST Call nodes."""
+    try:
+        # Environment variables
+        if hasattr(node.func, 'attr') and node.func.attr in ('getenv', 'get'):
+            if node.args and isinstance(node.args[0], ast.Constant):
+                var_name = node.args[0].value
+                if isinstance(var_name, str) and len(var_name) > 1:
+                    analysis.env_vars.append(var_name)
+        
+        # Ports
+        func_name = ""
+        if hasattr(node.func, 'attr'):
+            func_name = node.func.attr
+        elif hasattr(node.func, 'id'):
+            func_name = node.func.id
+        
+        if func_name in ('run', 'listen', 'bind', 'serve'):
+            # Check keyword arguments
+            for kw in node.keywords:
+                if kw.arg == 'port' and isinstance(kw.value, ast.Constant):
+                    port = kw.value.value
+                    if isinstance(port, int) and 1 <= port <= 65535:
+                        analysis.exposed_ports.append(port)
+            
+            # Check positional arguments
+            for arg in node.args:
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, int):
+                    port = arg.value
+                    if 1000 <= port <= 65535:
+                        analysis.exposed_ports.append(port)
+    except:
+        pass
 
 
 def _is_main_block(node: ast.If) -> bool:
@@ -212,507 +514,174 @@ def _is_main_block(node: ast.If) -> bool:
     return False
 
 
-def _extract_env_vars(node: ast.Call, analysis: FileAnalysis) -> None:
-    """Extract environment variable references from a Call node."""
-    try:
-        # os.getenv("VAR") or os.environ.get("VAR")
-        if hasattr(node.func, 'attr') and node.func.attr in ('getenv', 'get'):
-            if node.args and isinstance(node.args[0], ast.Constant):
-                var_name = node.args[0].value
-                if isinstance(var_name, str):
-                    analysis.env_vars.append(var_name)
-        
-        # os.environ["VAR"]
-        if isinstance(node.func, ast.Subscript):
-            if hasattr(node.func.value, 'attr') and node.func.value.attr == 'environ':
-                if isinstance(node.func.slice, ast.Constant):
-                    var_name = node.func.slice.value
-                    if isinstance(var_name, str):
-                        analysis.env_vars.append(var_name)
-    except:
-        pass
-
-
-def _extract_ports(node: ast.Call, analysis: FileAnalysis) -> None:
-    """Extract port numbers from common patterns."""
-    try:
-        # Look for patterns like: run(port=8000), listen(3000), bind(("", 5000))
-        func_name = ""
-        if hasattr(node.func, 'attr'):
-            func_name = node.func.attr
-        elif hasattr(node.func, 'id'):
-            func_name = node.func.id
-        
-        if func_name in ('run', 'listen', 'bind', 'serve'):
-            # Check keyword arguments
-            for kw in node.keywords:
-                if kw.arg == 'port' and isinstance(kw.value, ast.Constant):
-                    port = kw.value.value
-                    if isinstance(port, int) and 1 <= port <= 65535:
-                        analysis.exposed_ports.append(port)
-            
-            # Check positional arguments for port numbers
-            for arg in node.args:
-                if isinstance(arg, ast.Constant) and isinstance(arg.value, int):
-                    port = arg.value
-                    if 1000 <= port <= 65535:  # Likely a port
-                        analysis.exposed_ports.append(port)
-    except:
-        pass
-
-
-def _detect_framework(module_name: str, analysis: FileAnalysis) -> None:
-    """Detect frameworks from import statements."""
-    framework_map = {
-        'fastapi': 'FastAPI',
-        'flask': 'Flask',
-        'django': 'Django',
-        'starlette': 'Starlette',
-        'tornado': 'Tornado',
-        'aiohttp': 'aiohttp',
-        'sanic': 'Sanic',
-        'uvicorn': 'Uvicorn',
-        'gunicorn': 'Gunicorn',
-        'celery': 'Celery',
-        'dramatiq': 'Dramatiq',
-        'pytest': 'pytest',
-        'streamlit': 'Streamlit',
-        'gradio': 'Gradio',
-    }
-    
-    base_module = module_name.split('.')[0].lower()
-    if base_module in framework_map:
-        analysis.framework_hints.append(framework_map[base_module])
-
-
-def analyze_javascript_file(filepath: str, content: str) -> FileAnalysis:
-    """
-    Analyze a JavaScript/TypeScript file using regex patterns.
-    
-    Robustly handles:
-    - ES6 Imports (import x from 'y')
-    - CommonJS (require('y'))
-    - Dynamic Imports (import('y'))
-    - Framework detection (Express, NestJS, Next, React, etc.)
-    - Environment variables
-    - Ports
-    
-    Args:
-        filepath: Relative path to the file.
-        content: File content as string.
-        
-    Returns:
-        FileAnalysis object with extracted metadata.
-    """
-    ext = os.path.splitext(filepath)[1].lower()
-    language = "typescript" if ext in ('.ts', '.tsx') else "javascript"
-    analysis = FileAnalysis(path=filepath, language=language)
-    
-    # --- Import Detection ---
-    # 1. ES6 Imports: import ... from '...'
-    es6_pattern = r'import\s+(?:[\w\s{},*]+)\s+from\s+[\'"]([^\'"]+)[\'"]'
-    # 2. Side-effect imports: import '...'
-    side_effect_pattern = r'import\s+[\'"]([^\'"]+)[\'"]'
-    # 3. CommonJS: require('...')
-    cjs_pattern = r'require\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)'
-    # 4. Dynamic import: import('...')
-    dynamic_pattern = r'import\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)'
-    
-    for pattern in [es6_pattern, side_effect_pattern, cjs_pattern, dynamic_pattern]:
-        for match in re.finditer(pattern, content):
-            analysis.imports.append(match.group(1))
-    
-    # --- Framework Hints ---
-    js_frameworks = {
-        'express': 'Express',
-        'fastify': 'Fastify',
-        'koa': 'Koa',
-        'hapi': 'Hapi',
-        'next': 'Next.js',
-        'nuxt': 'Nuxt.js',
-        'react': 'React',
-        'vue': 'Vue',
-        'angular': 'Angular',
-        '@nestjs/core': 'NestJS',
-        '@nestjs/common': 'NestJS',
-        'svelte': 'Svelte',
-        'meteor': 'Meteor',
-        'remix': 'Remix',
-    }
-    
-    # Check imports for framework names
-    for imp in analysis.imports:
-        # Check explicit package names
-        if imp in js_frameworks:
-            analysis.framework_hints.append(js_frameworks[imp])
-        else:
-            # Check scoped/subpath (e.g., @nestjs/common -> NestJS)
-            for fw_pkg, fw_name in js_frameworks.items():
-                if imp.startswith(fw_pkg):
-                    analysis.framework_hints.append(fw_name)
-                    break
-                    
-    # --- Port Detection ---
-    port_patterns = [
-        r'\.listen\s*\(\s*(\d+)',            # .listen(3000)
-        r'port:\s*(\d+)',                    # port: 3000
-        r'PORT\s*=\s*(\d+)',                 # PORT = 3000
-        r'const\s+PORT\s*=\s*(\d+)',         # const PORT = 3000
-        r'process\.env\.PORT\s*\|\|\s*(\d+)', # process.env.PORT || 3000
-        r'\.listen\s*\(\s*process\.env\.PORT\s*\|\|\s*(\d+)\s*\)' # .listen(process.env.PORT || 3000)
-    ]
-    for pattern in port_patterns:
-        for match in re.finditer(pattern, content, re.IGNORECASE):
-            try:
-                port = int(match.group(1))
-                if 1000 <= port <= 65535:
-                    analysis.exposed_ports.append(port)
-            except:
-                pass
-    
-    # --- Env Var Detection ---
-    env_patterns = [
-        r'process\.env\.([A-Z_][A-Z0-9_]*)',   # process.env.DB_HOST
-        r'process\.env\[[\'"]([A-Z_][A-Z0-9_]*)[\'"]\]', # process.env['DB_HOST']
-        r'ConfigService\.get\([\'"]([A-Z_][A-Z0-9_]*)[\'"]\)' # NestJS ConfigService.get('DB_HOST')
-    ]
-    for pattern in env_patterns:
-        for match in re.finditer(pattern, content):
-            analysis.env_vars.append(match.group(1))
-    
-    # --- Entry Point Heuristics ---
-    if re.search(r'app\.listen|server\.listen|createServer|NestFactory\.create', content):
-        analysis.entry_points.append(f"{filepath}:server")
-    
-    # --- Symbol Extraction (Basic) ---
-    # Extract exported functions/classes
-    class_pattern = r'export\s+class\s+(\w+)'
-    func_pattern = r'export\s+(?:async\s+)?function\s+(\w+)'
-    const_func_pattern = r'export\s+const\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[^=]+)\s*=>'
-    
-    for match in re.finditer(class_pattern, content):
-        analysis.symbols.append(CodeSymbol(match.group(1), 'class', filepath, 0, 0))
-    for match in re.finditer(func_pattern, content):
-        analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
-    for match in re.finditer(const_func_pattern, content):
-        analysis.symbols.append(CodeSymbol(match.group(1), 'function', filepath, 0, 0))
-    
-    # Deduplicate
+def _deduplicate_analysis(analysis: FileAnalysis) -> None:
+    """Remove duplicates from analysis results."""
     analysis.imports = list(set(analysis.imports))
     analysis.env_vars = list(set(analysis.env_vars))
     analysis.exposed_ports = list(set(analysis.exposed_ports))
     analysis.framework_hints = list(set(analysis.framework_hints))
-    
-    return analysis
+    analysis.entry_points = list(set(analysis.entry_points))
 
 
-def analyze_go_file(filepath: str, content: str) -> FileAnalysis:
-    """
-    Analyze a Go file using regex patterns.
-    
-    Robustly handles:
-    - Package declaration (identifies main package)
-    - Multi-line Import statements
-    - Framework detection (Gin, Echo, Fiber, Chi, etc.)
-    - Env vars (os.Getenv, viper)
-    - Port detection
-    
-    Args:
-        filepath: Relative path to the file.
-        content: File content as string.
-        
-    Returns:
-        FileAnalysis object with extracted metadata.
-    """
-    analysis = FileAnalysis(path=filepath, language="go")
-    
-    # --- Package Detection ---
-    pkg_match = re.search(r'^\s*package\s+(\w+)', content, re.MULTILINE)
-    is_main_pkg = pkg_match and pkg_match.group(1) == "main"
-        
-    # --- Import Detection ---
-    # 1. Block imports: import ( ... )
-    import_block = re.search(r'import\s*\((.*?)\)', content, re.DOTALL)
-    if import_block:
-        # Extract quoted strings inside the block
-        # Handles: "fmt", _ "github.com/lib/pq", name "pkg/path"
-        for match in re.finditer(r'[\'"]([^\'"]+)[\'"]', import_block.group(1)):
-            analysis.imports.append(match.group(1))
-    
-    # 2. Single line imports: import "fmt"
-    single_imports = re.finditer(r'^\s*import\s+[\'"]([^\'"]+)[\'"]', content, re.MULTILINE)
-    for match in single_imports:
-        analysis.imports.append(match.group(1))
-    
-    # --- Framework Detection ---
-    go_frameworks = {
-        'github.com/gin-gonic/gin': 'Gin',
-        'github.com/labstack/echo': 'Echo',
-        'github.com/gofiber/fiber': 'Fiber',
-        'github.com/go-chi/chi': 'Chi',
-        'github.com/gorilla/mux': 'Gorilla Mux',
-        'github.com/kataras/iris': 'Iris',
-        'github.com/beego/beego': 'Beego',
-        'github.com/revel/revel': 'Revel',
-        'net/http': 'net/http' 
-    }
-    
-    for imp in analysis.imports:
-        for pkg, name in go_frameworks.items():
-            if pkg in imp:
-                analysis.framework_hints.append(name)
-    
-    # --- Port Detection ---
-    port_patterns = [
-        r'ListenAndServe\s*\(\s*[\'"]?:(\d+)',     # ListenAndServe(":8080")
-        r'Run\s*\(\s*[\'"]?:(\d+)',                # router.Run(":8080")
-        r'Listen\s*\(\s*[\'"]?:(\d+)',             # app.Listen(":3000")
-        r'const\s+\w*Port\s*=\s*"?(\d+)',          # const Port = "8080"
-    ]
-    for pattern in port_patterns:
-        for match in re.finditer(pattern, content):
-            try:
-                port = int(match.group(1))
-                if 1000 <= port <= 65535:
-                    analysis.exposed_ports.append(port)
-            except:
-                pass
-                
-    # --- Env Var Detection ---
-    env_patterns = [
-        r'os\.Getenv\s*\(\s*[\'"]([A-Z_][A-Z0-9_]*)[\'"]\s*\)',  # os.Getenv("KEY")
-        r'os\.LookupEnv\s*\(\s*[\'"]([A-Z_][A-Z0-9_]*)[\'"]\s*\)', # os.LookupEnv("KEY")
-        r'viper\.GetString\s*\(\s*[\'"]([A-Z_][A-Z0-9_]*)[\'"]\s*\)' # viper.GetString("KEY")
-    ]
-    for pattern in env_patterns:
-        for match in re.finditer(pattern, content):
-            analysis.env_vars.append(match.group(1))
-            
-    # --- Entry Point ---
-    if is_main_pkg:
-        if re.search(r'func\s+main\s*\(\s*\)', content):
-             analysis.entry_points.append(f"{filepath}:main()")
-             
-    # Deduplicate
-    analysis.imports = list(set(analysis.imports))
-    analysis.env_vars = list(set(analysis.env_vars))
-    analysis.exposed_ports = list(set(analysis.exposed_ports))
-    analysis.framework_hints = list(set(analysis.framework_hints))
-    
-    return analysis
-
-
-def analyze_file(filepath: str, content: str) -> Optional[FileAnalysis]:
-    """
-    Analyze a source file based on its extension.
-    
-    This is the main entry point for code analysis. It detects the
-    language from the file extension and dispatches to the appropriate
-    analyzer.
-    
-    Args:
-        filepath: Relative path to the file.
-        content: File content as string.
-        
-    Returns:
-        FileAnalysis object if the file type is supported, None otherwise.
-    """
-    ext = os.path.splitext(filepath)[1].lower()
-    filename = os.path.basename(filepath)
-    
-    # Python
-    if ext == ".py":
-        return analyze_python_file(filepath, content)
-    
-    # JavaScript/TypeScript
-    if ext in (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"):
-        return analyze_javascript_file(filepath, content)
-    
-    # Go
-    if ext == ".go":
-        return analyze_go_file(filepath, content)
-        
-    # Manifest Files (Better Framework Detection)
-    if filename == "package.json":
-        return analyze_package_json(filepath, content)
-    if filename == "go.mod":
-        return analyze_go_mod(filepath, content)
-    if filename == "requirements.txt":
-        return analyze_requirements_txt(filepath, content)
-    if filename == "pyproject.toml":
-        return analyze_pyproject_toml(filepath, content)
-    
-    # Generic analysis for all other text-based files
-    return analyze_generic_file(filepath, content)
-
+# ============================================================================
+# MANIFEST FILE ANALYZERS
+# ============================================================================
 
 def analyze_package_json(filepath: str, content: str) -> FileAnalysis:
-    """Analyze package.json for JS/TS frameworks."""
+    """Analyze package.json for Node.js frameworks."""
+    from .language_configs import JS_CONFIG
     analysis = FileAnalysis(path=filepath, language="json")
-    try:
-        # Simple string matching to avoid json parse errors on loose files
-        # framework_map key: (dependency_name, Display Name)
-        frameworks = {
-            '"express"': "Express",
-            '"@nestjs/core"': "NestJS",
-            '"next"': "Next.js",
-            '"nuxt"': "Nuxt.js",
-            '"react"': "React",
-            '"vue"': "Vue",
-            '"svelte"': "Svelte",
-            '"@sveltejs/kit"': "SvelteKit",
-            '"fastify"': "Fastify",
-            '"koa"': "Koa",
-            '"hapi"': "Hapi",
-            '"@remix-run/node"': "Remix",
-            '"astro"': "Astro",
-            '"adonis"': "AdonisJS",
-            '"meteor"': "Meteor"
-        }
-        
-        for key, name in frameworks.items():
-            if key in content:
-                analysis.framework_hints.append(name)
-                
-        # Also Extract scripts as "entry points" hints
-        if '"start":' in content:
-            # simple extraction
-            start_script = re.search(r'"start":\s*"([^"]+)"', content)
-            if start_script:
-                analysis.entry_points.append(f"npm run start ({start_script.group(1)})")
-                
-    except Exception as e:
-        logger.debug(f"Error parsing package.json: {e}")
-        
+    
+    # Detect frameworks from dependencies
+    for fw in JS_CONFIG.frameworks:
+        for pattern in fw.import_patterns:
+            # Search for dependency names
+            dep_pattern = f'"{pattern.replace(r"\\b", "")}"'
+            if re.search(dep_pattern, content):
+                analysis.framework_hints.append(fw.name)
+    
+    # Extract start script as entry point
+    start_script = re.search(r'"start":\s*"([^"]+)"', content)
+    if start_script:
+        analysis.entry_points.append(f"npm run start ({start_script.group(1)})")
+    
+    _deduplicate_analysis(analysis)
     return analysis
 
 
 def analyze_go_mod(filepath: str, content: str) -> FileAnalysis:
     """Analyze go.mod for Go frameworks."""
+    from .language_configs import GO_CONFIG
     analysis = FileAnalysis(path=filepath, language="go-mod")
     
-    frameworks = {
-        'github.com/gin-gonic/gin': 'Gin',
-        'github.com/labstack/echo': 'Echo',
-        'github.com/gofiber/fiber': 'Fiber',
-        'github.com/go-chi/chi': 'Chi',
-        'github.com/beego/beego': 'Beego',
-        'github.com/revel/revel': 'Revel',
-        'github.com/kataras/iris': 'Iris',
-        'github.com/gorilla/mux': 'Gorilla Mux'
-    }
+    for fw in GO_CONFIG.frameworks:
+        for pattern in fw.import_patterns:
+            if re.search(pattern, content):
+                analysis.framework_hints.append(fw.name)
     
-    for pkg, name in frameworks.items():
-        if pkg in content:
-            analysis.framework_hints.append(name)
-            
+    _deduplicate_analysis(analysis)
     return analysis
 
 
 def analyze_requirements_txt(filepath: str, content: str) -> FileAnalysis:
     """Analyze requirements.txt for Python frameworks."""
+    from .language_configs import PYTHON_CONFIG
     analysis = FileAnalysis(path=filepath, language="pip-requirements")
     
-    frameworks = {
-        'fastapi': 'FastAPI',
-        'flask': 'Flask',
-        'django': 'Django',
-        'pyramid': 'Pyramid',
-        'bottle': 'Bottle',
-        'tornado': 'Tornado',
-        'falcon': 'Falcon',
-        'sanic': 'Sanic',
-        'starlette': 'Starlette',
-        'litestar': 'Litestar',
-        'quart': 'Quart',
-        'streamlit': 'Streamlit',
-        'dash': 'Dash'
-    }
-    
-    # Case insensitive search
     content_lower = content.lower()
-    for pkg, name in frameworks.items():
-        # Match start of line, optional whitespace, package name, boundary
-        if re.search(rf'^\s*{pkg}\b', content_lower, re.MULTILINE):
-            analysis.framework_hints.append(name)
-            
+    for fw in PYTHON_CONFIG.frameworks:
+        for pattern in fw.import_patterns:
+            # Match package names at start of line
+            clean_pattern = pattern.replace(r'\b', '').lower()
+            if re.search(rf'^\s*{clean_pattern}\b', content_lower, re.MULTILINE):
+                analysis.framework_hints.append(fw.name)
+    
+    _deduplicate_analysis(analysis)
     return analysis
 
 
 def analyze_pyproject_toml(filepath: str, content: str) -> FileAnalysis:
     """Analyze pyproject.toml for Python frameworks."""
-    # Similar to requirements but looks for key names
-    analysis = FileAnalysis(path=filepath, language="toml")
-    
-    # Re-use logic mostly
+    # Reuse requirements.txt logic
     return analyze_requirements_txt(filepath, content)
 
 
+def analyze_cargo_toml(filepath: str, content: str) -> FileAnalysis:
+    """Analyze Cargo.toml for Rust frameworks."""
+    from .language_configs import RUST_CONFIG
+    analysis = FileAnalysis(path=filepath, language="toml")
+    
+    for fw in RUST_CONFIG.frameworks:
+        for pattern in fw.import_patterns:
+            if re.search(pattern, content):
+                analysis.framework_hints.append(fw.name)
+    
+    _deduplicate_analysis(analysis)
+    return analysis
+
+
+def analyze_gemfile(filepath: str, content: str) -> FileAnalysis:
+    """Analyze Gemfile for Ruby frameworks."""
+    from .language_configs import RUBY_CONFIG
+    analysis = FileAnalysis(path=filepath, language="ruby-gemfile")
+    
+    for fw in RUBY_CONFIG.frameworks:
+        for pattern in fw.import_patterns:
+            if re.search(pattern, content):
+                analysis.framework_hints.append(fw.name)
+    
+    _deduplicate_analysis(analysis)
+    return analysis
+
+
+def analyze_composer_json(filepath: str, content: str) -> FileAnalysis:
+    """Analyze composer.json for PHP frameworks."""
+    from .language_configs import PHP_CONFIG
+    analysis = FileAnalysis(path=filepath, language="json")
+    
+    for fw in PHP_CONFIG.frameworks:
+        for pattern in fw.import_patterns:
+            dep_pattern = f'"{pattern}"'
+            if re.search(dep_pattern, content, re.IGNORECASE):
+                analysis.framework_hints.append(fw.name)
+    
+    _deduplicate_analysis(analysis)
+    return analysis
 
 
 def analyze_generic_file(filepath: str, content: str) -> FileAnalysis:
     """
-    Perform generic analysis on any text file using universal patterns.
+    Perform generic analysis on unsupported file types.
     
-    This ensures DockAI supports "every language there was and will be"
-    by falling back to identifying common concepts like:
-    - Environment variables (caps with underscores)
-    - Port numbers
-    - Framework hints (based on common keywords)
-    
-    Args:
-        filepath: Relative path to the file.
-        content: File content as string.
-        
-    Returns:
-        FileAnalysis object with generic metadata.
+    Uses universal patterns to extract:
+    - Environment variables (SCREAMING_SNAKE_CASE)
+    - Ports (in assignment patterns)
+    - Language hints from shebangs
     """
     ext = os.path.splitext(filepath)[1].lower().replace('.', '') or "unknown"
     analysis = FileAnalysis(path=filepath, language=ext)
     
-    # Generic Env Var detection (SCREAMING_SNAKE_CASE)
-    # Matches words with at least one underscore, all caps, length > 3
-    # e.g., DATABASE_URL, API_KEY_V1
+    # Generic env var detection
     env_pattern = r'\b[A-Z][A-Z0-9_]*_[A-Z0-9_]+\b'
     potential_envs = re.findall(env_pattern, content)
     
-    # Filter out common noise
+    # Filter out noise
     noise = {'STDIN', 'STDOUT', 'STDERR', 'UTF8', 'UUID', 'JSON', 'HTML', 'HTTP', 'HTTPS', 'TODO', 'FIXME'}
-    analysis.env_vars = list(set([e for e in potential_envs if e not in noise]))
+    analysis.env_vars = [e for e in set(potential_envs) if e not in noise and len(e) > 3]
     
-    # Generic Port detection (1024-65535)
-    # Look for assignment-like patterns: port = 8080, port: 8080, port: u16 = 8080
-    # We allow some characters between 'port' and the number to handle type hints
+    # Generic port detection
     port_pattern = r'(?i)port.{0,20}[=:]\s*(\d{4,5})'
     for match in re.finditer(port_pattern, content):
         try:
             port = int(match.group(1))
             if 1024 <= port <= 65535:
-                # Avoid year-like numbers if possible (2020-2030), though hard to distinguish
                 analysis.exposed_ports.append(port)
         except:
             pass
-            
-    analysis.exposed_ports = list(set(analysis.exposed_ports))
     
-    # Simple Framework/Language Hinting based on Shebang
+    # Shebang detection
     if content.startswith('#!'):
-        first_line = content.split('\n')[0]
-        if 'python' in first_line:
-            analysis.language = 'python'
-        elif 'node' in first_line:
-            analysis.language = 'javascript'
-        elif 'bash' in first_line or 'sh' in first_line:
-            analysis.language = 'shell'
-        elif 'ruby' in first_line:
-            analysis.language = 'ruby'
-        elif 'perl' in first_line:
-            analysis.language = 'perl'
-        elif 'php' in first_line:
-            analysis.language = 'php'
-            
+        first_line = content.split('\n')[0].lower()
+        lang_map = {
+            'python': 'python',
+            'node': 'javascript',
+            'ruby': 'ruby',
+            'php': 'php',
+            'bash': 'shell',
+            'sh': 'shell',
+        }
+        for key, lang in lang_map.items():
+            if key in first_line:
+                analysis.language = lang
+                break
+    
+    _deduplicate_analysis(analysis)
     return analysis
 
+
+# ============================================================================
+# BATCH ANALYSIS
+# ============================================================================
 
 def analyze_project(root_path: str, file_tree: List[str]) -> Dict[str, FileAnalysis]:
     """
@@ -727,9 +696,19 @@ def analyze_project(root_path: str, file_tree: List[str]) -> Dict[str, FileAnaly
     """
     results = {}
     analyzed = 0
+    supported_exts = set(get_all_supported_extensions())
     
     for rel_path in file_tree:
         abs_path = os.path.join(root_path, rel_path)
+        ext = os.path.splitext(rel_path)[1].lower()
+        filename = os.path.basename(rel_path).lower()
+        
+        # Skip if not a supported extension and not a known manifest
+        manifest_files = {'package.json', 'go.mod', 'requirements.txt', 'pyproject.toml', 
+                         'cargo.toml', 'gemfile', 'composer.json'}
+        
+        if ext not in supported_exts and filename not in manifest_files:
+            continue
         
         try:
             with open(abs_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -743,7 +722,7 @@ def analyze_project(root_path: str, file_tree: List[str]) -> Dict[str, FileAnaly
         except Exception as e:
             logger.debug(f"Could not analyze {rel_path}: {e}")
     
-    logger.info(f"Code intelligence: analyzed {analyzed} files")
+    logger.info(f"Code intelligence: analyzed {analyzed} files across {len(set(get_all_supported_extensions()))} languages")
     return results
 
 
@@ -777,13 +756,13 @@ def get_project_summary(analyses: Dict[str, FileAnalysis]) -> Dict:
         for sym in analysis.symbols:
             if sym.type == "function":
                 summary["total_functions"] += 1
-            elif sym.type == "class":
+            elif sym.type in ("class", "struct"):
                 summary["total_classes"] += 1
     
     # Convert sets to lists for JSON serialization
-    summary["languages"] = list(summary["languages"])
-    summary["frameworks"] = list(summary["frameworks"])
-    summary["all_env_vars"] = list(summary["all_env_vars"])
-    summary["all_ports"] = list(summary["all_ports"])
+    summary["languages"] = sorted(summary["languages"])
+    summary["frameworks"] = sorted(summary["frameworks"])
+    summary["all_env_vars"] = sorted(summary["all_env_vars"])
+    summary["all_ports"] = sorted(summary["all_ports"])
     
     return summary
