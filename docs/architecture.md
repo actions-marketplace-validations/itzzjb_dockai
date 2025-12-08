@@ -79,12 +79,12 @@ graph TB
     Layer4 --> Layer5
     Layer3 --> Layer6
     
-    style Layer1 fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Layer2 fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Layer3 fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Layer4 fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Layer5 fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Layer6 fill:#f5f5f5,stroke:#333,stroke-width:2px
+    style Layer1 stroke:#333,stroke-width:2px
+    style Layer2 stroke:#333,stroke-width:2px
+    style Layer3 stroke:#333,stroke-width:2px
+    style Layer4 stroke:#333,stroke-width:2px
+    style Layer5 stroke:#333,stroke-width:2px
+    style Layer6 stroke:#333,stroke-width:2px
 ```
 
 
@@ -119,21 +119,21 @@ flowchart TD
     
     Increment --> Generate
     
-    style Start fill:#e0e0e0,stroke:#333,stroke-width:2px
-    style End fill:#e0e0e0,stroke:#333,stroke-width:2px
-    style Stop fill:#d0d0d0,stroke:#333,stroke-width:2px
-    style Scan fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Analyze fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style ReadFiles fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Blueprint fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Generate fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Review fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Validate fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Reflect fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style Increment fill:#f5f5f5,stroke:#333,stroke-width:2px
-    style ShouldReview fill:#ffffff,stroke:#333,stroke-width:2px,stroke-dasharray:5 5
-    style ShouldRetry fill:#ffffff,stroke:#333,stroke-width:2px,stroke-dasharray:5 5
-    style NeedsReanalysis fill:#ffffff,stroke:#333,stroke-width:2px,stroke-dasharray:5 5
+    style Start stroke:#333,stroke-width:2px
+    style End stroke:#333,stroke-width:2px
+    style Stop stroke:#333,stroke-width:2px
+    style Scan stroke:#333,stroke-width:2px
+    style Analyze stroke:#333,stroke-width:2px
+    style ReadFiles stroke:#333,stroke-width:2px
+    style Blueprint stroke:#333,stroke-width:2px
+    style Generate stroke:#333,stroke-width:2px
+    style Review stroke:#333,stroke-width:2px
+    style Validate stroke:#333,stroke-width:2px
+    style Reflect stroke:#333,stroke-width:2px
+    style Increment stroke:#333,stroke-width:2px
+    style ShouldReview stroke:#333,stroke-width:2px,stroke-dasharray:5 5
+    style ShouldRetry stroke:#333,stroke-width:2px,stroke-dasharray:5 5
+    style NeedsReanalysis stroke:#333,stroke-width:2px,stroke-dasharray:5 5
 ```
 
 
@@ -264,7 +264,7 @@ Phase 1: INDEXING (Happens Once)
 ┌──────────────────────┐
 │  Sentence Transformer│  Create embeddings
 │  Model:              │  all-MiniLM-L6-v2 (default)
-│  all-MiniLM-L6-v2   │  384-dimensional vectors
+│  all-MiniLM-L6-v2    │  384-dimensional vectors
 └──────┬───────────────┘
        │
        ▼

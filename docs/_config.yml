@@ -8,10 +8,7 @@ markdown: kramdown
 kramdown:
   input: GFM
   syntax_highlighter: rouge
-
-# Plugins
-plugins:
-  - jekyll-mermaid
+  parse_block_html: true
 
 # Navigation
 nav_links:
@@ -34,8 +31,13 @@ nav_links:
   - title: FAQ
     url: /faq
 
-# Google Analytics (optional - add your tracking ID)
-# google_analytics: UA-XXXXXXXXX-X
-
 # SEO
 lang: en
+
+# Exclude from build
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor/
+  - .bundle/
+
