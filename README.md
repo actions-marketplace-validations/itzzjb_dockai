@@ -209,7 +209,24 @@ Claude: [Uses DockAI MCP] I'll generate a Dockerfile for your project...
 pip install dockai-cli
 ```
 
-#### Option 2: Install from Source
+#### Option 2: Install with uv (Faster)
+
+[uv](https://github.com/astral-sh/uv) is an extremely fast Python package installer and resolver:
+
+```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install DockAI
+uv pip install dockai-cli
+```
+
+**Why use uv?**
+- 🚀 **10-100x faster** than pip
+- 📦 **Drop-in replacement** for pip
+- 🔒 **Deterministic** dependency resolution
+
+#### Option 3: Install from Source
 
 ```bash
 git clone https://github.com/itzzjb/dockai.git
