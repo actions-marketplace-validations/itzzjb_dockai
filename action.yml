@@ -311,6 +311,7 @@ runs:
         DOCKAI_TRUNCATION_ENABLED: ${{ inputs.truncation_enabled }}
         DOCKAI_TOKEN_LIMIT: ${{ inputs.token_limit }}
         DOCKAI_USE_RAG: ${{ inputs.use_rag }}
+        DOCKAI_EMBEDDING_MODEL: ${{ inputs.embedding_model }}
         DOCKAI_READ_ALL_FILES: ${{ inputs.read_all_files }}
         # Custom Instructions
         DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
