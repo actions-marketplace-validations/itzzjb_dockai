@@ -263,7 +263,12 @@ class ProjectIndex:
         try:
             # Generate embeddings for all documents at once
             # SentenceTransformers handles batching internally
-            embeddings = self.embedder.encode(documents, convert_to_numpy=True)
+            # Disable progress bar to use our own logging
+            embeddings = self.embedder.encode(
+                documents, 
+                convert_to_numpy=True,
+                show_progress_bar=False
+            )
             
             # Normalize embeddings for cosine similarity
             norm = np.linalg.norm(embeddings, axis=1, keepdims=True)
@@ -293,8 +298,12 @@ class ProjectIndex:
             return []
             
         try:
-            # Embed the query
-            query_embedding = self.embedder.encode([query], convert_to_numpy=True)
+            # Embed the query (disable progress bar for single query)
+            query_embedding = self.embedder.encode(
+                [query], 
+                convert_to_numpy=True,
+                show_progress_bar=False
+            )
             
             # Normalize query embedding
             query_norm = np.linalg.norm(query_embedding, axis=1, keepdims=True)
