@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dockai-cli"
-version = "4.0.5"
+version = "4.0.6"
 description = "The Customizable AI Dockerfile Generation Framework"
 readme = "README.md"
 authors = [
