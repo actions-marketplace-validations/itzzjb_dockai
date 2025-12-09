@@ -192,7 +192,8 @@ def build(
         "detected_health_endpoint": None,  # AI-detected from file contents
         "readiness_patterns": [],  # AI-detected startup log patterns
         "failure_patterns": [],  # AI-detected failure log patterns
-        "needs_reanalysis": False  # Flag to trigger re-analysis
+        "needs_reanalysis": False,  # Flag to trigger re-analysis
+        "best_dockerfile": None  # Stores the best functional Dockerfile (e.g. built but had lint errors) from previous attempts
     }
 
     # Create and compile the LangGraph workflow

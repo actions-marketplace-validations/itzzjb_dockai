@@ -1056,10 +1056,17 @@ def validate_node(state: DockAIState) -> DockAIState:
                     "suggestion": "Use alpine or slim base images, or enable multi-stage builds",
                     "should_retry": True
                 }
+                
+                # IMPORTANT: Even though we fail for size, the image IS functional.
+                # Save it as the best_dockerfile so we have a fallback if optimization fails/breaks the build.
+                logger.info("Saving functional (but oversized) Dockerfile as fallback candidate.")
+                
                 return {
                     "validation_result": {"success": False, "message": warning_msg},
                     "error": warning_msg,
-                    "error_details": error_details
+                    "error_details": error_details,
+                    "best_dockerfile": dockerfile_content,
+                    "best_dockerfile_source": f"Attempt {state.get('retry_count', 0) + 1} (Oversized)"
                 }
         
         if success:
