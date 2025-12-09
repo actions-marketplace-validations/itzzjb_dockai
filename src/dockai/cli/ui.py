@@ -14,6 +14,7 @@ import logging
 from rich.console import Console
 from rich.panel import Panel
 from rich.logging import RichHandler
+from rich.syntax import Syntax
 
 # Initialize the global Rich console instance
 console = Console()
@@ -93,6 +94,15 @@ def display_summary(final_state: dict, output_path: str):
     """
     print_success(f"Dockerfile validated successfully.")
     console.print(f"[bold green]Final Dockerfile saved to {output_path}[/bold green]")
+
+    # Display the generated Dockerfile
+    dockerfile_content = final_state.get("dockerfile_content", "")
+    if dockerfile_content:
+        console.print(Panel(
+            Syntax(dockerfile_content, "dockerfile", theme="monokai", line_numbers=True, word_wrap=True),
+            title="Generated Dockerfile",
+            border_style="blue"
+        ))
     
     # Show retry history summary if there were retries (Adaptive Learning)
     retry_history = final_state.get("retry_history", [])
@@ -147,6 +157,15 @@ def display_failure(final_state: dict):
         final_state (dict): The final state of the workflow.
     """
     console.print(f"\n[bold red]Failed to generate a valid Dockerfile[/bold red]\n")
+    
+    # Display the generated Dockerfile (if any)
+    dockerfile_content = final_state.get("dockerfile_content", "")
+    if dockerfile_content:
+        console.print(Panel(
+            Syntax(dockerfile_content, "dockerfile", theme="monokai", line_numbers=True, word_wrap=True),
+            title="Generated Dockerfile (Invalid/Incomplete)",
+            border_style="red"
+        ))
     
     # Display classified error information if available
     error_details = final_state.get("error_details")
