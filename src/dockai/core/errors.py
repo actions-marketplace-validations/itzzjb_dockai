@@ -242,6 +242,13 @@ the operation was SUCCESSFUL. Only look for ACTUAL errors.
   Legacy projects often have vulnerabilities that cannot be auto-fixed.
   The dockerfile_fix should be: "Remove the audit command from the RUN instruction"
 
+**Truncated / Missing Logs**:
+  If the error says "logs were truncated" or "no explicit error message":
+  - Assume this IS a DOCKERFILE_ERROR (e.g., build crashed or apt failed silently).
+  - Set should_retry = True.
+  - Suggest increasing verbosity or checking package names.
+  - DO NOT classify as UNKNOWN_ERROR unless you are sure it is not retryable.
+
 ## Output Requirements
 
 - Be specific about what file or command needs to be created/run
@@ -280,8 +287,8 @@ Classify this error and provide guidance.""")
         result = chain.invoke(
             {
                 "stack": stack or "Unknown",
-                "error_message": error_message[:2000],  # Limit size to avoid context overflow
-                "logs": logs[:3000] if logs else "No additional logs"
+                "error_message": error_message[:5000],  # Increase limit to capture more context
+                "logs": logs[-10000:] if logs else "No additional logs"  # Take the TAIL of the logs (last 10000 chars) where errors usually are
             },
             config={"callbacks": [callback]}
         )

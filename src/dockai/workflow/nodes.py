@@ -321,22 +321,13 @@ from ..utils.file_utils import smart_truncate, read_critical_files
 
 def read_files_node(state: DockAIState) -> DockAIState:
     """
-    Reads project files for LLM context with optional RAG support.
+    Reads project files for LLM context using RAG.
     
-    This node supports two modes:
-    
-    1. **Standard Mode** (DOCKAI_USE_RAG=false, default):
-       - Reads ALL source files with smart truncation
-       - Simple but effective for most projects
-    
-    2. **RAG Mode** (DOCKAI_USE_RAG=true):
-       - Uses semantic search + AST analysis
-       - Retrieves only the most relevant context
-       - Better for large projects with many files
-       - Detects entry points, env vars, ports automatically
-    
+    This node uses semantic search and AST analysis to retrieve only the 
+    most relevant context for Dockerfile generation, ensuring high quality
+    output even for large repositories.
+
     Environment Variables:
-        DOCKAI_USE_RAG: Enable RAG mode (default: false)
         DOCKAI_READ_ALL_FILES: In standard mode, read all vs priority files (default: true)
     
     Args:
@@ -350,7 +341,7 @@ def read_files_node(state: DockAIState) -> DockAIState:
     file_tree = state.get("file_tree", [])
     config = state.get("config", {})
     
-    # --- RAG STRATEGY (v4.0 ONLY) ---
+    # --- RAG STRATEGY ---
     return _read_files_rag(path, file_tree, config, analysis_result)
 
 
@@ -364,7 +355,7 @@ def _read_files_rag(path: str, file_tree: list, config: dict, analysis_result: d
         from ..utils.indexer import ProjectIndex
         from ..utils.context_retriever import ContextRetriever
     except ImportError as e:
-        logger.error(f"Critical RAG dependencies missing: {e}. Please install dockai-cli[rag].")
+        logger.error(f"Critical RAG dependencies missing: {e}. Please reinstall dockai-cli.")
         return _fallback_read_simple(path, file_tree, config)
     
     logger.info("Using RAG mode for intelligent context retrieval...")
@@ -449,7 +440,7 @@ def _fallback_read_simple(path: str, file_tree: list, config: dict) -> dict:
         except Exception:
             continue
             
-    return {"file_content": "".join(content_buffer)}
+    return {"file_contents": "".join(content_buffer)}
     
 
 
@@ -482,7 +473,8 @@ def blueprint_node(state: DockAIState) -> DockAIState:
             file_tree=state.get("file_tree", []),
             file_contents=file_contents,
             analysis_result=analysis_result,
-            retry_history=retry_history
+            retry_history=retry_history,
+            custom_instructions=state.get("config", {}).get("blueprint_instructions", "")
         )
         
         blueprint, usage = create_blueprint(context=context)
@@ -865,7 +857,8 @@ def review_node(state: DockAIState) -> DockAIState:
                 file_tree=state.get("file_tree", []),
                 file_contents=state.get("file_contents", ""),
                 analysis_result=state.get("analysis_result", {}),
-                dockerfile_content=dockerfile_content
+                dockerfile_content=dockerfile_content,
+                custom_instructions=state.get("config", {}).get("reviewer_instructions", "")
             )
             
             review_result, usage = review_dockerfile(context=reviewer_context)
@@ -1063,10 +1056,17 @@ def validate_node(state: DockAIState) -> DockAIState:
                     "suggestion": "Use alpine or slim base images, or enable multi-stage builds",
                     "should_retry": True
                 }
+                
+                # IMPORTANT: Even though we fail for size, the image IS functional.
+                # Save it as the best_dockerfile so we have a fallback if optimization fails/breaks the build.
+                logger.info("Saving functional (but oversized) Dockerfile as fallback candidate.")
+                
                 return {
                     "validation_result": {"success": False, "message": warning_msg},
                     "error": warning_msg,
-                    "error_details": error_details
+                    "error_details": error_details,
+                    "best_dockerfile": dockerfile_content,
+                    "best_dockerfile_source": f"Attempt {state.get('retry_count', 0) + 1} (Oversized)"
                 }
         
         if success:
@@ -1080,11 +1080,29 @@ def validate_node(state: DockAIState) -> DockAIState:
                 span.set_attribute("validation.success", False)
                 span.set_attribute("validation.error", message[:200] if message else "")
 
-        return {
+        # FALLBACK STRATEGY: 
+        # If the build/run passed (success=True OR message contains "Build/Run passed"), 
+        # we consider this a "functional" Dockerfile and save it as a fallback.
+        # This handles the case where lint warnings cause failure, but the Dockerfile works.
+        is_functional = success or (message and "Build/Run passed" in message)
+        
+        updated_state_updates = {
             "validation_result": {"success": success, "message": message},
             "error": message if not success else None,
             "error_details": error_details
         }
+        
+        if is_functional:
+            logger.info("Current Dockerfile verified as functional (saved as fallback candidate).")
+            # We overwrite the best_dockerfile because this one is newer and also functional
+            # (Assuming newer is better closer to perfect)
+            # OR logic: If current has NO lint errors (success=True), it's definitely best.
+            # If current HAS lint errors but works, it replaces previous only if previous didn't exist?
+            # Let's say: always update best if it works. The goal is "last working version".
+            updated_state_updates["best_dockerfile"] = dockerfile_content
+            updated_state_updates["best_dockerfile_source"] = f"Attempt {state.get('retry_count', 0) + 1}"
+            
+        return updated_state_updates
 
 
 def reflect_node(state: DockAIState) -> DockAIState:
@@ -1113,10 +1131,47 @@ def reflect_node(state: DockAIState) -> DockAIState:
         error_message = state.get("error", "Unknown error")
         error_details = state.get("error_details", {})
         analysis_result = state.get("analysis_result", {})
+        analysis_result = state.get("analysis_result", {})
         retry_history = state.get("retry_history", [])
+        max_retries = state.get("max_retries", 3)
+        best_dockerfile = state.get("best_dockerfile")
+        best_source = state.get("best_dockerfile_source", "unknown")
         
         logger.info("Reflecting on failure...")
         
+        # FINAL RETRY CHECK: If we are out of retries, maybe revert?
+        # Note: The 'retry_count' here is 0-indexed. If current retry_count is 2 and max is 3,
+        # we have tried 3 times (0, 1, 2). The next move would be increment to 3 -> check limit.
+        # However, the graph logic usually checks limit BEFORE generating next attempt.
+        # Typically: Reflect -> Loop decision -> (Increment -> Check) or (Check -> Increment).
+        # We'll make the reversion logic robust: If we recommend NOT retrying (needs_reanalysis=False and out of luck)
+        # OR if we know the loop will end.
+        
+        # Typically the loop ends if retry_count >= max_retries. 
+        # Since we are in reflect node, we just finished attempt 'retry_count + 1'.
+        # If retry_count + 1 >= max_retries, this was the last shot.
+        
+        if (retry_count + 1) >= max_retries:
+            logger.warning(f"Max retries ({max_retries}) reached.")
+            
+            if best_dockerfile and best_dockerfile != dockerfile_content:
+                logger.info(f"Reverting to last working version from {best_source} (ignoring lint warnings)...")
+                
+                # Write the fallback to disk
+                output_path = os.path.join(state["path"], "Dockerfile")
+                try:
+                    with open(output_path, "w") as f:
+                        f.write(best_dockerfile)
+                    
+                    # Update state to reflect reversion
+                    # We still return the reflection in case the graph wants it, 
+                    # but we modify the 'error' to indicate reversion.
+                    error_message = f"Max retries reached. Reverted to last working version from {best_source}. (Validation failed: {error_message})"
+                    state["error"] = error_message
+                    
+                except Exception as e:
+                    logger.error(f"Failed to revert Dockerfile: {e}")
+
         try:
             # Get container logs from error details if available
             container_logs = error_details.get("original_error", "") if error_details else ""
@@ -1130,7 +1185,8 @@ def reflect_node(state: DockAIState) -> DockAIState:
                 error_message=error_message,
                 error_details=error_details,
                 retry_history=retry_history,
-                container_logs=container_logs
+                container_logs=container_logs,
+                custom_instructions=state.get("config", {}).get("reflector_instructions", "")
             )
             
             reflection_result, usage = reflect_on_failure(context=reflect_context)

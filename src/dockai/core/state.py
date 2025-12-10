@@ -49,6 +49,8 @@ class DockAIState(TypedDict):
     # Generation
     dockerfile_content: str  # The current generated Dockerfile content
     previous_dockerfile: Optional[str]  # The Dockerfile from the previous attempt (for diffing/iteration)
+    best_dockerfile: Optional[str]  # The last "working" Dockerfile (builds/runs ok) even if it has warnings
+    best_dockerfile_source: Optional[str]  # Description of where the best Dockerfile came from (e.g. "Attempt 1")
     
     # Validation & Execution
     validation_result: Dict[str, Any]  # Result of the build/run validation step

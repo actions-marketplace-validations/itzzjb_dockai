@@ -11,9 +11,11 @@ console output is consistent, beautiful, and informative. It handles:
 """
 
 import logging
+import os
 from rich.console import Console
 from rich.panel import Panel
 from rich.logging import RichHandler
+from rich.syntax import Syntax
 
 # Initialize the global Rich console instance
 console = Console()
@@ -93,6 +95,15 @@ def display_summary(final_state: dict, output_path: str):
     """
     print_success(f"Dockerfile validated successfully.")
     console.print(f"[bold green]Final Dockerfile saved to {output_path}[/bold green]")
+
+    # Display the generated Dockerfile
+    dockerfile_content = final_state.get("dockerfile_content", "")
+    if dockerfile_content:
+        console.print(Panel(
+            Syntax(dockerfile_content, "dockerfile", theme="monokai", line_numbers=True, word_wrap=True),
+            title="Generated Dockerfile",
+            border_style="blue"
+        ))
     
     # Show retry history summary if there were retries (Adaptive Learning)
     retry_history = final_state.get("retry_history", [])
@@ -147,6 +158,41 @@ def display_failure(final_state: dict):
         final_state (dict): The final state of the workflow.
     """
     console.print(f"\n[bold red]Failed to generate a valid Dockerfile[/bold red]\n")
+    
+    # Check for legacy/best functional fallback
+    # If we have a 'best_dockerfile' (one that built but maybe had lint errors), use that instead of the failed last attempt
+    best_dockerfile = final_state.get("best_dockerfile")
+    dockerfile_content = final_state.get("dockerfile_content", "")
+    
+    if best_dockerfile and best_dockerfile != dockerfile_content:
+        # We have a better previous version!
+        path = final_state.get("path", ".")
+        output_path = os.path.join(path, "Dockerfile")
+        try:
+            with open(output_path, "w") as f:
+                f.write(best_dockerfile)
+            
+            source = final_state.get("best_dockerfile_source", "previous attempt")
+            console.print(Panel(
+                f"[bold green]Restored best valid Dockerfile from {source}[/bold green]\n"
+                f"[dim](Latest attempt failed, but we restored the version that successfully built)[/dim]",
+                border_style="green"
+            ))
+            # Update content for display below
+            dockerfile_content = best_dockerfile
+        except Exception as e:
+            console.print(f"[red]Failed to restore best Dockerfile: {e}[/red]")
+    
+    # Display the generated Dockerfile (if any)
+    if dockerfile_content:
+        title = "Restored Functional Dockerfile" if best_dockerfile else "Generated Dockerfile (Invalid/Incomplete)"
+        border = "green" if best_dockerfile else "red"
+        
+        console.print(Panel(
+            Syntax(dockerfile_content, "dockerfile", theme="monokai", line_numbers=True, word_wrap=True),
+            title=title,
+            border_style=border
+        ))
     
     # Display classified error information if available
     error_details = final_state.get("error_details")

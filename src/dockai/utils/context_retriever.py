@@ -468,5 +468,5 @@ class ContextRetriever:
             "env_vars": self.index.get_all_env_vars(),
             "ports": self.index.get_all_ports(),
             "frameworks": self.index.get_frameworks(),
-            "embeddings_available": self.index.embeddings is not None,
+            "embeddings_available": self.index.chunk_embeddings is not None,
         }

@@ -127,9 +127,13 @@ inputs:
     required: false
     default: '100000'
   use_rag:
-    description: 'Enable RAG (Retrieval-Augmented Generation) for intelligent context retrieval (true/false)'
+    description: 'Enable RAG (Retrieval-Augmented Generation) for intelligent context retrieval (true/false, default: true in v4.0)'
     required: false
-    default: 'false'
+    default: 'true'
+  embedding_model:
+    description: 'HuggingFace embedding model for RAG (default: all-MiniLM-L6-v2)'
+    required: false
+    default: 'all-MiniLM-L6-v2'
   read_all_files:
     description: 'Read all source files for complete context (true/false, default: true)'
     required: false
@@ -215,6 +219,10 @@ inputs:
     default: ''
   
   # Observability & Tracing
+  collect_metrics:
+    description: 'Enable metrics collection (true/false)'
+    required: false
+    default: 'false'
   enable_tracing:
     description: 'Enable OpenTelemetry tracing (true/false)'
     required: false
@@ -261,12 +269,8 @@ runs:
     - name: Install DockAI
       shell: bash
       run: |
-        if [ "${{ inputs.use_rag }}" == "true" ]; then
-          echo "Installing DockAI with RAG support..."
-          uv pip install "dockai-cli[rag]" --system
-        else
-          uv pip install dockai-cli --system
-        fi
+        echo "Installing DockAI v4.0..."
+        uv pip install dockai-cli --system
 
     - name: Run DockAI Framework
       shell: bash
@@ -307,6 +311,7 @@ runs:
         DOCKAI_TRUNCATION_ENABLED: ${{ inputs.truncation_enabled }}
         DOCKAI_TOKEN_LIMIT: ${{ inputs.token_limit }}
         DOCKAI_USE_RAG: ${{ inputs.use_rag }}
+        DOCKAI_EMBEDDING_MODEL: ${{ inputs.embedding_model }}
         DOCKAI_READ_ALL_FILES: ${{ inputs.read_all_files }}
         # Custom Instructions
         DOCKAI_ANALYZER_INSTRUCTIONS: ${{ inputs.analyzer_instructions }}
@@ -331,6 +336,7 @@ runs:
         OLLAMA_BASE_URL: ${{ inputs.ollama_base_url }}
         GOOGLE_CLOUD_PROJECT: ${{ inputs.google_cloud_project }}
         # Observability & Tracing
+        DOCKAI_COLLECT_METRICS: ${{ inputs.collect_metrics }}
         DOCKAI_ENABLE_TRACING: ${{ inputs.enable_tracing }}
         DOCKAI_TRACING_EXPORTER: ${{ inputs.tracing_exporter }}
         OTEL_EXPORTER_OTLP_ENDPOINT: ${{ inputs.otlp_endpoint }}

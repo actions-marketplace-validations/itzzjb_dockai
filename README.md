@@ -1,238 +1,434 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/🐳-DockAI-blue?style=for-the-badge&logoColor=white" alt="DockAI Logo" />
-</p>
+# DockAI 🐳🤖
 
-<h1 align="center">DockAI v4.0</h1>
+**The Customizable AI Dockerfile Generation Framework**
 
-<p align="center">
-  <strong>The Intelligent, First-Principles Dockerfile Generator</strong>
-</p>
+[![Version](https://img.shields.io/badge/version-4.0.7-blue.svg)](https://github.com/itzzjb/dockai)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![LangGraph](https://img.shields.io/badge/powered%20by-LangGraph-purple.svg)](https://github.com/langchain-ai/langgraph)
 
-<p align="center">
-  <em>Generate production-ready Dockerfiles by understanding your codebase, not guessing.</em>
-</p>
+DockAI is an intelligent, adaptive framework that generates production-ready Dockerfiles for any project using Large Language Models (LLMs). It goes beyond simple template generation by understanding your codebase through RAG (Retrieval-Augmented Generation), analyzing your project architecture, and iteratively improving Dockerfiles until they pass all security and validation checks.
 
-<p align="center">
-  <a href="https://pypi.org/project/dockai-cli/"><img src="https://img.shields.io/pypi/v/dockai-cli?style=flat-square&color=blue" alt="PyPI Version" /></a>
-  <a href="https://pypi.org/project/dockai-cli/"><img src="https://img.shields.io/pypi/pyversions/dockai-cli?style=flat-square" alt="Python Version" /></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License" /></a>
-</p>
+## 🌟 Key Features
 
-<p align="center">
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-whats-new-in-v40">What's New</a> •
-  <a href="#-features">Features</a> •
-  <a href="#-documentation">Docs</a> •
-  <a href="#-configuration">Config</a>
-</p>
+### 🧠 **Intelligent Context Understanding**
+- **RAG-Powered Analysis**: Uses semantic embeddings (sentence-transformers) to understand your entire codebase
+- **AST Code Intelligence**: Extracts entry points, ports, environment variables, and framework dependencies automatically
+- **Multi-Language Support**: Works with JavaScript/TypeScript, Python, Go, Java, Ruby, PHP, .NET, and more
 
----
+### 🏗️ **Multi-Agent Architecture**
+DockAI v4.0 features a sophisticated multi-agent system orchestrated by LangGraph:
+- **Analyzer Agent**: Project discovery and technology stack detection
+- **Blueprint Agent**: Architectural planning and runtime configuration
+- **Generator Agent**: Dockerfile creation with best practices
+- **Reviewer Agent**: Security auditing and vulnerability detection
+- **Reflector Agent**: Failure analysis and adaptive learning
+- **Iterative Improver Agent**: Surgical fixes based on validation feedback
 
-## 🎯 What is DockAI?
+### 🔄 **Adaptive & Self-Improving**
+- **Automatic Validation**: Builds and tests the Docker image locally
+- **Iterative Refinement**: Learns from failures and auto-fixes issues (up to configurable retries)
+- **Smart Fallback**: Reverts to the last working Dockerfile if fixes fail (ignoring non-critical warnings)
+- **Smart Reflection**: AI analyzes build/runtime errors and adjusts strategy
+- **Reanalysis**: Detects when fundamental assumptions are wrong and pivots
 
-DockAI is a **next-generation agentic framework** that writes Dockerfiles for you. It doesn't use templates. Instead, it uses **Retrieval-Augmented Generation (RAG)** to "read" your entire codebase, understand your frameworks, dependencies, and entry points, and then orchestrates a team of 8 specialized AI agents to build, validate, and secure your container.
+### 🔒 **Security & Best Practices**
+- **Hadolint Integration**: Strict Dockerfile linting (warnings are treated as errors and auto-fixed)
+- **Trivy Security Scanning**: Container vulnerability detection
+- **AI Security Review**: Identifies security anti-patterns (root users, exposed secrets, etc.)
+- **Multi-Stage Builds**: Optimizes for smaller, more secure images
 
-It behaves like a Senior DevOps Engineer sitting next to you:
-1.  **Analyzes** your code structure.
-2.  **Reads** your configuration and imports.
-3.  **Plans** a build strategy.
-4.  **Generates** a Dockerfile.
-5.  **Validates** it by actually building the container.
-6.  **Fixes** it automatically if the build fails.
+### 🎯 **Production-Ready Features**
+- **Health Check Detection**: Auto-discovers and configures health endpoints
+- **Resource Optimization**: Configurable memory, CPU, and process limits
+- **Multi-Platform Support**: Works with Docker, Podman, and GitHub Actions
+- **Observability**: OpenTelemetry and LangSmith tracing support
 
-```bash
-# Install
-# Install (choose one)
-pip install dockai-cli    # Standard pip
-uv tool install dockai-cli # Recommended (fast & isolated)
+### 🛠️ **Highly Customizable**
+- **Multi-LLM Support**: OpenAI, Google Gemini, Anthropic Claude, Azure OpenAI, Ollama
+- **Per-Agent Model Selection**: Choose different models for different tasks (cost vs. quality)
+- **Custom Instructions**: Override default agent behavior
+- **Custom Prompts**: Complete control over AI reasoning
+- **Environment-Based Configuration**: 100+ configuration options via environment variables
 
-# Run
-dockai build .
-```
+## 🏛️ Architecture
 
----
-
-## 🚀 What's New in v4.0?
-
-Version 4.0 is a complete architectural overhaul designed for **precision and scale**.
-
-*   **🧠 Local RAG & Vector Search**: DockAI now indexes your project using local embeddings (zero API cost) to find the exact lines of code that matter. No more token context overflow on large repos.
-*   **🕸️ Graph-RAG Traversal**: It follows your import graph (e.g., `main.py` -> `settings.py` -> `db_config.py`) to understand hidden dependencies.
-*   **⚡ Smart Registry Caching**: Intelligent caching ensures we never hallucinate Docker tags. We fetch real tags from Docker Hub, Quay, GCR, and GHCR.
-*   **🏎️ 10x Faster Scanning**: rewritten file scanner and efficiently truncated contexts.
-
----
-
-## ✨ Features
-
-<table>
-  <tr>
-    <td width="50%">
-      <h3>🧠 Semantic Code Understanding</h3>
-      <p>Uses <strong>AST Analysis</strong> + <strong>Vector Search</strong> to find entry points, ports, env vars, and frameworks. It reads your code, not just your file names.</p>
-    </td>
-    <td width="50%">
-      <h3>🔄 Self-Healing Workflow</h3>
-      <p>Builds the container in a sandbox. If it fails, the <strong>Reflector Agent</strong> analyzes the error logs, learns from the mistake, and the <strong>Iterative Improver</strong> patches the Dockerfile automatically.</p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>🛡️ Security-First</h3>
-      <p>Built-in <strong>Trivy</strong> and <strong>Hadolint</strong> integration. Enforces non-root users, SHA-pinned hashes (optional), and minimal base images like <code>alpine</code> or <code>distroless</code>.</p>
-    </td>
-    <td width="50%">
-      <h3>🤖 8 Specialized Agents</h3>
-      <p>From the <strong>Architect</strong> who plans the build to the <strong>Reviewer</strong> who audits security, every step is handled by a specialized expert.</p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>⚡ Multi-Provider LLMs</h3>
-      <p>Native support for <strong>OpenAI, Azure, Gemini, Anthropic, and Ollama</strong>. Run everything locally with Ollama or scaling up with GPT-4o.</p>
-    </td>
-    <td width="50%">
-      <h3>🔧 CI/CD Native</h3>
-      <p>Designed for GitHub Actions. Validates builds inside your pipeline and commits the fix back to your repo.</p>
-    </td>
-  </tr>
-</table>
-
----
-
-## 🏗️ How It Works (The v4 Architecture)
-
-DockAI uses a sophisticated **LangGraph** workflow fueled by a **RAG Context Engine**.
+DockAI v4.0 is built on a modern, agent-based architecture using LangGraph for workflow orchestration:
 
 ```mermaid
-flowchart TB
-    subgraph ContextEngine["🧠 Context Engine (RAG)"]
-        index["Indexer<br/>(Embeddings + AST)"]
-        retrieve["Context Retriever<br/>(Semantic Search)"]
-    end
-
-    subgraph Workflow["⚙️ Agent Workflow"]
-        scan["📂 Scan"] --> analyze["🧠 Analyze"]
-        analyze --> compile_ctx["📑 Retrieve Context"]
-        compile_ctx --> blueprint["🏗️ Plan & Blueprint"]
-        blueprint --> generate["⚙️ Generate"]
-        generate --> review["🔒 Security Review"]
-        review --> validate["✅ Build & Test"]
-        
-        validate -->|"❌ Fail"| reflect["🤔 Reflect & Fix"]
-        reflect --> generate
-        validate -->|"✅ Pass"| Done([🏁 Finished])
-    end
-
-    file_system["Your Codebase"] --> index
-    index --> retrieve --> compile_ctx
+flowchart TD
+    Start([START]) --> Scan[scan_node<br/>File Scanner]
+    Scan --> Analyze[analyze_node<br/>AI Analyzer<br/><i>Detects project type & stack</i>]
+    Analyze --> ReadFiles[read_files_node<br/>RAG Retrieval<br/><i>Semantic search for context</i>]
+    ReadFiles --> Blueprint[blueprint_node<br/>Chief Architect<br/><i>Plans build strategy</i>]
+    Blueprint --> Generate[generate_node<br/>Dockerfile Builder<br/><i>Creates Dockerfile</i>]
+    
+    Generate --> Review[review_node<br/>Security Auditor]
+    
+    Review --> ShouldRetryReview{Should<br/>Retry?}
+    ShouldRetryReview -->|security_passed| Validate
+    ShouldRetryReview -->|security_failed| Reflect
+    ShouldRetryReview -->|max_retries| Stop([END<br/>✗ Max Retries])
+    
+    Validate[validate_node<br/>Test Engineer<br/><i>Docker build + validation</i>] --> ShouldRetry{Should<br/>Retry?}
+    ShouldRetry -->|success| End([END<br/>✓ Dockerfile Ready])
+    ShouldRetry -->|failure| Reflect[reflect_node<br/>Post-Mortem Analyst<br/><i>Analyzes failure</i>]
+    ShouldRetry -->|max_retries| Stop
+    
+    Reflect --> Increment[increment_retry<br/>Update retry count]
+    Increment --> NeedsReanalysis{Needs<br/>Reanalysis?}
+    NeedsReanalysis -->|fundamental_issue| Analyze
+    NeedsReanalysis -->|strategy_change| Blueprint
+    NeedsReanalysis -->|fixable_error| Generate
 ```
 
----
+### Core Components
 
-## 🚀 Usage
+- **LangGraph Workflow Engine**: Orchestrates the agent flow with conditional routing
+- **RAG Context Engine**: In-memory vector store for semantic code search
+- **Multi-Agent System**: 8 specialized AI agents for different tasks
+- **Validation Pipeline**: Docker build, Hadolint, Trivy, and health checks
+- **State Management**: Centralized state for workflow coordination
 
-### 1. The CLI (Local)
+For detailed architecture documentation, see [`docs/architecture.md`](docs/architecture.md).
 
-The fastest way to get started.
+## 🎯 Three Ways to Use DockAI
 
+DockAI can be integrated into your workflow in multiple ways, depending on your needs:
+
+### 1️⃣ **CLI Tool** (Local Development)
+
+Install via **pip** or **uv** and use directly from the command line:
+
+**Using pip:**
 ```bash
-# Install
-# Install (choose one)
-pip install dockai-cli    # Standard
-uv tool install dockai-cli # Recommended (fast)
-
-# Run in your project root
+pip install dockai-cli
+export OPENAI_API_KEY="your-key"
 dockai build .
-
-# Or point to a specific path
-dockai build /path/to/your/app
 ```
 
-### 2. GitHub Actions (CI/CD)
+**Using uv (faster):**
+```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-Automate Dockerfile generation in your pipeline.
+# Install DockAI
+uv pip install dockai-cli
+
+# Use it
+dockai build .
+```
+
+**Perfect for:**
+- Local development and testing
+- Quick Dockerfile generation
+- Iterating on containerization
+
+### 2️⃣ **GitHub Actions** (CI/CD Automation)
+
+Integrate DockAI into your CI/CD pipeline with the GitHub Action:
 
 ```yaml
-# .github/workflows/dockai.yml
-name: Auto-Docker
+name: Generate Dockerfile
 on: [push]
+
 jobs:
-  dockai:
+  dockerize:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: itzzjb/dockai@v4  # Note v4 tag
+      
+      - name: Generate Dockerfile with DockAI
+        uses: itzzjb/dockai@v4
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          project_path: '.'
+      
+      - name: Commit Dockerfile
+        run: |
+          git config user.name "DockAI Bot"
+          git add Dockerfile
+          git commit -m "chore: update Dockerfile"
+          git push
 ```
 
-### 3. MCP Server (For AI Assistants)
+**Perfect for:**
+- Automated Dockerfile updates
+- Multi-service monorepos
+- Continuous integration workflows
+- Team collaboration
 
-Give **Claude Desktop** or **Cursor** the ability to generate Dockerfiles for you.
+**Learn more:** [GitHub Actions Guide](docs/github-actions.md)
 
+### 3️⃣ **MCP Integration** (Model Context Protocol)
+
+Use DockAI as an MCP server with AI assistants like Claude Desktop:
+
+**Setup MCP:**
 ```json
-// claude_desktop_config.json
 {
   "mcpServers": {
     "dockai": {
-      "command": "uv",
-      "args": ["run", "dockai", "mcp"]
+      "command": "uvx",
+      "args": ["dockai-cli"]
     }
   }
 }
 ```
 
+**Usage with Claude Desktop:**
+```
+You: Can you dockerize this Node.js project?
+Claude: [Uses DockAI MCP] I'll generate a Dockerfile for your project...
+```
+
+**Perfect for:**
+- Interactive AI-assisted development
+- Natural language Dockerfile generation
+- Integration with Claude Desktop, VSCode, and other MCP clients
+- Conversational containerization workflow
+
+**Learn more:** [MCP Integration Guide](docs/mcp-integration.md)
+
 ---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Python 3.10 or higher
+- Docker installed and running
+- An API key from at least one LLM provider (OpenAI, Google, Anthropic, etc.)
+
+### Installation
+
+#### Option 1: Install from PyPI (Recommended)
+
+```bash
+pip install dockai-cli
+```
+
+#### Option 2: Install with uv (Faster)
+
+[uv](https://github.com/astral-sh/uv) is an extremely fast Python package installer and resolver:
+
+```bash
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install DockAI
+uv pip install dockai-cli
+```
+
+**Why use uv?**
+- 🚀 **10-100x faster** than pip
+- 📦 **Drop-in replacement** for pip
+- 🔒 **Deterministic** dependency resolution
+
+#### Option 3: Install from Source
+
+```bash
+git clone https://github.com/itzzjb/dockai.git
+cd dockai
+pip install -e .
+```
+
+### Basic Usage
+
+1. **Set up your API key** (choose one provider):
+
+```bash
+# OpenAI (Default)
+export OPENAI_API_KEY="your-api-key-here"
+
+# Or Google Gemini
+export GOOGLE_API_KEY="your-api-key-here"
+export DOCKAI_LLM_PROVIDER="gemini"
+
+# Or Anthropic Claude
+export ANTHROPIC_API_KEY="your-api-key-here"
+export DOCKAI_LLM_PROVIDER="anthropic"
+```
+
+2. **Navigate to your project** and run DockAI:
+
+```bash
+cd /path/to/your/project
+dockai build .
+```
+
+3. **Done!** Your production-ready Dockerfile will be created and validated.
+
+### Example Output
+
+```
+🔍 Scanning project...
+✓ Found 42 files
+
+🧠 Analyzing project with AI...
+✓ Detected: Node.js Express application
+✓ Entry point: src/server.js
+✓ Dependencies: package.json
+
+📖 Reading files with RAG (10 relevant chunks)...
+✓ Context retrieved
+
+🏗️ Creating architectural blueprint...
+✓ Multi-stage build planned
+✓ Health endpoint: /health
+
+🔨 Generating Dockerfile...
+✓ Dockerfile created
+
+🔍 Reviewing security...
+✓ No critical issues found
+
+🧪 Validating with Docker...
+✓ Image built successfully (142 MB)
+✓ Container started
+✓ Health check passed
+
+✅ Dockerfile generated successfully!
+```
+
+## 📚 Documentation
+
+Comprehensive documentation is available in the [`docs/`](docs/) directory:
+
+- **[Getting Started](docs/getting-started.md)** - Installation, setup, and first steps
+- **[Architecture](docs/architecture.md)** - Deep dive into v4.0 architecture and RAG system
+- **[Configuration](docs/configuration.md)** - All environment variables and customization options
+- **[LLM Providers](docs/llm-providers.md)** - Setting up different LLM providers
+- **[GitHub Actions](docs/github-actions.md)** - Using DockAI in CI/CD pipelines
+- **[MCP Integration](docs/mcp-integration.md)** - Using DockAI with Model Context Protocol
+- **[API Reference](docs/api-reference.md)** - Code-level documentation
+- **[FAQ](docs/faq.md)** - Common questions and troubleshooting
+
+
+## 🎯 Use Cases
+
+### Single Project Dockerization
+```bash
+# Automatically detects and handles any project type
+cd /path/to/your/project
+dockai build .
+```
+
+### Polyglot Projects
+```bash
+# Works with multi-language projects
+dockai build ./my-fullstack-app
+```
+
+### Microservices Architecture
+```bash
+# Generate optimized Dockerfiles for each service
+for service in api frontend worker; do
+  dockai build ./services/$service
+done
+```
+
+### Custom Requirements
+```bash
+# Add specific requirements for your organization
+export DOCKAI_GENERATOR_INSTRUCTIONS="Always use Alpine Linux and pin all versions. Include MAINTAINER label."
+dockai build .
+```
+
+### Cost-Optimized Generation
+```bash
+# Use cheaper models for analysis, powerful models for generation
+export DOCKAI_MODEL_ANALYZER="gpt-4o-mini"
+export DOCKAI_MODEL_GENERATOR="gpt-4o"
+dockai build .
+```
+
 
 ## ⚙️ Configuration
 
-Create a `.env` file or pass environment variables.
+DockAI offers extensive configuration through environment variables:
 
-### 🔑 LLM Provider
+### Model Selection
+
 ```bash
-# Choose your fighter
-DOCKAI_LLM_PROVIDER=openai  # openai, azure, gemini, anthropic, ollama
-OPENAI_API_KEY=sk-...
+# Use different models for different agents (cost optimization)
+export DOCKAI_MODEL_ANALYZER="gpt-4o-mini"      # Fast, cheap model for analysis
+export DOCKAI_MODEL_GENERATOR="gpt-4o"          # Powerful model for generation
+export DOCKAI_MODEL_REFLECTOR="gemini-1.5-pro"  # Strong reasoning for failure analysis
 ```
 
-### 🧠 RAG & Context Settings (New in v4!)
+### Security & Validation
+
 ```bash
-# Enable RAG (Semantic Search) - Recommended for large repos > 50 files
-DOCKAI_USE_RAG=true
-
-# Model for local embeddings (Free, runs locally)
-DOCKAI_EMBEDDING_MODEL=all-MiniLM-L6-v2
-
-# If true, tries to read all file contents (truncated) + RAG. 
-# If false, relies PURELY on RAG + critical files (packages, configs).
-# Default: true
-DOCKAI_READ_ALL_FILES=true
+export DOCKAI_SKIP_HADOLINT="false"            # Enable Dockerfile linting
+export DOCKAI_SKIP_SECURITY_SCAN="false"       # Enable Trivy scanning
+export DOCKAI_STRICT_SECURITY="true"           # Fail on any vulnerability
+export DOCKAI_MAX_IMAGE_SIZE_MB="500"          # Max acceptable image size
 ```
 
-### 🔧 Build Settings
-```bash
-# Max retries if the container fails to build
-MAX_RETRIES=3
+### RAG Configuration
 
-# Skip security scanning (faster dev loops)
-DOCKAI_SKIP_SECURITY_SCAN=false
+```bash
+export DOCKAI_USE_RAG="true"                   # Enable RAG (default in v4.0)
+export DOCKAI_EMBEDDING_MODEL="all-MiniLM-L6-v2"  # Embedding model
+export DOCKAI_READ_ALL_FILES="true"            # Read all source files
 ```
 
-See [Configuration Docs](./docs/configuration.md) for the full list of 50+ options.
+### Retry & Adaptation
 
----
+```bash
+export MAX_RETRIES="3"                         # Max attempts to fix failures
+```
 
-## 📖 Documentation
+For complete configuration options, see [`docs/configuration.md`](docs/configuration.md).
 
-*   [**Getting Started**](./docs/getting-started.md)
-*   [**Architecture Deep Dive**](./docs/architecture.md) (Read this to understand the RAG system)
-*   [**Configuration Reference**](./docs/configuration.md)
-*   [**API Reference**](./docs/api-reference.md)
-*   [**GitHub Actions**](./docs/github-actions.md)
+## 🧪 Testing
 
----
+Run the test suite:
+
+```bash
+# Install test dependencies
+pip install -e ".[test]"
+
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=src/dockai --cov-report=html
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+## 🗺️ Roadmap
+
+- [ ] Support for Docker Compose generation
+- [ ] .dockerignore file generation
+- [ ] Multi-stage build optimization advisor
+- [ ] Integration with container registries
+- [ ] Web UI for interactive generation
+- [ ] Plugin system for custom validators
 
 ## 📄 License
 
-MIT License. Built with ❤️ by [Januda Bethmin](https://github.com/itzzjb).
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **LangGraph** for the agent orchestration framework
+- **LangChain** for LLM abstractions and tools
+- **Sentence Transformers** for efficient embeddings
+- All the open-source projects that make DockAI possible
+
+## 📧 Support
+
+- **Issues**: [GitHub Issues](https://github.com/itzzjb/dockai/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/itzzjb/dockai/discussions)
+- **Email**: desilvabethmin@gmail.com
+
+---
+
+**Made with ❤️ by [Januda Bethmin](https://github.com/itzzjb)**
+
+**⭐ If you find DockAI useful, please give it a star on GitHub!**

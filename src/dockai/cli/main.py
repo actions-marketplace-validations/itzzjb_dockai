@@ -192,7 +192,8 @@ def build(
         "detected_health_endpoint": None,  # AI-detected from file contents
         "readiness_patterns": [],  # AI-detected startup log patterns
         "failure_patterns": [],  # AI-detected failure log patterns
-        "needs_reanalysis": False  # Flag to trigger re-analysis
+        "needs_reanalysis": False,  # Flag to trigger re-analysis
+        "best_dockerfile": None  # Stores the best functional Dockerfile (e.g. built but had lint errors) from previous attempts
     }
 
     # Create and compile the LangGraph workflow
@@ -214,21 +215,90 @@ def build(
                 }
             }
             final_state = workflow.invoke(initial_state, config=invoke_config)
+    except KeyboardInterrupt:
+        # Handle user interruption gracefully
+        ui.print_error("Cancelled", "Operation cancelled by user.")
+        logger.info("User interrupted the operation")
+        raise typer.Exit(code=130)
+    except PermissionError as e:
+        # Handle Docker permission issues
+        ui.print_error(
+            "Permission Error",
+            "Unable to access Docker daemon. This usually means your user doesn't have permission to run Docker.",
+            "Try running: sudo usermod -aG docker $USER\\nThen log out and back in, or use: sudo dockai build ."
+        )
+        logger.error(f"Docker permission error: {e}")
+        raise typer.Exit(code=1)
+    except ConnectionError as e:
+        # Handle network/Docker connection issues
+        ui.print_error(
+            "Connection Error",
+            "Failed to connect to required services (Docker daemon or LLM API).",
+            "Ensure Docker is running: docker ps\\nCheck your internet connection and API credentials."
+        )
+        logger.error(f"Connection error: {e}")
+        if verbose:
+            logger.exception("Connection error details")
+        raise typer.Exit(code=1)
+    except TimeoutError as e:
+        # Handle timeout errors
+        ui.print_error(
+            "Timeout Error",
+            "Operation timed out while waiting for a response.",
+            "The Docker build or LLM API call took too long. Try again or increase timeout settings."
+        )
+        logger.error(f"Timeout error: {e}")
+        raise typer.Exit(code=1)
+    except MemoryError as e:
+        # Handle out of memory errors
+        ui.print_error(
+            "Memory Error",
+            "Ran out of memory while processing the repository.",
+            "Try processing a smaller directory or increase available system memory.\\nConsider excluding large directories using .dockerignore."
+        )
+        logger.error(f"Memory error: {e}")
+        raise typer.Exit(code=1)
     except Exception as e:
         # Handle unexpected errors gracefully
         error_msg = str(e)
+        error_type = type(e).__name__
         
         # Check for common LangGraph errors like recursion limits
         if "GraphRecursionError" in error_msg or "recursion" in error_msg.lower():
             ui.print_error(
                 "Max Retries Exceeded", 
                 "The system reached the maximum retry limit while trying to generate a valid Dockerfile.",
-                "Check the error details above for specific guidance on how to fix the issue.\nYou can also increase MAX_RETRIES in .env or run with --verbose for more details."
+                "Check the error details above for specific guidance on how to fix the issue.\\nYou can also increase MAX_RETRIES in .env or run with --verbose for more details."
+            )
+        # Check for API authentication errors
+        elif "authentication" in error_msg.lower() or "unauthorized" in error_msg.lower() or "401" in error_msg:
+            ui.print_error(
+                "Authentication Error",
+                "Failed to authenticate with the LLM API.",
+                "Check your API key is correct and has not expired.\\nVerify the key in your .env file or environment variables."
+            )
+        # Check for rate limiting
+        elif "rate limit" in error_msg.lower() or "429" in error_msg:
+            ui.print_error(
+                "Rate Limit Error",
+                "Hit API rate limits. Too many requests to the LLM provider.",
+                "Wait a few minutes and try again, or upgrade your API plan for higher limits."
+            )
+        # Check for model errors
+        elif "model" in error_msg.lower() and ("not found" in error_msg.lower() or "does not exist" in error_msg.lower()):
+            ui.print_error(
+                "Model Not Found",
+                "The specified AI model does not exist or is not accessible.",
+                "Check the model name in your configuration and ensure you have access to it."
             )
         else:
-            ui.print_error("Unexpected Error", error_msg[:200])
+            ui.print_error(
+                f"Unexpected Error ({error_type})", 
+                error_msg[:300] if len(error_msg) > 300 else error_msg,
+                "Run with --verbose for detailed logs or check the error message above."
+            )
             if verbose:
-                logger.exception("Unexpected error")
+                logger.exception("Unexpected error with full traceback")
         
         raise typer.Exit(code=1)
 

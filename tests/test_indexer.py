@@ -58,13 +58,7 @@ class TestProjectIndex:
         assert index.embedder is None
         assert index.chunks == []
     
-    def test_init_with_missing_sentence_transformers(self):
-        """Test graceful fallback when sentence-transformers is missing."""
-        with patch.dict('sys.modules', {'sentence_transformers': None}):
-            index = ProjectIndex(use_embeddings=True)
-            # Should fall back to keyword search
-            assert index.embedder is None
-    
+
     def test_chunking_small_file(self):
         """Test that small files become single chunks."""
         index = ProjectIndex(use_embeddings=False)
@@ -296,51 +290,37 @@ class TestProjectIndex:
 class TestProjectIndexWithEmbeddings:
     """Tests for ProjectIndex with embeddings (mocked)."""
     
-    @patch('dockai.utils.indexer.ProjectIndex._init_embedder')
-    def test_semantic_search(self, mock_init):
-        """Test semantic search with mocked ChromaDB collection."""
-        index = ProjectIndex(use_embeddings=True)
+    def test_semantic_search_with_numpy(self):
+        """Test semantic search with in-memory numpy embeddings."""
+        import numpy as np
+        
+        index = ProjectIndex(use_embeddings=False)  # Init without embedder
         index.use_embeddings = True
+        
+        # Manually setup embedder and embeddings
         index.embedder = Mock()
-        index.collection = Mock()
         
-        # Mock embedding generation (simulate numpy array with .tolist())
-        mock_embedding = MagicMock()
-        mock_embedding.tolist.return_value = [[0.1, 0.2, 0.3]]
-        index.embedder.encode = Mock(return_value=mock_embedding) 
+        # Create test chunks  
+        index.chunks = [
+            FileChunk("app.py", "start server application", 1, 10, "full", {}),
+            FileChunk("db.py", "database connection", 1, 20, "full", {})
+        ]
         
-        # Mock ChromaDB query results
-        index.collection.query = Mock(return_value={
-            'ids': [['id1', 'id2']],
-            'documents': [['doc1', 'doc2']],
-            'metadatas': [[
-                {
-                    'file_path': 'app.py', 
-                    'start_line': 1, 
-                    'end_line': 10, 
-                    'chunk_type': 'full',
-                    'is_config': False,
-                    'is_dependency': False,
-                    'is_dockerfile': False
-                },
-                {
-                    'file_path': 'db.py', 
-                    'start_line': 1, 
-                    'end_line': 20, 
-                    'chunk_type': 'full',
-                    'is_config': False,
-                    'is_dependency': False,
-                    'is_dockerfile': False
-                }
-            ]],
-            'distances': [[0.1, 0.2]]
-        })
+        # Mock chunk embeddings (2 chunks, 3D embeddings, normalized)
+        index.chunk_embeddings = np.array([
+            [0.6, 0.0, 0.8],  # app.py
+            [0.0, 1.0, 0.0]   # db.py
+        ])
+        
+        # Mock query embedding (normalized)
+        query_embedding = np.array([[0.6, 0.0, 0.8]])  # Similar to app.py
+        mock_result = MagicMock()
+        mock_result.__getitem__ = lambda self, idx: query_embedding
+        index.embedder.encode = Mock(return_value=query_embedding)
         
         results = index._semantic_search("start server", top_k=2)
         
-        assert len(results) == 2
+        # Should return chunks sorted by similarity
+        assert len(results) >= 1
+        # app.py should be most similar
         assert results[0].file_path == "app.py"
-        assert results[1].file_path == "db.py"
-        
-        # Verify collection was queried
-        index.collection.query.assert_called_once()

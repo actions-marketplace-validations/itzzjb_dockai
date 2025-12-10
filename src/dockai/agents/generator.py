@@ -638,42 +638,195 @@ Fallback Strategy: {result.fallback_strategy or 'None'}
     return result.dockerfile, result.project_type, thought_process, callback.get_usage()
 
 
+
 def _get_expert_guidance(stack: str) -> str:
     """
     Returns curated expert patterns for specific stacks.
     This helps the LLM avoid common hallucinations and adhere to best practices.
+    Covers all 15+ supported languages in DockAI v4.0 architecture.
     """
     stack_lower = stack.lower()
     
+    # Python Ecosystem
     if "python" in stack_lower:
         return """
+**PYTHON PRODUCTION PATTERNS:**
 - **Env Vars**: Set `PYTHONDONTWRITEBYTECODE=1` and `PYTHONUNBUFFERED=1` immediately after FROM.
-- **Dependencies**: COPY `requirements.txt` / `pyproject.toml` separately before `COPY . .` to leverage caching.
-- **User**: Create a non-root user `appuser`. Ensure `chown` is done *before* switching USER.
-- **Path**: Ensure `/home/appuser/.local/bin` is in PATH if installing with `--user`.
-- **Gunicorn**: For production, use `gunicorn` with `-w 4 -k uvicorn.workers.UvicornWorker` for FastAPI/ASGI apps.
+- **Dependencies**: COPY `requirements.txt` / `pyproject.toml` / `Pipfile` separately before `COPY . .` to leverage caching.
+- **Package Manager**: Use `pip install --no-cache-dir` for smaller images. For Poetry: `poetry install --no-dev --no-root`.
+- **User**: Create non-root user `appuser`. Ensure `chown -R appuser:appgroup /app` is done *before* switching USER.
+- **Path**: Ensure `/home/appuser/.local/bin` is in PATH if installing with `--user` flag.
+- **Django**: Run `python manage.py collectstatic --noinput` and `python manage.py migrate` at runtime, NOT in build.
+- **FastAPI/ASGI**: Use `uvicorn app.main:app --host 0.0.0.0 --port 8000` or `gunicorn -w 4 -k uvicorn.workers.UvicornWorker`.
+- **Flask/WSGI**: Use `gunicorn -w 4 -b 0.0.0.0:8000 app:app` for production.
+- **Virtual Env**: Don't create venv in Docker - install globally in the container.
         """
-        
-    if "node" in stack_lower or "javascript" in stack_lower or "typescript" in stack_lower:
+    
+    # Node.js/JavaScript/TypeScript Ecosystem
+    if "node" in stack_lower or "javascript" in stack_lower or "typescript" in stack_lower or "next" in stack_lower or "react" in stack_lower or "vue" in stack_lower or "angular" in stack_lower:
         return """
-- **Node Environment**: Set `ENV NODE_ENV=production`.
-- **Dependencies**: COPY `package.json` AND `package-lock.json` (or `yarn.lock`). Run `npm ci` (clean install), not `npm install`.
-- **User**: Use the built-in `node` user (uid 1000). `USER node`.
-- **Permissions**: If you need to write to directories, do `RUN chown -R node:node /app` before switching.
-- **Tini**: Use `tini` as init process (`ENTRYPOINT ["/sbin/tini", "--"]`) to handle signals correctly if not using a process manager.
+**NODE.JS/JAVASCRIPT/TYPESCRIPT PRODUCTION PATTERNS:**
+- **Node Environment**: Set `ENV NODE_ENV=production` to disable dev dependencies and enable optimizations.
+- **Dependencies**: COPY `package.json` AND `package-lock.json` (or `yarn.lock`, `pnpm-lock.yaml`). Run `npm ci` (clean install), NOT `npm install`.
+- **User**: Use the built-in `node` user (uid 1000). Avoid running as root: `USER node`.
+- **Permissions**: If you need to write to directories: `RUN chown -R node:node /app` before switching user.
+- **Next.js**: Multi-stage build: build with `npm run build`, runtime needs `.next/`, `public/`, `node_modules/`, `package.json`.
+- **TypeScript**: Compile in builder stage with `npm run build` or `tsc`, copy `dist/` to runtime.
+- **PM2**: If using PM2, install globally and use `pm2-runtime start ecosystem.config.js` for proper signal handling.
+- **Tini**: Use `tini` as init process for proper signal handling: `ENTRYPOINT ["/sbin/tini", "--", "node", "server.js"]`.
+- **Pruning**: Use `npm prune --production` after build to remove dev dependencies before copying to runtime.
         """
-        
-    if "go" in stack_lower:
+    
+    # Go Ecosystem
+    if "go" in stack_lower or "golang" in stack_lower:
         return """
-- **Image**: Use `golang:*-alpine` for build, `alpine` or `gcr.io/distroless/static-debian12` for runtime.
-- **Build**: `CGO_ENABLED=0 GOOS=linux go build -o /app/main .`
-- **Security**: Do NOT run as root. `USER nonroot:nonroot` (if using distroless) or create user.
-- **Certificates**: If using scratch/minimal, install `ca-certificates` in builder and copy to runtime.
+**GO PRODUCTION PATTERNS:**
+- **Multi-Stage**: ALWAYS use multi-stage: `golang:*-alpine` for build, `alpine` or `gcr.io/distroless/static-debian12` for runtime.
+- **Static Build**: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/main .` for static binary.
+- **Modules**: COPY `go.mod` and `go.sum` first, run `go mod download`, then COPY source for layer caching.
+- **Security**: NEVER run as root. Use `USER nonroot:nonroot` (distroless) or create user with `adduser --disabled-password --gecos "" appuser`.
+- **Certificates**: If using scratch/minimal, copy CA certs: `COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/`.
+- **Timezone**: If needed: `COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo`.
+- **Binary Location**: Place binary at `/app/main` or `/usr/local/bin/app` for easy execution.
         """
-        
-    # Default/Generic
+    
+    # Rust Ecosystem
+    if "rust" in stack_lower or "cargo" in stack_lower:
+        return """
+**RUST PRODUCTION PATTERNS:**
+- **Multi-Stage**: `rust:*-alpine` or `rust:*-slim` for build, `alpine`, `debian:bookworm-slim`, or `scratch` for runtime.
+- **Static Build**: For musl static: `rustup target add x86_64-unknown-linux-musl` then `cargo build --release --target x86_64-unknown-linux-musl`.
+- **Dependencies**: COPY `Cargo.toml` and `Cargo.lock` first, create dummy `src/main.rs`, build deps, then copy real source.
+- **Size Optimization**: Use `strip` to reduce binary size: `RUN strip /app/target/release/myapp`.
+- **User**: Create non-root user. In Alpine: `RUN adduser -D -u 1000 appuser`.
+- **Certificates**: Copy CA certs for HTTPS: `COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/`.
+- **Actix/Rocket/Axum**: Bind to `0.0.0.0:8080`, not `localhost`, to accept external connections.
+        """
+    
+    # Ruby Ecosystem
+    if "ruby" in stack_lower or "rails" in stack_lower:
+        return """
+**RUBY PRODUCTION PATTERNS:**
+- **Bundler**: COPY `Gemfile` and `Gemfile.lock` first, run `bundle install --without development test`, then COPY source.
+- **Rails**: Run `rails assets:precompile` in builder stage. Set `RAILS_ENV=production` and `RACK_ENV=production`.
+- **User**: Create non-root user and use it. `RUN useradd -m -u 1000 appuser`.
+- **Puma**: Use Puma server for Rails: `bundle exec puma -C config/puma.rb`.
+- **Database**: Don't run migrations in Dockerfile. Run `rails db:migrate` as a separate container/job.
+- **Secrets**: Use ENV vars for `SECRET_KEY_BASE` and database credentials, never hardcode.
+        """
+    
+    # PHP Ecosystem
+    if "php" in stack_lower or "laravel" in stack_lower or "symfony" in stack_lower:
+        return """
+**PHP PRODUCTION PATTERNS:**
+- **Image**: Use official `php:*-fpm-alpine` for FPM or `php:*-cli-alpine` for CLI apps.
+- **Composer**: COPY `composer.json` and `composer.lock` first, run `composer install --no-dev --optimize-autoloader`, then COPY source.
+- **Laravel**: Run `php artisan config:cache`, `php artisan route:cache`, `php artisan view:cache` in build for optimization.
+- **Nginx**: For web apps, use multi-container setup or include nginx in the same image with supervisord.
+- **Permissions**: Set ownership: `chown -R www-data:www-data /var/www/html` and run as `USER www-data`.
+- **Extensions**: Install needed extensions: `RUN docker-php-ext-install pdo pdo_mysql opcache`.
+- **OPcache**: Enable OPcache for production performance.
+        """
+    
+    # Java Ecosystem
+    if "java" in stack_lower or "spring" in stack_lower or "maven" in stack_lower or "gradle" in stack_lower:
+        return """
+**JAVA PRODUCTION PATTERNS:**
+- **Multi-Stage**: Use `maven:*` or `gradle:*-jdk17` for build, `eclipse-temurin:17-jre` or `openjdk:17-jre-slim` for runtime.
+- **Maven**: COPY `pom.xml` first, run `mvn dependency:go-offline`, then COPY `src/` and build.
+- **Gradle**: COPY `build.gradle*` and `settings.gradle*` first, run `gradle dependencies --no-daemon`, then copy source.
+- **Spring Boot**: Build with `mvn clean package -DskipTests`, JAR will be in `target/*.jar`. Copy to runtime as `app.jar`.
+- **JVM Flags**: Set appropriate heap: `ENV JAVA_OPTS="-Xmx512m -Xms256m"` and use in ENTRYPOINT.
+- **User**: Create non-root user and run as that user. Don't run Java as root.
+- **Health**: Spring Boot Actuator provides `/actuator/health` - use for HEALTHCHECK.
+        """
+    
+    # C# / .NET Ecosystem
+    if "c#" in stack_lower or ".net" in stack_lower or "dotnet" in stack_lower or "aspnet" in stack_lower:
+        return """
+**.NET PRODUCTION PATTERNS:**
+- **Multi-Stage**: Use `mcr.microsoft.com/dotnet/sdk:7.0` for build, `mcr.microsoft.com/dotnet/aspnet:7.0` for runtime.
+- **Restore**: COPY `*.csproj` and `*.sln` first, run `dotnet restore`, then COPY source and `dotnet publish`.
+- **Publish**: Use `dotnet publish -c Release -o /app/publish` to create optimized build.
+- **User**: Use non-root user. .NET images include `app` user: `USER app`.
+- **Environment**: Set `ASPNETCORE_ENVIRONMENT=Production` for production config.
+- **Ports**: ASP.NET Core default port is 80/443. Expose and bind correctly: `ASPNETCORE_URLS=http://+:80`.
+- **Globalization**: If you need globalization: `ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false`.
+        """
+    
+    # Kotlin Ecosystem
+    if "kotlin" in stack_lower or "ktor" in stack_lower:
+        return """
+**KOTLIN PRODUCTION PATTERNS:**
+- **Jvm**: Follow Java patterns for Kotlin/JVM projects (use Gradle/Maven multi-stage builds).
+- **Ktor**: Build fat JAR with `gradle shadowJar` or `./gradlew build`, copy JAR to runtime.
+- **Native**: For Kotlin/Native, compile to native binary and use minimal runtime image.
+- **Spring Boot (Kotlin)**: Same as Java Spring Boot patterns.
+- **Dependencies**: COPY build files first, fetch deps, then copy source for caching.
+        """
+    
+    # Scala Ecosystem
+    if "scala" in stack_lower or "play" in stack_lower or "akka" in stack_lower:
+        return """
+**SCALA PRODUCTION PATTERNS:**
+- **SBT**: Use `sbt:*` for build, `eclipse-temurin:17-jre` for runtime. Build with `sbt assembly` or `sbt stage`.
+- **Play Framework**: Use `sbt stage` to package, creates a startup script in `target/universal/stage/bin/`.
+- **Akka HTTP**: Build fat JAR with `sbt assembly`, copy to runtime as `app.jar`.
+- **JVM Settings**: Set heap appropriately for Scala apps: `-Xmx1g -Xms512m`.
+- **User**: Run as non-root user.
+        """
+    
+    # Elixir Ecosystem
+    if "elixir" in stack_lower or "phoenix" in stack_lower:
+        return """
+**ELIXIR PRODUCTION PATTERNS:**
+- **Release**: Use `mix release` for production deployment (creates self-contained release).
+- **Multi-Stage**: Build in `elixir:*-alpine`, run in `alpine` with only ERTS (Erlang runtime).
+- **Phoenix**: Run `mix assets.deploy` in build to compile frontend assets.
+- **Env**: Set `MIX_ENV=prod` for production. Never use `mix phx.server` in prod - use releases.
+- **Migrations**: Run `bin/myapp eval "MyApp.Release.migrate"` at container startup, not in Dockerfile.
+- **User**: Create non-root user and run release as that user.
+        """
+    
+    # Haskell Ecosystem
+    if "haskell" in stack_lower or "ghc" in stack_lower or "stack" in stack_lower:
+        return """
+**HASKELL PRODUCTION PATTERNS:**
+- **Stack**: Use `haskell:*` for build, compile with `stack build --copy-bins`, copy binary to minimal runtime.
+- **Static**: Compile static binary for smallest image: `stack build --ghc-options='-optl-static'`.
+- **Cabal**: Use cabal-install for dependency resolution and building.
+- **Runtime**: Use `debian:bookworm-slim` or `alpine` with required system libs.
+- **Libraries**: GHC binaries may need glibc, gmp, libffi - ensure they're in runtime image.
+        """
+    
+    # Dart Ecosystem
+    if "dart" in stack_lower or "flutter" in stack_lower:
+        return """
+**DART PRODUCTION PATTERNS:**
+- **Server**: For Dart server apps, build with `dart compile exe bin/server.dart -o server`, copy binary to runtime.
+- **Flutter Web**: Build with `flutter build web`, copy `build/web/` to nginx image and serve.
+- **Flutter Mobile**: Docker isn't typical for mobile apps, but can use for CI/CD builds.
+- **Dependencies**: Run `dart pub get` or `flutter pub get` before building.
+        """
+    
+    # Swift Ecosystem
+    if "swift" in stack_lower or "vapor" in stack_lower:
+        return """
+**SWIFT PRODUCTION PATTERNS:**
+- **Vapor**: Use `swift:*` for build, compile with `swift build -c release`, copy `.build/release/App` to runtime.
+- **Runtime**: Use `swift:*-slim` or Ubuntu slim with Swift runtime libraries.
+- **Static Build**: For smallest image, compile release mode and use minimal runtime image.
+- **Dependencies**: SPM (Swift Package Manager) resolves dependencies from `Package.swift`.
+        """
+    
+    # Default/Generic guidance
     return """
-- **Least Privilege**: Always create and use a non-root user.
-- **Layer Caching**: Copy dependency manifests first, install, then copy source.
-- **Minimalism**: Use multistage builds to ship only the binary/assets, not build tools.
+**UNIVERSAL PRODUCTION PATTERNS:**
+- **Least Privilege**: ALWAYS create and use a non-root user for security.
+- **Layer Caching**: Copy dependency manifests first, install dependencies, THEN copy source code.
+- **Multi-Stage Builds**: Separate build and runtime stages to ship only what's needed, not build tools.
+- **.dockerignore**: Use `.dockerignore` to exclude `.git/`, tests, dev dependencies, and IDE configs.
+- **Health Checks**: Implement HTTP health endpoint (`/health` or `/healthz`) and add HEALTHCHECK instruction.
+- **Graceful Shutdown**: Handle SIGTERM properly for zero-downtime deployments.
     """
+
