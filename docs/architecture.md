@@ -97,19 +97,19 @@ The DockAI workflow is implemented as a LangGraph `StateGraph` with conditional 
 ```mermaid
 graph TD
     Start([Start]) --> Scan[Scan Repo]
-    Scan --> Analyze[Agent 1: Analyzer]
+    Scan --> Analyze[Agent : Analyzer]
     Analyze --> ReadFiles[Read Context]
-    ReadFiles --> Blueprint[Agent 2: Blueprint]
-    Blueprint --> Generate[Agent 3: Generator]
-    Generate --> Review[Agent 5: Reviewer]
+    ReadFiles --> Blueprint[Agent : Blueprint]
+    Blueprint --> Generate[Agent : Generator]
+    Generate --> Review[Agent : Reviewer]
     
-    Review -->|Secure| Validate[Validate & Agent 7: Error Analyzer]
+    Review -->|Secure| Validate[Agent : Validator]
     Review -->|Insecure| CheckRetry{Retry < Max?}
     
     Validate -->|Success| End([Success])
     Validate -->|Fail| CheckRetry
     
-    CheckRetry -->|Yes| Reflect[Agent 6: Reflector]
+    CheckRetry -->|Yes| Reflect[Agent : Reflector]
     CheckRetry -->|No| EndFail([Fail])
     
     Reflect --> IncRetry[Increment Retry]
@@ -117,7 +117,7 @@ graph TD
     
     Route -->|Re-Analyze| Analyze
     Route -->|Re-Plan| Blueprint
-    Route -->|Fix Code| Improver[Agent 8: Iterative Improver]
+    Route -->|Fix Code| Improver[Agent : Iterative Improver]
     Improver --> Review
 ```
 
