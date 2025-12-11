@@ -103,7 +103,7 @@ graph TD
     Blueprint --> Generate[Agent 3: Generator]
     Generate --> Review[Agent 5: Reviewer]
     
-    Review -->|Secure| Validate[Validate Build]
+    Review -->|Secure| Validate[Validate & Agent 7: Error Analyzer]
     Review -->|Insecure| CheckRetry{Retry < Max?}
     
     Validate -->|Success| End([Success])
@@ -117,7 +117,8 @@ graph TD
     
     Route -->|Re-Analyze| Analyze
     Route -->|Re-Plan| Blueprint
-    Route -->|Fix Code| Generate
+    Route -->|Fix Code| Improver[Agent 8: Iterative Improver]
+    Improver --> Review
 ```
 
 
