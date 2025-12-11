@@ -95,46 +95,30 @@ The DockAI workflow is implemented as a LangGraph `StateGraph` with conditional 
 ### Workflow Diagram
 
 ```mermaid
-flowchart TD
-    Start([START]) --> Scan[scan_node<br/>File Tree Scanner]
-    Scan --> Analyze[analyze_node<br/>AI Analyzer<br/><i>Detects project type & stack</i>]
-    Analyze --> ReadFiles[read_files_node<br/>RAG Retrieval<br/><i>Semantic search for context</i>]
-    ReadFiles --> Blueprint[blueprint_node<br/>Chief Architect<br/><i>Plans build strategy</i>]
-    Blueprint --> Generate[generate_node<br/>Dockerfile Builder<br/><i>Creates Dockerfile</i>]
+graph TD
+    Start([Start]) --> Scan[Scan Repo]
+    Scan --> Analyze[Agent : Analyzer]
+    Analyze --> ReadFiles[Read Context]
+    ReadFiles --> Blueprint[Agent : Blueprint]
+    Blueprint --> Generate[Agent : Generator]
+    Generate --> Review[Agent : Reviewer]
     
-    Generate --> Review[review_node<br/>Security Auditor]
+    Review -->|Secure| Validate[Agent : Validator]
+    Review -->|Insecure| CheckRetry{Retry < Max?}
     
-    Review --> CheckSecurity{Check<br/>Security}
-    CheckSecurity -->|security_passed| Validate
-    CheckSecurity -->|security_failed| Reflect
-    CheckSecurity -->|max_retries| Stop([END<br/>✗ Max Retries])
+    Validate -->|Success| End([Success])
+    Validate -->|Fail| CheckRetry
     
-    Validate[validate_node<br/>Test Engineer<br/><i>Docker build + validation</i>] --> ShouldRetry{Should<br/>Retry?}
-    ShouldRetry -->|success| End([END<br/>✓ Dockerfile Ready])
-    ShouldRetry -->|failure| Reflect[reflect_node<br/>Post-Mortem Analyst<br/><i>Analyzes failure</i>]
-    ShouldRetry -->|max_retries| Stop
+    CheckRetry -->|Yes| Reflect[Agent : Reflector]
+    CheckRetry -->|No| EndFail([Fail])
     
-    Reflect --> Increment[increment_retry<br/>Update retry count]
-    Increment --> NeedsReanalysis{Needs<br/>Reanalysis?}
-    NeedsReanalysis -->|fundamental_issue| Analyze
-    NeedsReanalysis -->|strategy_change| Blueprint
-    NeedsReanalysis -->|fixable_error| Generate
+    Reflect --> IncRetry[Increment Retry]
+    IncRetry --> Route{Route Fix}
     
-    style Start stroke:#333,stroke-width:2px
-    style End stroke:#333,stroke-width:2px
-    style Stop stroke:#333,stroke-width:2px
-    style Scan stroke:#333,stroke-width:2px
-    style Analyze stroke:#333,stroke-width:2px
-    style ReadFiles stroke:#333,stroke-width:2px
-    style Blueprint stroke:#333,stroke-width:2px
-    style Generate stroke:#333,stroke-width:2px
-    style Review stroke:#333,stroke-width:2px
-    style Validate stroke:#333,stroke-width:2px
-    style Reflect stroke:#333,stroke-width:2px
-    style Increment stroke:#333,stroke-width:2px
-    style CheckSecurity stroke:#333,stroke-width:2px,stroke-dasharray:5 5
-    style ShouldRetry stroke:#333,stroke-width:2px,stroke-dasharray:5 5
-    style NeedsReanalysis stroke:#333,stroke-width:2px,stroke-dasharray:5 5
+    Route -->|Re-Analyze| Analyze
+    Route -->|Re-Plan| Blueprint
+    Route -->|Fix Code| Improver[Agent : Iterative Improver]
+    Improver --> Review
 ```
 
 
@@ -389,17 +373,18 @@ In addition to semantic search, DockAI extracts structural information via AST p
 DockAI v4.0 features 8 specialized agents, each with a distinct role:
 
 ### Agent Roles & Responsibilities
+The workload is distributed among **8 specialized AI agents**, each with a distinct prompt and role:
 
 | Agent | Role | Model Type | Task |
 |-------|------|-----------|------|
-| **Analyzer** | Project Detective | Lightweight | Deduce project type, stack, entry points |
-| **Blueprint** | Chief Architect | Strong Reasoning | Plan build strategy and runtime config |
-| **Generator** | Code Builder | Best Available | Write the Dockerfile |
-| **Generator Iterative** | Surgical Fixer | Strong Reasoning | Apply targeted fixes based on errors |
-| **Reviewer** | Security Auditor | Medium | Identify security anti-patterns |
-| **Reflector** | Post-Mortem Analyst | Strong Reasoning | Analyze failures and decide next steps |
-| **Error Analyzer** | Troubleshooter | Medium | Classify error types |
-| **Iterative Improver** | Precision Surgeon | Strong Reasoning | Make minimal edits to fix specific issues |
+| **Analyzer** | Project Detective | Lightweight | Identifies tech stack, frameworks, packages, and project structure. |
+| **Blueprint** | Chief Architect | Strong Reasoning | Creates the strategic build plan (base images, multi-stage strategy) and runtime config. |
+| **Generator** | Code Author | Best Available | Translates the blueprint into syntactically correct Dockerfile code. |
+| **Iterative Generator** | Refinement Engineer | Strong Reasoning | Refines existing Dockerfiles based on user feedback or non-critical updates. |
+| **Reviewer** | Security Auditor | Medium | Performs static security analysis (secrets, root user, vulnerabilities). |
+| **Reflector** | Post-Mortem Analyst | Strong Reasoning | Analyzes build logs/errors to diagnose the *root cause* of failures. |
+| **Error Analyzer** | Troubleshooter | Medium | Classifies errors (Project vs Dockerfile vs Env) to determine recoverability. |
+| **Iterative Improver** | Surgical Fixer | Strong Reasoning | Applies precise, minimal patches to the Dockerfile to fix diagnosed issues. |
 
 ### Agent Function Modules
 

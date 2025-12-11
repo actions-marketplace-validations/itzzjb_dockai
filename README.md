@@ -21,8 +21,10 @@ DockAI v4.0 features a sophisticated multi-agent system orchestrated by LangGrap
 - **Analyzer Agent**: Project discovery and technology stack detection
 - **Blueprint Agent**: Architectural planning and runtime configuration
 - **Generator Agent**: Dockerfile creation with best practices
+- **Iterative Generator Agent**: Refining existing Dockerfiles based on feedback
 - **Reviewer Agent**: Security auditing and vulnerability detection
 - **Reflector Agent**: Failure analysis and adaptive learning
+- **Error Analyzer Agent**: Classification of build/runtime errors for better recovery
 - **Iterative Improver Agent**: Surgical fixes based on validation feedback
 
 ### 🔄 **Adaptive & Self-Improving**
@@ -56,30 +58,30 @@ DockAI v4.0 features a sophisticated multi-agent system orchestrated by LangGrap
 DockAI v4.0 is built on a modern, agent-based architecture using LangGraph for workflow orchestration:
 
 ```mermaid
-flowchart TD
-    Start([START]) --> Scan[scan_node<br/>File Scanner]
-    Scan --> Analyze[analyze_node<br/>AI Analyzer<br/><i>Detects project type & stack</i>]
-    Analyze --> ReadFiles[read_files_node<br/>RAG Retrieval<br/><i>Semantic search for context</i>]
-    ReadFiles --> Blueprint[blueprint_node<br/>Chief Architect<br/><i>Plans build strategy</i>]
-    Blueprint --> Generate[generate_node<br/>Dockerfile Builder<br/><i>Creates Dockerfile</i>]
+graph TD
+    Start([Start]) --> Scan[Scan Repo]
+    Scan --> Analyze[Agent : Analyzer]
+    Analyze --> ReadFiles[Read Context]
+    ReadFiles --> Blueprint[Agent : Blueprint]
+    Blueprint --> Generate[Agent : Generator]
+    Generate --> Review[Agent : Reviewer]
     
-    Generate --> Review[review_node<br/>Security Auditor]
+    Review -->|Secure| Validate[Agent : Validator]
+    Review -->|Insecure| CheckRetry{Retry < Max?}
     
-    Review --> ShouldRetryReview{Should<br/>Retry?}
-    ShouldRetryReview -->|security_passed| Validate
-    ShouldRetryReview -->|security_failed| Reflect
-    ShouldRetryReview -->|max_retries| Stop([END<br/>✗ Max Retries])
+    Validate -->|Success| End([Success])
+    Validate -->|Fail| CheckRetry
     
-    Validate[validate_node<br/>Test Engineer<br/><i>Docker build + validation</i>] --> ShouldRetry{Should<br/>Retry?}
-    ShouldRetry -->|success| End([END<br/>✓ Dockerfile Ready])
-    ShouldRetry -->|failure| Reflect[reflect_node<br/>Post-Mortem Analyst<br/><i>Analyzes failure</i>]
-    ShouldRetry -->|max_retries| Stop
+    CheckRetry -->|Yes| Reflect[Agent : Reflector]
+    CheckRetry -->|No| EndFail([Fail])
     
-    Reflect --> Increment[increment_retry<br/>Update retry count]
-    Increment --> NeedsReanalysis{Needs<br/>Reanalysis?}
-    NeedsReanalysis -->|fundamental_issue| Analyze
-    NeedsReanalysis -->|strategy_change| Blueprint
-    NeedsReanalysis -->|fixable_error| Generate
+    Reflect --> IncRetry[Increment Retry]
+    IncRetry --> Route{Route Fix}
+    
+    Route -->|Re-Analyze| Analyze
+    Route -->|Re-Plan| Blueprint
+    Route -->|Fix Code| Improver[Agent : Iterative Improver]
+    Improver --> Review
 ```
 
 ### Core Components
